@@ -54,11 +54,12 @@ int FUN_004767a0(void *this, char *param_1, int param_2, int param_3, uint param
     if (r) return r;
   }
   uint32_t surface = U32(style, 4);
-  if (len == 0 || !surface) return x;
+  if (len <= 0 || !surface) return x;
 
-  char *copy = (char *)(uintptr_t)crt_malloc(len);
+  char *copy = (char *)(uintptr_t)crt_malloc((nu)len + 1u);
   if (copy) {
     for (int i = 0; i < len; i++) copy[i] = text[i] == '_' ? ' ' : text[i];
+    copy[len] = '\0';   // the font extent routine scans a C string before clamping its byte count
     text = copy;
   }
 
@@ -104,13 +105,14 @@ int FUN_004767a0(void *this, char *param_1, int param_2, int param_3, uint param
   }
 
   set_colour(style, surface, pal, U32(style, 0x6c + col_idx * 4), 0);
-  char seg[256];
+  char seg[257];
   int start = 0, pos = x;
   for (int i = 0; i <= len; i++) {
     if (i < len && text[i] != '\t') continue;
     int n = i - start;
-    if (n > (int)sizeof seg) n = sizeof seg;
+    if (n > (int)sizeof seg - 1) n = sizeof seg - 1;
     for (int k = 0; k < n; k++) seg[k] = text[start + k];
+    seg[n] = '\0';
     surf_text_out(surface, pos, y, seg, n);
     pos += (int)FUN_00483930((void *)(uintptr_t)font, seg, n);
     if (i < len) pos += 30 - pos % 30;   // tab stop

@@ -421,9 +421,13 @@ void mods_save_written(const char *path) {
     fprintf(stderr, "mods: save %s: cannot write the mod record\n", base_name(path));
     return;
   }
-  fputs(text, f);
-  fclose(f);
-  MoveFileExA(tmp, side, MOVEFILE_REPLACE_EXISTING);
+  int written = fputs(text, f) != EOF && !ferror(f);
+  if (fclose(f) != 0) written = 0;
+  if (!written || !MoveFileExA(tmp, side, MOVEFILE_REPLACE_EXISTING)) {
+    DeleteFileA(tmp);
+    fprintf(stderr, "mods: save %s: cannot replace the mod record\n", base_name(path));
+    return;
+  }
   fprintf(stderr, "mods: save %s: recorded %d mods (profile \"%s\") in %s\n", base_name(path), rec.n, g_profile,
           base_name(side));
 }
