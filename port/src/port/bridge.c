@@ -45,6 +45,7 @@ extern unsigned g_presents;   // gdi.c
 int dlg_game_active(void);
 int rp_game_active(void);
 int opt_is_open(void);
+int modsp_is_open(void);
 int hud_on(void);             // ghidra_prelude.h: the new HUD replaces the old one this frame
 int hd_native_shot(const char *name);   // hd_native.c (task-3): the presented picture, 0 when off
 int hd_native_dump(const char *path);   // hd_native.c (task-68): the course of every presented frame to a file, NULL ends
@@ -656,7 +657,7 @@ static void state_fields(Buf *b) {
   // still reach the old controls, hud_game.c).
   bprintf(b, ",\"canvas_w\":%d,\"canvas_h\":%d,\"ui_dy\":%d,\"hud\":%s,\"map_w\":%d,\"map_h\":%d", SCREEN_W, SCREEN_H, SCREEN_H - 600,
           hud_on() ? "true" : "false", g_map_w, g_map_h);
-  bprintf(b, ",\"modal\":%s", (dlg_game_active() || rp_game_active() || opt_is_open()) ? "true" : "false");
+  bprintf(b, ",\"modal\":%s", (dlg_game_active() || rp_game_active() || opt_is_open() || modsp_is_open()) ? "true" : "false");
 }
 
 int harness_write_bmp(const char *path);   // harness.c
