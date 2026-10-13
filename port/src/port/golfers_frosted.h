@@ -28,6 +28,7 @@ extern "C" {
 int gwf_enabled(void);                                  // ui.golfers=frosted_mint and the world layer (tags, bubbles) is up
 int gwf_card_enabled(void);                             // the same for the card layer, which goes in after the HUD's
 void gwf_publish_art(int key, const uint32_t *argb, int w, int h);   // GW_ART_* key; NULL clears
+int gwf_escape(int repeat);                            // visible card owns Escape; queue its original Close action
 int gwf_take_action(GwAction *a);                       // next click on the card, 1 if any
 void gwf_set_injecting(int on);                         // the game thread is feeding the original card a click
 

@@ -161,6 +161,22 @@ int gwf_take_action(GwAction *a) {
   return ok;
 }
 
+// Escape closes the visible card through its original Close button before the HUD.
+int gwf_escape(int repeat) {
+  if (!g_want || !g_visible || g_failed) return 0;
+  lock();
+  if (!repeat) {
+    int queued = 0;
+    for (int i = 0; i < g_qn; ++i) queued |= g_q[i].kind == GW_ACT_CLOSE;
+    if (!queued) {
+      if (g_qn == QMAX) --g_qn;   // Escape cancels the last pending card action if the queue is full
+      g_q[g_qn++] = (GwAction){GW_ACT_CLOSE, 4};
+    }
+  }
+  unlock();
+  return 1;
+}
+
 void gwf_set_injecting(int on) { g_injecting = on; }
 
 // ------------------------------------------------------------------ render thread

@@ -19,6 +19,7 @@ mkdir -p "$STAGE/app/data" "$STAGE/app/mods"
 cp tools/release/setup/Setup.cmd tools/release/setup/setup.ps1 tools/release/setup/copy_app.ps1 "$STAGE/"
 A=$STAGE/app
 cp $N/golf.exe $N/SDL2.dll $N/sgsetup.exe $N/sgupdate.exe $N/jgld-nops.json "$A/"
+cp "$N/golf.exe" "$A/Sim Golf Remastered.exe"
 cp -r $N/fonts $N/ui "$A/"
 cp -r mods/. "$A/mods/"
 rm -rf "$A/mods/examples"

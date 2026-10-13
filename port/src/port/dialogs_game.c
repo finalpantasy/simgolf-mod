@@ -33,6 +33,7 @@
 
 static int g_on;            // this dialog: the native version replaces the original
 static int g_kind;
+static int g_modal_depth, g_hint_open;
 static int g_log = -1;
 static uint32_t g_serial;
 static DlgSnap g_snap;
@@ -157,7 +158,8 @@ static void begin(int kind) {
   }
 }
 
-void dlg_begin(int kind) { begin(kind); }
+void dlg_begin(int kind) { ++g_modal_depth; begin(kind); }
+int dlg_game_active(void) { return g_modal_depth > 0 || g_hint_open; }
 
 static void copy_str(char *dst, int cap, const char *src) {
   int n = 0;
@@ -395,8 +397,11 @@ void dlg_hint_pre(void) {
   g_hint_t = now | 1;
 }
 
+void dlg_wait_begin(void) { g_hint_open = 1; }
+
 // Once per iteration of FUN_0045c0c0, golf's wait for a click or a key. 1 when the native hint was closed.
 int dlg_wait(void) {
+  g_hint_open = 1;   // the original wait loop also owns input until dlg_hint_end
   if (!g_hint_on) {
     if (g_on || !g_hint_t || SDL_GetTicks() - g_hint_t > 400 || !g_kept || !dlgf_enabled()) return 0;
     if (g_log < 0) g_log = getenv("SIMGOLF_DIALOGS_LOG") != NULL;
@@ -486,13 +491,19 @@ int dlg_hire(int hover) {
   return cancel;
 }
 
-unsigned dlg_done(unsigned v);
+static unsigned finish(unsigned v);
 
 void dlg_hint_end(void) {
-  if (g_hint_on) dlg_done(0);
+  g_hint_open = 0;
+  if (g_hint_on) finish(0);
 }
 
 unsigned dlg_done(unsigned v) {
+  if (g_modal_depth > 0) --g_modal_depth;
+  return finish(v);
+}
+
+static unsigned finish(unsigned v) {
   if (g_on) {
     if (g_log) fprintf(stderr, "dialogs: closed with %d\n", (int)v);
     dlgf_end();
@@ -503,5 +514,6 @@ unsigned dlg_done(unsigned v) {
     g_hint_t = 0;
     g_inj = 0;
   }
+  g_kind = 0;
   return v;
 }

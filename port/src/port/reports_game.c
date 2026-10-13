@@ -534,6 +534,7 @@ static void capture_pics(void) {
 }
 
 int rp_is_on(void) { return g_on; }
+int rp_game_active(void) { return g_kind != RP_NONE; }
 
 // golf's text calls inside functions that other screens use too (FUN_0045b0d0 wraps the bio and Gary's hints): recorded only for
 // the task-73 pages.

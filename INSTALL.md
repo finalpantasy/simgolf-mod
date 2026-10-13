@@ -106,3 +106,5 @@ If you are stuck, open an issue on the project page and attach `golf.log`.
 
 Delete the install folder and the desktop shortcut. Nothing else was changed on your PC.
 Your saved games are in `game\Saved Games` inside the install folder; copy them out first if you want to keep them.
+
+The playable program is **Sim Golf Remastered.exe**. Setup creates the desktop shortcut for it. Your existing settings and saves are retained during updates.

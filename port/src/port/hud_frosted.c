@@ -13,6 +13,8 @@
 
 #include "mods/mods.h"
 #include "port/dialogs_frosted.h"
+#include "port/reports_frosted.h"
+#include "port/golfers_frosted.h"
 #include "port/hd_native.h"
 #include "port/options_frosted.h"
 #include "port/host.h"
@@ -353,6 +355,8 @@ static void draw(const HdUiFrame *f, void *user) {
 static int input(SDL_Event *e, int course, void *user) {
   (void)user, (void)course;
   if (!g_ui || !g_want) return 0;
+  // Original modal loops own Escape too, even when their native skin is off.
+  if (dlg_game_active() || rp_game_active()) return 0;
   UiEvent u = {0};
   int cx = 0, cy = 0;
   switch (e->type) {
@@ -377,6 +381,7 @@ static int input(SDL_Event *e, int course, void *user) {
       if (e->window.event == SDL_WINDOWEVENT_LEAVE || e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) ui_input_reset(g_ui);
       return 0;
     case SDL_KEYDOWN: {
+      if (e->key.keysym.sym == SDLK_ESCAPE && !opt_is_open() && gwf_escape(e->key.repeat)) return 1;
       if (e->key.keysym.sym == SDLK_ESCAPE) fprintf(stderr, "hud: esc key (visible %d, options %d, dialog %d)\n", g_visible, opt_is_open(), dlgf_active());
       if (e->key.keysym.sym == SDLK_ESCAPE && g_visible && !opt_is_open() && !dlgf_active()) {
         if (!e->key.repeat) g_esc = 1;   // each Esc is one step (the draw runs ui_hud_escape)

@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 // game thread
+int dlg_game_active(void);               // original or native modal owns input until return
 int dlgf_enabled(void);                  // ui.dialogs=frosted_mint and the native layer is up
 void dlgf_publish(const DlgSnap *s);     // the dialog the original is showing now
 void dlgf_end(void);                     // the original dialog has returned

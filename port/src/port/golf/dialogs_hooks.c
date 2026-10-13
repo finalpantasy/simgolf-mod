@@ -29,6 +29,7 @@ int dlg_entry(const char *prompt, const char *text, int caret, int max_chars) {
   return 0;
 }
 void dlg_hint_pre(void) {}
+void dlg_wait_begin(void) {}
 int dlg_wait(void) { return 0; }
 void dlg_hint_end(void) {}
 void dlg_profile_tick(void) {}

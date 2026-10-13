@@ -455,6 +455,7 @@ void dlg_begin(int kind);       // a dialog's loop starts (0 menu, 1 text entry)
 int dlg_menu(int px, int py, int sel, int checks, unsigned mask, unsigned disabled, int left, int first_y, int n_items, int width, int height);   // per frame; 1 = close it
 int dlg_entry(const char *prompt, const char *text, int caret, int max_chars);   // per frame; 1 = Enter, 2 = Esc
 void dlg_hint_pre(void);        // FUN_0040d320 is about to draw a message panel (param_4 -2): keep the picture
+void dlg_wait_begin(void);      // the wait owns input before its first event pump
 int dlg_wait(void);             // per iteration of golf's wait for a click or key (FUN_0045c0c0)
 void dlg_hint_end(void);        // that wait ends
 void dlg_profile_tick(void);    // per frame of the golfer profile page (FUN_004385d0): Esc presses its OK disc

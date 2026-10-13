@@ -22,6 +22,12 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## What you get
 
+### Included in the current 0.1.4 source
+- **Staff:** the original default of 20 paid staff, adjustable up to 100 in Options > Gameplay. Expanded teams persist in game and course saves.
+- **Controls:** orderly Esc handling, build trays that stay open, clearer weed notices, and aligned tee lines and cart shadows.
+- **Setup:** use your own existing SimGolf installation folder or a disc image. Both require the checked version 1.02 no-CD program.
+- **Career and pro:** automatic or manual clubhouse placement, readable adult/child labels and award plaques, current shot information, and pro export. The current Career flow follows the original game and does not open pro creation automatically.
+
 ### New in 0.1.3: the whole game, playable in the new interface
 Everything from the original game is being made reachable from the new screens. This release fills the biggest gaps:
 - **Your pro is back.** A new career starts with **Create your pro** (clear steps, quick clicks), then a new **skill points** page with big + and - buttons and a points counter. Each accomplishment gets its own page and opens the same skill page with your 3 new points. **People > Your pro** has Profile, Skills, Practice, Match and Tournament.

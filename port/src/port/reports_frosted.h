@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+int rp_game_active(void);
+
 #include "port/ui/ui_kit.h"
 
 // The report on show. The overlay reports use golf's screen_state number (0x569498).

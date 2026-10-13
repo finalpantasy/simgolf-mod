@@ -14,3 +14,9 @@ Get-ChildItem -LiteralPath $App -Force | ForEach-Object {
 }
 $def = Join-Path $Dir "mods.ini.default"
 if (-not (Test-Path -LiteralPath $mine) -and (Test-Path -LiteralPath $def)) { Copy-Item -LiteralPath $def $mine }
+
+# Keep the established internal payload name compatible with earlier releases.
+$program = Join-Path $Dir "golf.exe"
+if (Test-Path -LiteralPath $program) {
+  Copy-Item -LiteralPath $program -Destination (Join-Path $Dir "Sim Golf Remastered.exe") -Force
+}

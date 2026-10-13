@@ -226,16 +226,16 @@ try {
     $w = New-Object -ComObject WScript.Shell
     $desk = [Environment]::GetFolderPath("Desktop")
     $lnk = $w.CreateShortcut((Join-Path $desk "SimGolf Remastered.lnk"))
-    $lnk.TargetPath = Join-Path $Dir "golf.exe"
+    $lnk.TargetPath = Join-Path $Dir "Sim Golf Remastered.exe"
     $lnk.WorkingDirectory = $Dir
     $lnk.Description = "SimGolf Remastered"
     $lnk.Save()
     Say "Desktop shortcut made."
   }
   Say ""
-  Say "Done. Start the game with the 'SimGolf Remastered' shortcut, or run $Dir\golf.exe"
+  Say "Done. Start the game with the 'SimGolf Remastered' shortcut, or run $Dir\Sim Golf Remastered.exe"
   if (-not $Quiet) {
-    if (Ask "SimGolf Remastered is installed.`n`nStart it now?") { Start-Process (Join-Path $Dir "golf.exe") -WorkingDirectory $Dir }
+    if (Ask "SimGolf Remastered is installed.`n`nStart it now?") { Start-Process (Join-Path $Dir "Sim Golf Remastered.exe") -WorkingDirectory $Dir }
   }
 } finally {
   Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

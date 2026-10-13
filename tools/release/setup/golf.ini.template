@@ -1,4 +1,4 @@
-; SimGolf Remastered settings. Paths here are relative to this folder (the one with golf.exe).
+; SimGolf Remastered settings. Paths here are relative to this folder (the one with Sim Golf Remastered.exe).
 ; game= is the SimGolf data folder. mute=1 turns all sound off.
 game=game
 mute=0

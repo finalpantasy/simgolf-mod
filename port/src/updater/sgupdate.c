@@ -22,7 +22,8 @@
 #pragma comment(lib, "bcrypt.lib")
 
 // path relative to the app folder; a trailing slash is a folder
-static const char *const ITEMS[] = {"golf.exe", "SDL2.dll", "sgsetup.exe", "sgupdate.exe", "jgld-nops.json", "version.txt", "mods.ini.default", "fonts/", "ui/",
+static const char PLAYER_EXE[] = "Sim Golf Remastered.exe";
+static const char *const ITEMS[] = {"golf.exe", PLAYER_EXE, "SDL2.dll", "sgsetup.exe", "sgupdate.exe", "jgld-nops.json", "version.txt", "mods.ini.default", "fonts/", "ui/",
                                     "data/tables/", "mods-examples/"};
 #define NITEMS ((int)(sizeof ITEMS / sizeof ITEMS[0]))
 
@@ -247,7 +248,8 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
     winpath(rel);
     size_t rl = strlen(rel);
     if (rl && rel[rl - 1] == '\\') rel[rl - 1] = 0;
-    snprintf(src, sizeof src, "%s\\%s", stage, rel);
+    // The named player program uses the same verified payload, including older zips.
+    snprintf(src, sizeof src, "%s\\%s", stage, !strcmp(rel, PLAYER_EXE) ? "golf.exe" : rel);
     snprintf(dst, sizeof dst, "%s\\%s", app, rel);
     snprintf(bak, sizeof bak, "%s\\%s", backup, rel);
     if (!exists(src)) continue;   // an older release without this item: leave the player's as is
@@ -344,7 +346,7 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
   }
   if (restart) {
     char g[MAX_PATH + 16];
-    snprintf(g, sizeof g, "\"%s\\golf.exe\"", app);
+    snprintf(g, sizeof g, "\"%s\\%s\"", app, PLAYER_EXE);
     STARTUPINFOA si = {sizeof si};
     PROCESS_INFORMATION pi;
     if (CreateProcessA(NULL, g, NULL, NULL, FALSE, 0, NULL, app, &si, &pi)) {
