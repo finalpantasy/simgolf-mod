@@ -131,6 +131,8 @@ static void keep_restore(void) {
 static unsigned g_pre_t;   // dlg_pre kept the picture at this time
 
 // The save-name dialog's caller draws its own strip before the entry opens: it keeps the picture first.
+// task-107: the entry can open seconds later on a busy machine (a 1 s limit made begin() keep a picture with golf's old
+// strip in it, and the strip showed behind the native box); 20 s still tells a stale mark from this call.
 void dlg_pre(void) {
   if (!dlgf_enabled()) return;
   keep_save();
@@ -150,7 +152,7 @@ static void begin(int kind) {
     hd_ui_show_golf_ui(0);   // golf's own UI layer (and the old HUD under it) stays hidden
     hd_art_dlg_begin();
     hud_clean_pages();
-    if (!(g_pre_t && SDL_GetTicks() - g_pre_t < 1000 && g_kept)) keep_save();
+    if (!(g_pre_t && SDL_GetTicks() - g_pre_t < 20000 && g_kept)) keep_save();
     g_pre_t = 0;
   }
 }
@@ -246,6 +248,7 @@ int dlg_entry(const char *prompt, const char *text, int caret, int max_chars) {
     else if (a.kind == DLG_A_CANCEL) r = 2;
   }
   keep_restore();
+  hd_art_hide_dialog();   // task-107: golf's own strip (name box), drawn again this frame, like the menus above
   return r;
 }
 

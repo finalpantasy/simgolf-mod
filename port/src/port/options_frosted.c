@@ -18,6 +18,7 @@
 #include <strings.h>
 
 #include "mods/mods.h"
+#include "port/staff.h"
 #include "port/golf/keymap.h"
 #include "port/hd_art.h"
 #include "port/hd_native.h"
@@ -89,6 +90,12 @@ static const Row k_gameplay[] = {
     {.type = OT_SEG, .label = "Game speed", .key = "gameplay.speed", .def = "1",
      .desc = "Runs the whole game clock faster: seasons, golfers and money. Pause still stops it.",
      .n = 5, .vals = {"1", "2", "3", "5", "10"}, .names = {"1x", "2x", "3x", "5x", "10x"}},
+    {.type = OT_SLIDER, .label = "Staff you can hire", .key = "gameplay.staff_max", .def = "20",
+     .desc = "Hire up to this many staff. Lowering it keeps everyone already hired.",
+     .lo = 1, .hi = STAFF_HIRE_MAX, .step = 1},
+    {.type = OT_SEG, .label = "New Career clubhouse", .key = "gameplay.manual_clubhouse", .def = "0",
+     .desc = "Automatic placement, or choose its position yourself when starting a Career.",
+     .n = 2, .vals = {"0", "1"}, .names = {"Automatic", "Place manually"}},
     {.type = OT_HEAD, .label = "This game (saved with it)"},
     PREF(1, "Golfer names", "Show each golfer's name under them on the course."),
     PREF(2, "Great shot snapshots", "Show a snapshot when a golfer makes a great shot."),
@@ -305,10 +312,21 @@ static int val_eq(const char *a, const char *b) {
 static int is_on(const char *v) { return v && (atoi(v) != 0 || !strcasecmp(v, "on") || !strcasecmp(v, "true")); }
 
 static int g_slider_dirty;
+static int g_staff_slider_dirty;
 static uint32_t g_slider_id;
 
 static void set_value(const Row *r, const char *v) {
+  if (r->key && !strcmp(r->key, "gameplay.manual_clubhouse")) {
+    mods_set(r->key, v);
+    fprintf(stderr, "options: manual_clubhouse %s mods.ini %s\n", v, mods_ini_save() ? "saved" : "write failed");
+    return;
+  }
   if (r->type == OT_SLIDER) {   // dragged: the store follows at once, the file when the button is let go
+    if (!strcmp(r->key, "gameplay.staff_max")) {
+      mods_set(r->key, v);
+      g_staff_slider_dirty = g_slider_dirty = 1;
+      return;
+    }
     mods_option_put(r->key, v);
     g_slider_dirty = 1;
     return;
@@ -438,6 +456,15 @@ static void note_segments(UiCtx *c, const Row *r, UiRect sr, int slot) {
     x += w + gap;
   }
   g_ctl_n[slot] = r->n < 8 ? r->n : 8;
+  if (r->key && !strcmp(r->key, "gameplay.manual_clubhouse") && getenv("SIMGOLF_OPTIONS_LOG")) {
+    static uint32_t last; uint32_t now = host_now_ms();
+    if (now - last > 1000) {
+      UiRect scr = ui_screen(c), a = g_ctl_log[slot][0], b = g_ctl_log[slot][1];
+      fprintf(stderr, "options: clubhouse target %dx%d automatic %d,%d manual %d,%d\n", (int)scr.w, (int)scr.h,
+        (int)(a.x+a.w/2), (int)(a.y+a.h/2), (int)(b.x+b.w/2), (int)(b.y+b.h/2));
+      last = now;
+    }
+  }
 }
 
 static const char *draw_control(UiCtx *c, uint32_t id, const Row *r, UiRect cr, const char *cur, int slot) {
@@ -703,6 +730,10 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
   if (g_slider_dirty && !ui_is_active(c, g_slider_id)) {
     g_slider_dirty = 0;
     mods_option_flush();
+    if (g_staff_slider_dirty) {
+      g_staff_slider_dirty = 0;
+      fprintf(stderr, "options: staff_max mods.ini %s\n", mods_ini_save() ? "saved" : "write failed");
+    }
     fprintf(stderr, "options: volume or slider settled\n");
   }
   if (do_swap || do_replace) {

@@ -11,6 +11,8 @@
 
 #include "golf_protos.h"
 #include "port/grid.h"
+#include "port/camera_tiles.h"
+#include "port/staff.h"
 
 #define SAVE_FD (*(int *)0x568d08)        // DAT_00568d08: open save file
 #define SAVE_READING (*(int *)0x53e638)   // DAT_0053e638: 1 load, 0 save
@@ -21,7 +23,11 @@
 
 // @override FUN_0040af70
 int FUN_0040af70(int param_1, int param_2) {
-  if (param_1 == FIRST_FIELD && param_2 == 4) grid_save_tag(SAVE_FD, SAVE_READING);
+  if (param_1 == FIRST_FIELD && param_2 == 4) {
+    grid_save_tag(SAVE_FD, SAVE_READING);
+    staff_save_tag(SAVE_FD, SAVE_READING);
+    camera_tiles_save_field(SAVE_FD, SAVE_READING);
+  }
   if (SAVE_READING != 0) return crt_read(SAVE_FD, param_1, param_2);
   return crt_write(SAVE_FD, param_1, param_2);
 }

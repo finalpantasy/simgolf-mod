@@ -483,6 +483,11 @@ static int draw_profile(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
       if (lk[i].btn == PF_HAIR && !off) val = (s->ext[7] >> 8) & 0xff, of = 5;
       if (val >= 0 && val < of) snprintf(lab, sizeof lab, "%s %d/%d", lk[i].label, val + 1, of);
       else snprintf(lab, sizeof lab, "%s", lk[i].label);
+      // task-119 (tester F27): the toggles say what they are now. Adult / child is golf's child flag (a child is
+      // drawn at about three quarters size); without it a click made the pro small with nothing on the page saying so
+      if (lk[i].btn == PF_ADULT) snprintf(lab, sizeof lab, "%s", (s->ext[7] >> 18) & 1 ? "Child (small)" : "Adult");
+      if (lk[i].btn == PF_BODY) snprintf(lab, sizeof lab, "Body type %d/4", ((s->ext[7] >> 16) & 3) + 1);
+      if (lk[i].btn == PF_GENDER) snprintf(lab, sizeof lab, "%s", (s->ext[4] & 0x80) ? "Woman" : "Man");
       if (chip(c, ui_id(key), cr, lab, 0, off, UI_TYPE_LABEL) && na < max)
         acts[na++] = (RpAction){RP_A_CLICK, CLICK(PF_BTN[lk[i].btn - 8][0], PF_BTN[lk[i].btn - 8][1])};
     }

@@ -1,0 +1,49 @@
+{
+  "comment": "Instruction-proven v1.02 bounds hazards. Helpers use fixes.re_bounds=0 for original comparisons.",
+  "patches": {
+    "FUN_0046f550": [
+      [
+        "local_4 = 0xffffffff;\n  pcStack_8 = FUN_004b7abc;",
+        "if (fix_re_bounds_on() && !re_course_slot_ids_valid()) return -1;\n  local_4 = 0xffffffff;\n  pcStack_8 = FUN_004b7abc;"
+      ]
+    ],
+    "FUN_00492000": [
+      ["if (param_2 + param_4 <= iVar3) {", "if (fix_re_bounds_on() ? sg_re_cut_axis_fits(param_2, param_4, iVar3) : param_2 + param_4 <= iVar3) {"],
+      ["if (param_3 + param_5 <= iVar3) {", "if (fix_re_bounds_on() ? sg_re_cut_axis_fits(param_3, param_5, iVar3) : param_3 + param_5 <= iVar3) {"],
+      ["*(int **)((int)this + 4) = piVar4;", "*(int **)((int)this + 4) = piVar4;\n        if (fix_re_bounds_on() && piVar4 == (int *)0) return 4;"],
+      [
+        "a0 = (undefined4 *)crt_malloc(iVar6 * *(int *)((int)this + 0x14));",
+        "if (fix_re_bounds_on() && !sg_re_cut_area_fits(iVar6, *(int *)((int)this + 0x14))) {\n          FUN_00473ae0((int)this);\n          return 4;\n        }\n        a0 = (undefined4 *)crt_malloc(iVar6 * *(int *)((int)this + 0x14));"
+      ]
+    ],
+    "FUN_0040b680": [
+      [
+        "uVar3 = 0xffffffff;\n  pcVar2 = (char *)&DAT_0051a068;",
+        "if (fix_re_bounds_on() && !sg_re_string_fits((const char *)&DAT_0051a068, SG_RE_FILE_BYTES)) return -1;\n  uVar3 = 0xffffffff;\n  pcVar2 = (char *)&DAT_0051a068;"
+      ]
+    ],
+    "FUN_00422430": [
+      ["iVar1 = DAT_005a9ce0;", "re_shot_cache_context(param_3);\n  iVar1 = DAT_005a9ce0;"]
+    ],
+    "FUN_00463180": [
+      [
+        "local_40 = (int)*(char *)((int)local_2c + (uint)(byte)(&DAT_00578804)[iVar4]),",
+        "local_40 = re_animation_height(local_2c, (uint8_t)(&DAT_00578804)[iVar4]),"
+      ]
+    ],
+    "FUN_0043d2a0": [
+      [
+        "uVar5 = ~uVar5;\n    bVar2 = true;",
+        "uVar5 = ~uVar5;\n    if (fix_re_bounds_on() && uVar5 > SG_RE_FILE_BYTES) {\n      if (FindNextFileA(hFindFile, &local_140)) continue;\n      FindClose(hFindFile);\n      return local_1ac;\n    }\n    bVar2 = true;"
+      ],
+      [
+        "if ((iVar4 == 0) && (bVar2)) {",
+        "if ((iVar4 == 0) && bVar2 && (!fix_re_bounds_on() || local_1ac < SG_RE_FILE_SLOTS)) {\n      if (fix_re_bounds_on() && !re_file_text_append_fits(local_1a4)) goto re_file_text_done;"
+      ],
+      [
+        "local_1ac = local_1ac + 1;",
+        "re_file_text_done:\n      pcVar8 = pcVar7 + SG_RE_FILE_BYTES;\n      local_1ac = local_1ac + 1;"
+      ]
+    ]
+  }
+}

@@ -154,7 +154,9 @@ static void inj_step(void) {
       break;
     case 2: sdl_button(g_inj_x, g_inj_y, 0); g_inj_wait = !page; break;
     case 3:   // task-73 pages: park golf's pointer where it hovers over nothing (no tooltip in the kept pictures)
-      if (page && !g_iqn) sdl_motion(690, 160);
+      // The tract loop still reads hover after pumping the click. Keep its
+      // original control position until return; 690,160 is a buyable tract.
+      if (page && g_kind != RP_TRACTS && !g_iqn) sdl_motion(690, 160);
       g_inj_wait = !page;
       break;
     default:
@@ -789,6 +791,10 @@ static void rp_frame_body(void) {
     if (gi < 0x200) {   // task-102c: the colours golf has now (shirt, pants, skin, hair), for the page's chips
       const volatile uint8_t *r = (const volatile uint8_t *)(uintptr_t)(0x4d6088 + (uint32_t)gi * 0x230);
       g_snap.ext[5] = r[0x24], g_snap.ext[6] = r[0x25], g_snap.ext[7] = r[0x27] | r[0x28] << 8;
+      // task-119 (tester F27, the pro drawn as a child): body type (0x23 bits 4..5), the child bit (bit 3 of the
+      // flag dword at 0x2c) and whether golf uses the profile's own look (the dword non-zero), for the page's chips
+      uint32_t look = (uint32_t)r[0x2c] | (uint32_t)r[0x2d] << 8 | (uint32_t)r[0x2e] << 16 | (uint32_t)r[0x2f] << 24;
+      g_snap.ext[7] |= (int32_t)(((r[0x23] >> 4) & 3u) << 16 | ((look & 8u) ? 1u : 0u) << 18 | (look ? 1u : 0u) << 19);
     }
     g_snap.ext[4] = gi < 0x200 ? *(volatile uint8_t *)(uintptr_t)(0x4d60a9 + (uint32_t)gi * 0x230) : 0x80;   // 0x80: a woman (task-102c)
     if (!g_in_edit) profile_page_keep();

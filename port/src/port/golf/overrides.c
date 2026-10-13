@@ -4,6 +4,7 @@
 
 #include "golf_protos.h"
 #include "port/runtime.h"
+#include "re_bounds.h"
 
 // task-40: golf pushes water elevations into Terrain only for tiles near the camera.
 // FUN_00449540 (patch in tools/translate/golf.json) asks here whether to push
@@ -145,7 +146,10 @@ static int female_heads_fix_on(void) { return mods_get_int("fixes.female_heads",
 static int female_heads_fix_on(void) { return 1; }
 #endif
 int head_default_skin(int male, int rec) {
+  int bounds = fix_re_bounds_on();
+  if (bounds && !sg_re_profile_valid(rec)) return 0;
   int head = *(volatile int8_t *)(uintptr_t)(0x4d60aa + rec * 0x230);
+  if (bounds && head < 0) return (int)((unsigned)rec & 3u);
   if ((head >= 0x13 || head < 0) && female_heads_fix_on()) return rec % 4;   // task-118: a negative head too
   return *(volatile int8_t *)(uintptr_t)((male ? 0x4d55e8u : 0x4d5b38u) + head * 0x44);
 }

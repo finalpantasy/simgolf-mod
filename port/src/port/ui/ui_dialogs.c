@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum { WRAP_MAX = 14 };
@@ -66,6 +67,8 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
   const UiTokens *t = ui_tokens(c);
   int n_acts = 0;
   UiRect scr = ui_screen(c);
+  static unsigned log_frames;
+  int log_layout = getenv("SIMGOLF_DIALOGS_LOG") && (++log_frames % 60) == 0;
   float u = ui_s(c, 1);
   // texts above the list, the choices
   char texts[DLG_LINES][DLG_TEXT];
@@ -81,6 +84,12 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
       snprintf(items[n_item], DLG_TEXT, "%s", tmp);
       item_no[n_item++] = s->line[i].item;
     }
+  }
+  // The pro export's overwrite prompt names an internal folder. Show the
+  // complete filename, keeping the game's original path and choices intact.
+  if (n_text && !strncmp(texts[0], "Themes\\Championship\\", sizeof("Themes\\Championship\\") - 1)) {
+    const char *name = strrchr(texts[0], '\\');
+    if (name && name[1]) memmove(texts[0], name + 1, strlen(name + 1) + 1);
   }
   const char *title = NULL;
   int first_body = 0;
@@ -131,6 +140,9 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
     uint32_t id = ui_idi(ui_id("dlg.item"), i);
     int no = item_no[i];
     int dis = (s->disabled >> no) & 1;
+    if (log_layout)
+      fprintf(stderr, "dialogs: item %d at %.0f,%.0f size %.0fx%.0f target %.0fx%.0f [%s]\n",
+              no, r.x, r.y, r.w, r.h, scr.w, scr.h, items[i]);
     ui_hit(c, r, ui_s(c, t->radius_tile), id, dis ? UI_HIT_BLOCK : UI_HIT_BLOCK | UI_HIT_INTERACT);
     UiDraw *d = ui_drawer(c);
     float rad = ui_s(c, t->radius_tile);

@@ -1,0 +1,8 @@
+{
+ "comment": "task-119 (src/port/golf/hole_line_hooks.c): the sideways offset of each tee's route line (tester F26).",
+ "patches": {
+  "FUN_0040f5c0": [
+   ["iVar23 = uVar24 * 3 + -3;", "iVar23 = hole_line_shift((int)uVar24);"]
+  ]
+ }
+}

@@ -35,6 +35,9 @@ enum { HUD_REGULAR, HUD_COMPACT, HUD_MINIMAL, HUD_COMPACT_COLUMN, HUD_WHEEL, HUD
        // round three, full-width bars (ui.hud_density = bars | topbar | ribbon | bottombar | jwe)
        HUD_BARS, HUD_TOPBAR, HUD_RIBBON, HUD_BOTTOMBAR, HUD_JWE };
 
+// Esc on the course (task-112): changes h and writes the actions it asks for; *what is the step taken.
+int ui_hud_escape(UiHud *h, const HudSnap *s, HudAction *out, int max_out, const char **what);
+
 // art: HUD_ART_MAX textures (NULL where none). Returns the number of actions.
 int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, HudAction *out, int max_out);
 

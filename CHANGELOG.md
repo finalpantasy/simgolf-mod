@@ -2,6 +2,18 @@
 
 ## 0.1.4 - unreleased
 
+- Changed: staff starts at the original limit of 20. Options > Gameplay can raise it to 100; existing staff survive lowering the limit and saving/loading
+- Fixed: a busy save-name box no longer shows the old moving text strip
+- Fixed: Esc closes the active layer in order, build trays stay open after placement, cart shadows align, and uncovered weeds offer an Open staff notice
+- Fixed: tee-to-cup lines align at both ends, pro profiles distinguish adults and children, and the Best Hole award plaque is readable
+- New: setup can use an existing SimGolf installation folder as well as a disc image, with checked files and a separate required version 1.02 program
+- Fixed: tournament camera cleanup restores the original course tiles, including after save/load; Career can place the clubhouse automatically or leave it for manual placement
+- Fixed: the pro shot readout and pro export use the current game values and chosen save name
+- Fixed: No thanks on the land-purchase page keeps your money, with the pointer held on the intended exit control
+- Fixed: additional verified table, animation and shot-cache bounds guards (switch fixes.re_bounds)
+
+- Fixed: the browser development build compiles with the default pro skill settings again
+
 - Fixed: the first dialogs and reports now use the new interface from their first visible frame
 
 - New: a Mod Manager (Mods on the start menu, in Options, or Shift+F12): search, sort, filters, load order, profiles, conflict and missing-mod warnings, changes apply on restart

@@ -53,6 +53,7 @@
 #include "port/golf/art_hooks.h"
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
+#include "port/hd_art_geom.h"
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
@@ -1260,7 +1261,9 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     e.variant = V_RGBA;
     // task-78c: cliffs01.pcx holds the rock chips golf draws at cliff corners through these slots; they are
     // real rock pictures, not shading, and drawing them as shade painted dark wedges (the art pack's rocks stay)
-    if ((slot == 27 || slot == 30) && !strstr(a->norm, "cliffs01")) {   // a shading sheet (index 0xf8: darken what is under it): black at golf's level
+    // task-119 (tester F30): holemark.pcx, the hole number plaques at the tees (and the Top 100 / best hole ones), goes
+    // through the same slots and was painted as a black silhouette; it is a picture too
+    if ((slot == 27 || slot == 30) && !strstr(a->norm, "cliffs01") && !strstr(a->norm, "holemark")) {   // a shading sheet (index 0xf8: darken what is under it): black at golf's level
       e.variant = V_SHADE;
       e.pal_hash = shadow_levels(lut, lev);
       memcpy(pal, lev, sizeof pal);
@@ -1910,6 +1913,14 @@ int hd_art_prepare(SDL_Renderer *r, int new_frame) {
 
 const uint8_t *hd_art_cut_mask(int which) { return g_on && g_cur_ok[which] && g_cur[which].n ? g_cut[which] : NULL; }
 
+// The attached shadow's place (task-112): see hd_art_geom.h.
+static void shadow_rect(const Entry *e, const SDL_FRect *d, SDL_FRect *out) {
+  const ArtFile *a = &g_files[e->file], *b = &g_files[e->shadow_file];
+  float dv[4] = {d->x, d->y, d->w, d->h}, o[4];
+  hd_art_shadow_rect(a->crop_x, a->crop_y, a->w4 / 4, a->h4 / 4, b->crop_x, b->crop_y, b->w4 / 4, b->h4 / 4, e->flip, dv, o);
+  *out = (SDL_FRect){o[0], o[1], o[2], o[3]};
+}
+
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
   if (!g_on || !g_cur_ok[which]) return;
   double t0 = host_now_ms();
@@ -1922,7 +1933,11 @@ void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
     SDL_RendererFlip f = (e->flip & 1 ? SDL_FLIP_HORIZONTAL : 0) | (e->flip & 2 ? SDL_FLIP_VERTICAL : 0);
     if (e->shadow_file >= 0) {
       SDL_Texture *s = tex_of(e, 1);
-      if (s) SDL_RenderCopyExF(r, s, NULL, &d, 0, NULL, f);
+      if (s) {
+        SDL_FRect sd;
+        shadow_rect(e, &d, &sd);
+        SDL_RenderCopyExF(r, s, NULL, &sd, 0, NULL, f);
+      }
     }
     SDL_Texture *tx = tex_of(e, 0);
     float uw[3], uwa;   // shoals, rocks and coral (task-78): seen through the realistic water, not painted on it

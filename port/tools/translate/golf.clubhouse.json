@@ -1,0 +1,8 @@
+{
+  "comment": "task-95: optional manual Career start, automatic by default. Capture before generator placement and finish after generation.",
+  "patches": {
+    "FUN_0040e000": [["local_c = 0;", "if (param_3 == 15) clubhouse_start_capture(param_1,param_2,local_10);\n  local_c = 0;"]],
+    "FUN_0040f5c0": [["FUN_00470a60(DAT_0059bf90);", "clubhouse_start_begin();\n    FUN_00470a60(DAT_0059bf90);\n    clubhouse_start_end();"]],
+    "FUN_00407d30": [["FUN_00470a60(uVar2);", "clubhouse_start_begin();\n    FUN_00470a60(uVar2);\n    clubhouse_start_end();"]]
+  }
+}

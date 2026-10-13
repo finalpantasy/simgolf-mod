@@ -6,6 +6,11 @@
 #define SIMGOLF_PORT_GHIDRA_PRELUDE_H
 
 #include <stdint.h>
+#include "port/golf/re_bounds.h"
+#include "port/camera_tiles.h"
+#include "port/clubhouse_start.h"
+#include "port/staff.h"
+#include "port/shot_readout.h"
 #include "port/grid.h"   // MAP_W, MAP_H, GRID(i): tools/translate/grid.py
 
 #ifdef _MSC_VER
@@ -371,6 +376,7 @@ void aim_start(int x, int y);   // task-115: the shot aim arrow hooks (golf/aim_
 void aim_dot(int x, int y, int col, int w, int a);
 void aim_seg(int x0, int y0, int x1, int y1, int col, int w, int a);
 void place_center(int *tx, int *ty);   // task-115: lot placement centred on the pointer (golf/place_hooks.c)
+int hole_line_shift(int tee);   // task-119: the sideways offset of a tee's route line (golf/hole_line_hooks.c)
 
 // task-78 (port/water_native.c): realistic water. 1 while the presenter draws the water,
 // so golf skips its own ripples, waves, waterfalls, spray and sparkles (translator patch golf.water.json).

@@ -1,0 +1,8 @@
+{
+  "comment": "task-117: snapshot TV camera footprints before placement and restore instead of replacing with rough. Reset on course initialization; save snapshots at the first full serializer field.",
+  "patches": {
+    "FUN_0040e000": [["local_c = 0;", "if (param_3 == 0x11 || param_3 == 0x12) camera_tiles_capture(param_1,param_2,local_10);\n  local_c = 0;"]],
+    "FUN_0040e400": [["if (iVar6 == 5) {", "if ((iVar6 == 0x11 || iVar6 == 0x12) && camera_tiles_restore(iVar7,iVar2)) {\n    (&DAT_0058bcb8)[param_1 * 8] = 0xffff;\n    FUN_0042f340();\n    return FUN_0042f7a0();\n  }\n  if (iVar6 == 5) {"]],
+    "FUN_004315e0": [["grid_resize_default();", "camera_tiles_reset();\n  grid_resize_default();"]]
+  }
+}

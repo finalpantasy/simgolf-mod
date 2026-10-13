@@ -73,6 +73,7 @@ static int g_nrects;
 static int g_inj, g_inj_x, g_inj_y, g_inj_frames;
 static HudAction g_goal;
 static int g_goal_on, g_goal_steps;
+static int g_staff_tab, g_staff_tab_wait;   // task-112: open the Staff tab once the People tray is up
 
 static HudSnap g_snap;
 static uint32_t g_serial, g_art_serial;
@@ -389,6 +390,127 @@ static void note_messages(const char *date) {
   copy_str(g_prev_text, sizeof g_prev_text, text);
 }
 
+// ------------------------------------------------------------------ weeds (task-112)
+//
+// Weeds (tile flag 0x800, the yellow dandelions) spread from tile to tile and only the turf staff clear them
+// inside their work zone: employee record +0x10/+0x11 is the zone's centre tile (-1 none), jobs -4 and -6 are
+// the ones the main loop (FUN_00403xxx) sends to weedy tiles, within 12 tiles (16 for the technician, record
+// flag 8). When 3 or more weedy tiles of a hole lie outside every zone the HUD posts one card for that hole
+// ("Hire a Turf Technician or move one to cover it") with a button to People > Staff, at most once per hole
+// per game month. The card is a history entry like a game message (g_hist) with HUD_SHOW_STAFF as its target.
+#define EMP_BASE staff_base()
+#define EMP_COUNT STAFF_CAPACITY
+#define WEED_MIN 3
+#define WEED_CARD_MS 14000
+static double g_weed_until;
+static int g_weed_seq;
+static char g_weed_month[19][40];   // the month key of the last card, per hole
+
+static void month_key(const char *date, char *out, size_t cap) {   // "12 June 2001" -> "June2001" (letters and the 4-digit year)
+  size_t n = 0;
+  for (const char *p = date; *p && n + 5 < cap;) {
+    if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) {
+      out[n++] = *p++;
+    } else if (*p >= '0' && *p <= '9') {
+      const char *q = p;
+      while (*q >= '0' && *q <= '9') q++;
+      if (q - p == 4)
+        for (; p < q; p++) out[n++] = *p;
+      p = q;
+    } else {
+      p++;
+    }
+  }
+  out[n] = 0;
+}
+
+static void weed_check(const char *date) {
+  static int frame, arr = -2;
+  if (++frame % 90) return;
+  if (arr == -2) {
+    arr = -1;
+    for (int i = 0; i < grid_count; i++)
+      if (grid_arrays[i].addr == 0x53caf0) arr = i;
+  }
+  if (arr < 0 || !g_grid[arr] || !date[0]) return;
+  int cx[HUD_STAFF_MAX], cy[HUD_STAFF_MAX], cr[HUD_STAFF_MAX], nz = 0;
+  for (int r = 0; r < EMP_COUNT && nz < HUD_STAFF_MAX; r++) {
+    int st = G8(EMP_BASE + r * 0x4c + 0x12) & 0xff, job = G8(EMP_BASE + r * 0x4c + 0x13);
+    if (st == 0 || (job != -4 && job != -6)) continue;
+    int zx = G8(EMP_BASE + r * 0x4c + 0x10), zy = G8(EMP_BASE + r * 0x4c + 0x11);
+    if (zx < 0 || zy < 0) continue;
+    cx[nz] = zx, cy[nz] = zy, cr[nz] = (st & 8) ? 16 : 12;
+    nz++;
+  }
+  int bad[19] = {0}, first[19];
+  const uint16_t *f = (const uint16_t *)g_grid[arr];
+  for (int x = 0; x < g_map_w; x++)
+    for (int y = 0; y < g_map_h; y++) {
+      uint16_t v = f[x * g_map_w + y];
+      int hole = v & 0x1f;
+      if (!(v & 0x800)) continue;
+      if (hole < 1 || hole > 18) {   // weeds also grow on grass beside the holes: the hole whose tiles are nearest (within 5)
+        hole = 0;
+        for (int r = 1; r <= 5 && !hole; r++)
+          for (int dx = -r; dx <= r && !hole; dx++)
+            for (int dy = -r; dy <= r; dy++) {
+              if (abs(dx) != r && abs(dy) != r) continue;
+              int nx = x + dx, ny = y + dy;
+              if (nx < 0 || ny < 0 || nx >= g_map_w || ny >= g_map_h) continue;
+              int hh = f[nx * g_map_w + ny] & 0x1f;
+              if (hh >= 1 && hh <= 18) {
+                hole = hh;
+                break;
+              }
+            }
+        if (!hole) continue;
+      }
+      int covered = 0;
+      for (int k = 0; k < nz && !covered; k++) covered = abs(x - cx[k]) <= cr[k] && abs(y - cy[k]) <= cr[k];
+      if (!covered && bad[hole]++ == 0) first[hole] = x;
+    }
+  char key[40];
+  month_key(date, key, sizeof key);
+  {   // one line when the numbers change (tests read it)
+    static int last_w = -1, last_z = -1;
+    int w = 0, u = 0;
+    for (int h = 1; h <= 18; h++) u += bad[h];
+    for (int x = 0; x < g_map_w; x++)
+      for (int y = 0; y < g_map_h; y++) w += (f[x * g_map_w + y] & 0x8ff) > 0x7ff;
+    if (w != last_w || nz != last_z) fprintf(stderr, "hud: weeds scan: %d weedy tiles, %d outside every turf zone, %d zones\n", w, u, nz);
+    last_w = w, last_z = nz;
+  }
+  if (host_now_ms() < g_weed_until + 20000) return;   // cards come one at a time, 20 s apart
+  for (int h = 1; h <= 18; h++) {
+    if (bad[h] < WEED_MIN || !strcmp(g_weed_month[h], key)) continue;
+    char nm[120];
+    char keep[512];
+    memcpy(keep, (void *)(uintptr_t)TEXT_BUF, sizeof keep);
+    *(char *)(uintptr_t)TEXT_BUF = 0;
+    FUN_00407280(h);
+    copy_str(nm, sizeof nm, (const char *)(uintptr_t)TEXT_BUF);
+    memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
+    HudMsg *m;
+    if (g_hist_n == HUD_MSG_MAX) {
+      memmove(g_hist, g_hist + 1, sizeof g_hist[0] * (HUD_MSG_MAX - 1));
+      m = &g_hist[HUD_MSG_MAX - 1];
+    } else {
+      m = &g_hist[g_hist_n++];
+    }
+    memset(m, 0, sizeof *m);
+    snprintf(m->text, sizeof m->text, "Weeds are spreading on hole %d (%s). Hire a Turf Technician or move one to cover it.", h, nm);
+    copy_str(m->date, sizeof m->date, date);
+    m->t_ms = host_now_ms();
+    m->seq = g_weed_seq = g_news_seq = ++g_hist_seq;
+    m->show = HUD_SHOW_STAFF;
+    m->target = h;
+    g_weed_until = m->t_ms + WEED_CARD_MS;
+    copy_str(g_weed_month[h], sizeof g_weed_month[h], key);
+    fprintf(stderr, "hud: weeds hole %d: %d uncovered weedy tiles, %d turf zones, card %d month %s\n", h, bad[h], nz, m->seq, key);
+    break;   // one card at a time; the next hole's follows on a later check
+  }
+}
+
 // ------------------------------------------------------------------ the player's pro (task-92)
 //
 // The original's People panel has a second page, the player panel (dock modes 3 and 4, FUN_004362f0 draws
@@ -533,8 +655,6 @@ static void inject(int x, int y);
 // portraits with Fire, Move and Rename (FUN_00436e50 draws, FUN_00436c00 handles; records at 0x585850 +
 // n * 0x4c: status +0x12, job +0x13, tile +0x10/+0x11, name +0x2a, wage +0x24). Both are hidden with the
 // old HUD, so the snapshot carries the lists and the actions below click golf's own controls.
-#define EMP_BASE 0x585850
-#define EMP_COUNT 64
 #define EMP_LIST 0x5aa5b8     // the draw's list of the visible portraits: employee records
 #define EMP_SCROLL 0x5aa558   // first portrait shown (steps of 2)
 #define EMP_SEL 0x4c7aec      // selected portrait, -1 none
@@ -577,6 +697,7 @@ static void read_people(HudSnap *s) {
   }
   if (names) memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
   s->staff_n = 0;
+  s->staff_limit = staff_max();
   int staff_names = s->employee_overlay;
   if (staff_names) memcpy(keep, (void *)(uintptr_t)TEXT_BUF, sizeof keep);
   for (int r = 0; r < EMP_COUNT; r++) {
@@ -624,7 +745,15 @@ static void staff_action(int what, int rec) {
   if (what == HUD_STAFF_SELECT) {
     if (rec < 0 || rec >= EMP_COUNT || !emp_active(rec)) return;
     int pos = emp_pos(rec), scroll = G32(EMP_SCROLL);
-    if (pos < scroll || pos >= scroll + 8) G32(EMP_SCROLL) = pos < 8 ? 0 : (pos & ~1);
+    // The original strip backs off by two every frame while fewer than seven
+    // portraits remain. Start on its stable last page before synthesizing a
+    // portrait click, or its list moves between lookup and click dispatch.
+    int max_scroll = staff_paid_count() - 7;
+    if (max_scroll < 0) max_scroll = 0;
+    max_scroll &= ~1;
+    if (pos < scroll || pos >= scroll + 8) scroll = pos < 8 ? 0 : (pos & ~1);
+    if (scroll > max_scroll) scroll = max_scroll;
+    G32(EMP_SCROLL) = scroll;
     g_staff_pend = rec;
     g_staff_wait = 0;
   } else if (what == HUD_STAFF_FIRE) {
@@ -720,10 +849,17 @@ static void read_state(HudSnap *s) {
   copy_str(s->date, sizeof s->date, (const char *)(uintptr_t)TEXT_BUF);
   memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
   note_messages(s->date);
+  weed_check(s->date);
+  if (g_weed_until > host_now_ms() && g_weed_seq && !s->news_on) {   // the weed card shows while the game says nothing
+    s->news_on = 1;
+    g_news_seq = g_weed_seq;
+  }
   s->news_seq = g_news_seq;
   s->msg_n = g_hist_n;
   memcpy(s->msgs, g_hist, sizeof g_hist[0] * (size_t)g_hist_n);
   read_pro(s, flags);
+  if (!s->pro_out) shot_readout_reset();
+  s->shot_readout = s->pro_shots && shot_readout_copy(s->shot_text);
   read_design(s, flags);
   read_people(s);
 }
@@ -813,6 +949,16 @@ static void run_actions(void) {
     }
     return;
   }
+  if (g_staff_tab && !g_goal_on) {   // the People tray is open: its Staff tab (the clicks ui_hud.c makes)
+    int mode = G32(DOCK_MODE);
+    if (mode >= 2 && mode <= 4) {
+      if (!G32(0x561254)) inject(mode == 2 ? 232 : 231, mode == 2 ? 538 : 540);
+      g_staff_tab = 0;
+    } else if (++g_staff_tab_wait > 20) {
+      g_staff_tab = 0;
+    }
+    return;
+  }
   if (g_goal_on) {
     if (++g_goal_steps > 6) {
       g_goal_on = 0;
@@ -850,6 +996,14 @@ static void run_actions(void) {
         G32(0x822b9c) = a.y <= 9 ? '0' + a.y : "!@#$%^&*("[a.y - 10];
         fprintf(stderr, "hud: show hole %d\n", a.y);
         g_show_log = 4;
+      } else if (a.x == HUD_SHOW_STAFF) {   // task-112: People, then its Staff tab
+        g_staff_tab = 1;
+        g_weed_until = 0;
+        g_staff_tab_wait = 0;
+        g_goal = (HudAction){HUD_ACT_GOAL, -1, -1, HUD_GOAL_PEOPLE, 0};
+        g_goal_on = 1;
+        g_goal_steps = 0;
+        fprintf(stderr, "hud: show staff\n");
       } else if (a.x == HUD_SHOW_BUILDING) {
         pv_show_building(a.y);
         G8(SCREEN_STATE) = 0;
@@ -938,11 +1092,11 @@ void hud_restore(void) {
   s->art_serial = g_art_serial;
   hudf_publish(s);
   // one line whenever what the HUD shows changes (tests read these)
-  static char last[160];
-  char now[160];
-  snprintf(now, sizeof now, "dock %d amenities %d elevation %d staff %d terrain %d build %d elev_tool %d elev_edit %d paused %d zoom %d rot %d shape %d pro %d%d%d money %d design %d club %d",
+  static char last[256];
+  char now[256];
+  snprintf(now, sizeof now, "dock %d amenities %d elevation %d staff %d terrain %d build %d elev_tool %d elev_edit %d paused %d zoom %d rot %d shape %d pro %d%d%d money %d design %d club %d staff_count %d staff_limit %d",
            s->dock_mode, s->amenities_on, s->elevation_on, s->employee_overlay, s->terrain_tool, s->build_tool,
-           s->elevation_tool, s->elev_edit, s->paused, G32(0x4c2844), s->rotation, s->shape, s->pro_ready, s->pro_out, s->pro_practice, s->money, s->design, s->clubhouse);
+           s->elevation_tool, s->elev_edit, s->paused, G32(0x4c2844), s->rotation, s->shape, s->pro_ready, s->pro_out, s->pro_practice, s->money, s->design, s->clubhouse, s->staff_n, s->staff_limit);
   if (strcmp(now, last)) {
     fprintf(stderr, "hud: state %s\n", now);
     memcpy(last, now, sizeof last);

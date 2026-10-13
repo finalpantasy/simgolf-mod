@@ -42,6 +42,8 @@ IcallFn icall_replace(uint32_t addr, IcallFn fn, uint32_t *flags);
 uint32_t icall_register_native(IcallFn fn);
 
 int port_load_image(const char *path, uint32_t base, uint32_t limit);
+// A serializer's validation or short write must survive until its final close.
+void crt_io_failed(uint32_t fd);
 // Milliseconds, sub-millisecond resolution (emscripten_get_now in the browser).
 double port_now_ms(void);
 // SIMGOLF_SEED for golf's random numbers, else clock (runtime.c, task-38)

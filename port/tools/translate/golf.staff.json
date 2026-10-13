@@ -1,0 +1,425 @@
+{
+  "comment": "task-104: bounded 128-record relocated staff pool, allocator guards, all audited loops and strict SGST save preflight. Topic order follows golfers.",
+  "patches": {
+    "FUN_00402970": [
+      [
+        "iVar6 = 0;\n  if (DAT_00585862 != '\\0') {\n    puVar2 = &DAT_00585862;\n    do {\n      pcVar1 = puVar2 + 0x4c;\n      puVar2 = puVar2 + 0x4c;\n      iVar6 = iVar6 + 1;\n    } while (*pcVar1 != '\\0');\n  }",
+        "iVar6 = staff_free_slot((signed char)param_1);\n  if (iVar6 < 0) return -1;"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ],
+      [
+        "DAT_0058586a",
+        "(*(__typeof__(&DAT_0058586a))(staff_base()+0x1a))"
+      ],
+      [
+        "DAT_0058586e",
+        "(*(__typeof__(&DAT_0058586e))(staff_base()+0x1e))"
+      ]
+    ],
+    "FUN_0040aa80": [
+      [
+        "iVar3 = FUN_00459400();",
+        "if (!staff_can_hire()) return 0;\n  iVar3 = FUN_00459400();"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ],
+      [
+        "DAT_00585872",
+        "(*(__typeof__(&DAT_00585872))(staff_base()+0x22))"
+      ]
+    ],
+    "FUN_00470a60": [
+      [
+        "  (&DAT_00585860)[iVar19 * 0x4c] = (undefined1)DAT_00578150;\n  (&DAT_00585861)[iVar19 * 0x4c] = uVar7;",
+        "  if (iVar19 >= 0) {\n    (&DAT_00585860)[iVar19 * 0x4c] = (undefined1)DAT_00578150;\n    (&DAT_00585861)[iVar19 * 0x4c] = uVar7;\n  }"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ]
+    ],
+    "FUN_00402a40": [
+      [
+        "0x3f < (int)local_24",
+        "(STAFF_CAPACITY-1) < (int)local_24"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_00585864",
+        "(*(__typeof__(&DAT_00585864))(staff_base()+0x14))"
+      ],
+      [
+        "DAT_00585865",
+        "(*(__typeof__(&DAT_00585865))(staff_base()+0x15))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ],
+      [
+        "DAT_00585868",
+        "(*(__typeof__(&DAT_00585868))(staff_base()+0x18))"
+      ],
+      [
+        "DAT_0058586a",
+        "(*(__typeof__(&DAT_0058586a))(staff_base()+0x1a))"
+      ],
+      [
+        "DAT_0058586c",
+        "(*(__typeof__(&DAT_0058586c))(staff_base()+0x1c))"
+      ],
+      [
+        "DAT_0058586e",
+        "(*(__typeof__(&DAT_0058586e))(staff_base()+0x1e))"
+      ],
+      [
+        "DAT_00585870",
+        "(*(__typeof__(&DAT_00585870))(staff_base()+0x20))"
+      ],
+      [
+        "DAT_00585876",
+        "(*(__typeof__(&DAT_00585876))(staff_base()+0x26))"
+      ]
+    ],
+    "FUN_004038f0": [
+      [
+        "0x586b6d",
+        "(staff_base()+STAFF_BYTES+0x1d)"
+      ],
+      [
+        "DAT_0058586e",
+        "(*(__typeof__(&DAT_0058586e))(staff_base()+0x1e))"
+      ]
+    ],
+    "FUN_0040f5c0": [
+      [
+        "0x586b65",
+        "(staff_base()+STAFF_BYTES+0x15)"
+      ],
+      [
+        "0x586b63",
+        "(staff_base()+STAFF_BYTES+0x13)"
+      ],
+      [
+        "0x585865",
+        "(staff_base()+0x15)"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_00585865",
+        "(*(__typeof__(&DAT_00585865))(staff_base()+0x15))"
+      ],
+      [
+        "DAT_0058586a",
+        "(*(__typeof__(&DAT_0058586a))(staff_base()+0x1a))"
+      ],
+      [
+        "DAT_005858ae",
+        "(*(__typeof__(&DAT_005858ae))(staff_base()+0x5e))"
+      ]
+    ],
+    "FUN_00427380": [
+      [
+        "0x586b62",
+        "(staff_base()+STAFF_BYTES+0x12)"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ]
+    ],
+    "FUN_00436e50": [
+      [
+        "0x586b63",
+        "(staff_base()+STAFF_BYTES+0x13)"
+      ],
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_00585872",
+        "(*(__typeof__(&DAT_00585872))(staff_base()+0x22))"
+      ],
+      [
+        "DAT_00585874",
+        "(*(__typeof__(&DAT_00585874))(staff_base()+0x24))"
+      ],
+      [
+        "DAT_00585876",
+        "(*(__typeof__(&DAT_00585876))(staff_base()+0x26))"
+      ],
+      [
+        "0x13 < DAT_005aa6c0 + DAT_005aa558",
+        "!staff_can_hire()"
+      ],
+      [
+        "DAT_005aa6c0 + DAT_005aa558 < 0x14",
+        "staff_can_hire()"
+      ]
+    ],
+    "FUN_00456be0": [
+      [
+        "0x586b63",
+        "(staff_base()+STAFF_BYTES+0x13)"
+      ],
+      [
+        "0x586b6e",
+        "(staff_base()+STAFF_BYTES+0x1e)"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_0058586e",
+        "(*(__typeof__(&DAT_0058586e))(staff_base()+0x1e))"
+      ]
+    ],
+    "FUN_004315e0": [
+      [
+        "iVar8 = 0x4c0;",
+        "iVar8 = STAFF_CAPACITY * 0x13;"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ]
+    ],
+    "FUN_00442180": [
+      [
+        "iVar7 = 0x4c0;",
+        "iVar7 = STAFF_CAPACITY * 0x13;"
+      ],
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ]
+    ],
+    "FUN_0040afa0": [
+      [
+        "FUN_0040af70(0x585850,0x1300);",
+        "FUN_0040af70((int)staff_base(),0x1300);"
+      ]
+    ],
+    "FUN_0040bbf0": [
+      [
+        "FUN_0040af70(0x585850,0x1300);",
+        "FUN_0040af70((int)staff_base(),0x1300);"
+      ]
+    ],
+    "FUN_0040b9b0": [
+      [
+        "FUN_0040afa0(1);",
+        "if (!staff_preflight(DAT_00568d08,0,-1)) { crt_close(DAT_00568d08); return -1; }\n  FUN_0040afa0(1);"
+      ]
+    ],
+    "FUN_0040b840": [
+      [
+        "DAT_00568d08 = crt_open((int)local_64,0x8000,unaff_EDI);",
+        "DAT_00568d08 = crt_open((int)local_64,0x8000,unaff_EDI);\n  if (param_1 != 2 && param_1 != 3 && !staff_preflight(DAT_00568d08,1,200)) { crt_close(DAT_00568d08); return -1; }"
+      ]
+    ],
+    "FUN_0040e000": [
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ]
+    ],
+    "FUN_0040e720": [
+      [
+        "DAT_00585860",
+        "(*(__typeof__(&DAT_00585860))(staff_base()+0x10))"
+      ],
+      [
+        "DAT_00585861",
+        "(*(__typeof__(&DAT_00585861))(staff_base()+0x11))"
+      ]
+    ],
+    "FUN_0040f190": [
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ]
+    ],
+    "FUN_004289e0": [
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ]
+    ],
+    "FUN_00436c00": [
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_0058587a",
+        "(*(__typeof__(&DAT_0058587a))(staff_base()+0x2a))"
+      ]
+    ],
+    "FUN_00467600": [
+      [
+        "DAT_00585862",
+        "(*(__typeof__(&DAT_00585862))(staff_base()+0x12))"
+      ],
+      [
+        "DAT_00585863",
+        "(*(__typeof__(&DAT_00585863))(staff_base()+0x13))"
+      ],
+      [
+        "DAT_0058587a",
+        "(*(__typeof__(&DAT_0058587a))(staff_base()+0x2a))"
+      ]
+    ],
+    "FUN_0046c970": [
+      [
+        "DAT_00585850",
+        "(*(__typeof__(&DAT_00585850))(staff_base()+0x0))"
+      ],
+      [
+        "DAT_00585854",
+        "(*(__typeof__(&DAT_00585854))(staff_base()+0x4))"
+      ],
+      [
+        "DAT_00585866",
+        "(*(__typeof__(&DAT_00585866))(staff_base()+0x16))"
+      ]
+    ]
+  }
+}

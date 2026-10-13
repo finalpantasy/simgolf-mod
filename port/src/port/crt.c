@@ -19,6 +19,7 @@
 #endif
 #include "port/native.h"
 #include "port/runtime.h"
+#include "port/camera_tiles.h"
 
 #define P(x) ((void *)(uintptr_t)(x))
 #define S(x) ((char *)(uintptr_t)(x))
@@ -185,6 +186,11 @@ static int is_save(const char *real) {
   size_t n = strlen(real);
   return n > 4 && !strcasecmp(real + n - 4, ".sve");
 }
+static char *g_fd_path[256];
+static unsigned char g_fd_failed[256];
+static uint32_t g_fd_bytes[256];
+void crt_io_failed(uint32_t fd) { if (fd < 256) g_fd_failed[fd] = 1; }
+const char *crt_real_path(unsigned fd) { return fd < 256 ? g_fd_path[fd] : NULL; }
 
 int crt_open(nu path, nu flags, ...) {
   char real[512];
@@ -211,13 +217,33 @@ int crt_open(nu path, nu flags, ...) {
     g_fd_written[fd] = strdup(real);
     g_fd_final[fd] = safe ? strdup(tmp) : NULL;
   }
+  if (fd >= 0 && fd < 256) { g_fd_path[fd] = strdup(real); g_fd_failed[fd] = 0; g_fd_bytes[fd] = 0; }
   return fd;
 }
-int crt_read(nu fd, nu buf, nu n) { return (int)read((int)fd, P(buf), n); }
-int crt_write(nu fd, nu buf, nu n) { return (int)write((int)fd, P(buf), n); }
+int crt_read(nu fd, nu buf, nu n) {
+  return (int)read((int)fd, P(buf), n);
+}
+int crt_write(nu fd, nu buf, nu n) {
+  uint32_t requested = n;
+  // Harness-only short-write injection. It follows the real write and close
+  // paths and is absent unless this instance explicitly sets the test variable.
+  const char *fault = getenv("SIMGOLF_TEST_SAVE_FAIL_AFTER");
+  if (fault && fd < 256 && g_fd_written[fd]) {
+    long limit = strtol(fault, NULL, 10);
+    if (limit >= 0) {
+      uint32_t left = g_fd_bytes[fd] >= (uint32_t)limit ? 0 : (uint32_t)limit - g_fd_bytes[fd];
+      if (n > left) n = left;
+    }
+  }
+  int r = (int)write((int)fd, P(buf), n);
+  if (fd < 256 && r > 0) g_fd_bytes[fd] += (uint32_t)r;
+  if (fd < 256 && r != (int)requested) g_fd_failed[fd] = 1;
+  return r;
+}
 int crt_close(nu fd) {
   int synced = fd < 256 && g_fd_final[fd] ? fs_commit((int)fd) : 1;
   int r = close((int)fd);
+  if (fd < 256 && g_fd_failed[fd]) r = -1;
   if (fd < 256 && g_fd_final[fd]) {   // the save is whole on the disk: put it in place of the old one
     if (r == 0 && synced && fs_replace(g_fd_final[fd], g_fd_written[fd])) fprintf(stderr, "save: %s written safely\n", g_fd_written[fd]);
     else {
@@ -228,10 +254,13 @@ int crt_close(nu fd) {
     g_fd_final[fd] = NULL;
   }
   if (fd < 256 && g_fd_written[fd]) {
-    fs_written(g_fd_written[fd]);
+    if (!r && !camera_tiles_written((int)fd, g_fd_written[fd])) r = -1;
+    if (!r) fs_written(g_fd_written[fd]);
     free(g_fd_written[fd]);
     g_fd_written[fd] = NULL;
   }
+  camera_tiles_closed((int)fd);
+  if (fd < 256) { free(g_fd_path[fd]); g_fd_path[fd] = NULL; }
   return r;
 }
 int crt_lseek(nu fd, nu off, nu whence) { return (int)lseek((int)fd, (int32_t)off, (int)whence); }

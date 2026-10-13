@@ -31,6 +31,7 @@
 
 
 #include "port/grid.h"
+#include "port/staff.h"
 #include "port/host.h"
 #include "port/runtime.h"
 #include "mods/mods.h"
@@ -670,7 +671,7 @@ static void cmd_peek(int ci, const char *id, const JObj *o, Buf *b) {
   if (count > 4096) count = 4096;
   if (len < 1) len = 1;
   if (len > 65536) len = 65536;
-  uintptr_t a = grid_translate((uintptr_t)addr);   // map arrays moved (grid.h)
+  uintptr_t a = staff_translate(grid_translate((uintptr_t)addr));   // map and legacy staff addresses
   if (t == T_STR || t == T_BYTES) {
     if (!mem_ok(a, len, 0)) {
       // shorter readable prefix for strings near the end of a region
@@ -708,7 +709,7 @@ static void cmd_poke(int ci, const char *id, const JObj *o, Buf *b) {
   if (!jnum(o, "addr", &addr)) { reply_err(ci, id, "poke: addr missing"); return; }
   jstr(o, "type", tname, sizeof tname);
   Type t = parse_type(tname);
-  uintptr_t a = grid_translate((uintptr_t)addr);   // map arrays moved (grid.h)
+  uintptr_t a = staff_translate(grid_translate((uintptr_t)addr));   // map and legacy staff addresses
   if (t == T_BAD) { reply_err(ci, id, "unknown type %s", tname); return; }
   if (t == T_STR || t == T_BYTES) {
     static char s[4096];
@@ -874,6 +875,9 @@ static void run_cmd(int ci, const char *line) {
     bprintf(&b, ",\"ok\":true,\"version\":%d,\"pid\":%lu,\"port\":%d,\"game_dir\":", BRIDGE_VERSION, GetCurrentProcessId(), g_port);
     bstr(&b, host_game_dir(), (int)strlen(host_game_dir()));
     state_fields(&b);
+  } else if (!strcmp(cmd, "staff")) {
+    bprintf(&b, ",\"ok\":true,\"base\":%u,\"stride\":%d,\"capacity\":%d,\"hire_max\":%d,\"paid\":%d",
+      (unsigned)staff_base(), STAFF_STRIDE, STAFF_CAPACITY, staff_max(), staff_paid_count());
   } else if (!strcmp(cmd, "pause")) {
     set_paused(1);
     g_stepping = 0;

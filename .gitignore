@@ -25,6 +25,8 @@ dist/
 # local derived art (never in git)
 art_local/
 fixtures/
+# Runtime course tile bytes are local evidence, never redistributed.
+evidence/task-117/*cleanup.json
 
 # task-60: original game sprites written by SIMGOLF_FACES_DUMP (never commit game art)
 evidence/task-60/*/faces/

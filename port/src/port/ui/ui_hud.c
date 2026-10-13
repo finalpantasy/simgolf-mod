@@ -283,6 +283,40 @@ static void dock_act(UiHud *hud, const HudSnap *s, Acts *a, int i, int on) {
   (void)s;
 }
 
+// What Esc does on the course (task-112), one step per press: close a message or the history, else fold the
+// jwe build bar, else (regular: close the open tray and cancel its tool; the folding layouts: tuck the tray),
+// else cancel the tool that is still armed behind a tucked tray, else open the Menu. Returns the number of
+// actions written; *what names the step for the log.
+int ui_hud_escape(UiHud *h, const HudSnap *s, HudAction *out, int max_out, const char **what) {
+  Acts a = {out, 0, max_out};
+  const char *w = "menu";
+  int on = active_item(s);
+  if (h->msg_open || h->hist_open) {
+    h->msg_open = 0;
+    h->hist_open = 0;
+    w = "message";
+  } else if (h->density == HUD_JWE && h->bar_open) {
+    h->bar_open = 0;
+    h->tray_hidden = 1;
+    w = "bar";
+  } else if (on >= 0 && on <= D_PEOPLE && !h->tray_hidden) {
+    if (h->density == HUD_REGULAR) {
+      goal(&a, HUD_GOAL_CLOSE, -1, -1);
+      w = "close";
+    } else {
+      h->tray_hidden = 1;
+      w = "tray";
+    }
+  } else if (on >= 0 && on <= D_PEOPLE) {
+    goal(&a, HUD_GOAL_CLOSE, -1, -1);
+    w = "tool";
+  } else {
+    wheel(&a, W_OPTIONS);
+  }
+  if (what) *what = w;
+  return a.n;
+}
+
 static const UiIcon k_dock_ic[D_N] = {UI_ICON_FLAG, UI_ICON_HOUSE, UI_ICON_MOUNTAIN, UI_ICON_USERS, UI_ICON_CHART, UI_ICON_GEAR};
 static const char *const k_dock_lab[D_N] = {"Course", "Buildings", "Landscape", "People", "Reports", "Menu"};
 static const char *const k_dock_tip[D_N] = {"Build the course (tees, greens, hazards, trees)", "Add buildings",
@@ -1592,7 +1626,7 @@ static void staff_panel(UiCtx *c, const HudSnap *s, Acts *a) {
   const UiTokens *t = ui_tokens(c);
   float w = ui_s(c, 320), rh = ui_s(c, 48), rg = ui_s(c, 4);
   char title[48];
-  snprintf(title, sizeof title, "Staff  (%d of 20)", s->staff_n);
+  snprintf(title, sizeof title, "Staff  (%d of %d)", s->staff_n, s->staff_limit);
   float rows_h = s->staff_n ? s->staff_n * (rh + rg) - rg : ui_s(c, 48);
   UiRect view;
   UiRect r = people_panel_frame(c, title, w, rows_h, s->staff_n ? ui_s(c, 22) : 0, &view);
@@ -1655,10 +1689,10 @@ static void people_tray(UiCtx *c, UiHud *h, const HudSnap *s, UiRect dock_r, Act
       static char fire_txt[24];
       ui_hud_money(fire_txt, sizeof fire_txt, s->staff_fire_cost);
       tiles[0].labelled = 1;
-      tiles[1] = (Tile){"Fire", fire_txt, "Let this employee go", NULL, UI_ICON_TRASH, 0, 0, 1, {HUD_ACT_STAFF, HUD_STAFF_FIRE, 0, 0, 0}};
-      tiles[2] = (Tile){"Move", "then click", "Pick them up, then click a tile on the course", NULL, UI_ICON_PIN, s->staff_moving >= 0, 0, 1,
+      tiles[1] = (Tile){"Fire", fire_txt, "Let this employee go", NULL, UI_ICON_TRASH, 0, 0, 1, 0, {HUD_ACT_STAFF, HUD_STAFF_FIRE, 0, 0, 0}};
+      tiles[2] = (Tile){"Move", "then click", "Pick them up, then click a tile on the course", NULL, UI_ICON_PIN, s->staff_moving >= 0, 0, 1, 0,
                         {HUD_ACT_STAFF, HUD_STAFF_MOVE, 0, 0, 0}};
-      tiles[3] = (Tile){"Rename", "name", "Give this employee a new name", NULL, UI_ICON_PALETTE, 0, 0, 1, {HUD_ACT_STAFF, HUD_STAFF_RENAME, 0, 0, 0}};
+      tiles[3] = (Tile){"Rename", "name", "Give this employee a new name", NULL, UI_ICON_PALETTE, 0, 0, 1, 0, {HUD_ACT_STAFF, HUD_STAFF_RENAME, 0, 0, 0}};
       n = 4;
     }
     staff_panel(c, s, a);
@@ -1728,7 +1762,8 @@ static void msg_when(UiCtx *c, const HudMsg *m, char *out, int cap) {
 }
 
 static const char *show_label(const HudMsg *m) {
-  return m->show == HUD_SHOW_GOLFER ? "Show the golfer" : m->show == HUD_SHOW_BUILDING ? "Show the building" : "Show the hole";
+  return m->show == HUD_SHOW_GOLFER ? "Show the golfer" : m->show == HUD_SHOW_BUILDING ? "Show the building"
+       : m->show == HUD_SHOW_STAFF ? "Open staff" : "Show the hole";
 }
 
 static const HudMsg *find_msg(const HudSnap *s, int seq) {
@@ -1767,7 +1802,7 @@ static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
   const char *st[16];
   int ln[16], more = 0;
   int n = wrap_lines(c, UI_TYPE_CAPTION, m->text, tw, st, ln, open ? 14 : 3, &more);
-  int btn = open && m->show != HUD_SHOW_NONE;
+  int btn = (open || m->show == HUD_SHOW_STAFF) && m->show != HUD_SHOW_NONE;   // the weed card (task-112) has its button at once
   float btn_h = ui_s(c, 30);
   float h = 2 * pad + n * cf.line + (open ? lf.line + ui_s(c, 6) : 0) + (btn ? ui_s(c, 10) + btn_h : 0);
   h = fmaxf(h, d + 2 * pad);
@@ -1810,9 +1845,13 @@ static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
   }
   if (btn) {
     UiRect br = ui_rect(x, r.y + r.h - pad - btn_h, ui_s(c, 150), btn_h);
-    if (ui_button(c, ui_id("hud.newscard.show"), br, show_label(m), UI_ICON_EYE, UI_BTN_PRIMARY, UI_COMPACT)) {
+    if (ui_button(c, ui_id("hud.newscard.show"), br, show_label(m), m->show == HUD_SHOW_STAFF ? UI_ICON_USERS : UI_ICON_EYE, UI_BTN_PRIMARY, UI_COMPACT)) {
       act(a, (HudAction){HUD_ACT_SHOW, m->show, m->target, 0, 0});
       hud->msg_open = 0;
+      if (m->show == HUD_SHOW_STAFF) {   // the tray must show: the jwe build bar opens, a tucked tray comes back
+        hud->bar_open = 1;
+        hud->tray_hidden = 0;
+      }
     }
   }
   if (!open) {
@@ -2002,6 +2041,35 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
   ui_text_in(c, ui_rect(x + ui_s(c, 2), y, inner, ui_font(c, UI_TYPE_BODY).line), UI_TYPE_BODY, t->text_secondary, hint, 0);
 }
 
+static void shot_readout(UiCtx *c, const HudSnap *s) {
+  if (!s->shot_readout) return;
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  float pad = ui_s(c, 16), row = ui_s(c, 26), head = ui_s(c, 30);
+  float w = fminf(ui_s(c, 380), scr.w - 2 * pad), h = 2 * pad + head + SHOT_READOUT_LINES * row;
+  UiRect r = ui_rect_round(ui_rect(scr.x + scr.w - pad - w, scr.y + scr.h - ui_s(c, 80) - h, w, h));
+  ui_panel(c, r, ui_s(c, 20), UI_PANEL_STRONG);
+  ui_hit(c, r, ui_s(c, 20), ui_id("hud.shot.readout"), UI_HIT_BLOCK);
+  ui_text_in(c, ui_rect(r.x + pad, r.y + pad, w - 2 * pad, head), UI_TYPE_LABEL, t->text_secondary, "Next shot", 0);
+  for (int i = 0; i < SHOT_READOUT_LINES; i++) {
+    char line[SHOT_READOUT_TEXT + 2];
+    const char *colon = strchr(s->shot_text[i], ':');
+    if (colon && colon[1] && colon[1] != ' ')
+      snprintf(line, sizeof line, "%.*s: %s", (int)(colon - s->shot_text[i]), s->shot_text[i], colon + 1);
+    else snprintf(line, sizeof line, "%s", s->shot_text[i]);
+    ui_text_fit(c, ui_rect(r.x + pad, r.y + pad + head + i * row, w - 2 * pad, row), UI_TYPE_BODY,
+                t->text_primary, line, 0);
+  }
+  if (getenv("SIMGOLF_FRONTEND_LOG")) {
+    static char last[SHOT_READOUT_LINES][SHOT_READOUT_TEXT];
+    if (memcmp(last, s->shot_text, sizeof last)) {
+      memcpy(last, s->shot_text, sizeof last);
+      fprintf(stderr, "hud: shot readout target %.0fx%.0f at %.0f,%.0f size %.0fx%.0f [%s|%s|%s|%s]\n",
+              scr.w, scr.h, r.x, r.y, r.w, r.h, s->shot_text[0], s->shot_text[1], s->shot_text[2], s->shot_text[3]);
+    }
+  }
+}
+
 int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, HudAction *out, int max_out) {
   Acts a = {out, 0, max_out};
   if (!s->visible) return 0;
@@ -2042,6 +2110,7 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
     case D_PEOPLE: people_tray(c, h, s, dock_r, &a); break;
   }
   place_panel(c, h, s, art, &a);
+  shot_readout(c, s);
   if (h->density == HUD_JWE) news_ui(c, h, s, &a);
   return a.n;
 }

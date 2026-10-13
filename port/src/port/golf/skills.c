@@ -9,10 +9,22 @@
 #pragma clang diagnostic error "-Wimplicit-function-declaration"
 
 #include "golf_protos.h"
+#ifndef __EMSCRIPTEN__
 #include "mods/mods.h"
+#endif
+
+static int skill_setting(const char *key, int fallback) {
+#ifndef __EMSCRIPTEN__
+  return mods_get_int(key, fallback);
+#else
+  // The browser target has no native mod store. Keep these settings' defaults.
+  (void)key;
+  return fallback;
+#endif
+}
 
 static int skills_cap(void) {
-  int c = mods_get_int("skills.cap", 15);
+  int c = skill_setting("skills.cap", 15);
   return c < 10 ? 10 : c > 30 ? 30 : c;
 }
 
@@ -20,14 +32,14 @@ static int skills_cap(void) {
 // (the hard gate of 10 then ends it).
 int skill_soft_cap(int t) {
   int c = skills_cap();
-  if (c > 10 && (t >= 3 || mods_get_int("skills.any_course", 0) != 0)) return c;
+  if (c > 10 && (t >= 3 || skill_setting("skills.any_course", 0) != 0)) return c;
   return t == 3 ? 99 : t * 2 + 6;
 }
 
 // The hard gate of the grow branch (the original: below 10).
 int skill_hard_cap(void) { return skills_cap(); }
 
-int skill_loss_on(void) { return mods_get_int("skills.loss", 1) != 0; }
+int skill_loss_on(void) { return skill_setting("skills.loss", 1) != 0; }
 
 // @override FUN_0044faf0
 // Course size tier from the hole count: 0 (under 6), 1 (6 to 9), 2 (10 to 17), 3 (18 or more). The

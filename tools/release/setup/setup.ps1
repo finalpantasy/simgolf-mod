@@ -1,6 +1,6 @@
 # SimGolf Remastered setup. Double-click Setup.cmd (it runs this file).
 #
-# Asks for YOUR copy of the game (the disc image and the v1.02 no-CD zip),
+# Asks for YOUR copy of the game (a disc image or installed folder, and the v1.02 no-CD zip),
 # checks it, unpacks it next to our program, optionally downloads the HD art
 # pack, writes golf.ini and makes a desktop shortcut. Nothing is uploaded;
 # the only download is the optional HD art pack from GitHub.
@@ -10,6 +10,7 @@
 param(
   [string]$Dir = "",
   [string]$Disc = "",
+  [string]$GameDir = "",         # existing original SimGolf folder, instead of -Disc
   [string]$NoCd = "",
   [string]$Hd = "",              # "yes" (download), "no", or a folder holding the pack parts you already downloaded
   [string]$HdUrl = "https://github.com/finalpantasy/simgolf-hd-art/releases/latest/download",
@@ -42,6 +43,7 @@ function Ask($t) {
   return [System.Windows.Forms.MessageBox]::Show($owner, $t, $title, "YesNo", "Question") -eq "Yes"
 }
 function Pick($text, $filter) {
+  if ($Quiet) { Die "A required file was not supplied. Use -NoCd and either -Disc or -GameDir with -Quiet." }
   $d = New-Object System.Windows.Forms.OpenFileDialog
   $d.Title = $text
   $d.Filter = $filter
@@ -49,6 +51,7 @@ function Pick($text, $filter) {
   return $d.FileName
 }
 function Pick-Folder($text, $start) {
+  if ($Quiet) { Die "A required folder was not supplied." }
   $d = New-Object System.Windows.Forms.FolderBrowserDialog
   $d.Description = $text
   $d.SelectedPath = $start
@@ -57,11 +60,13 @@ function Pick-Folder($text, $start) {
 }
 function Sha1-Of($path) { (Get-FileHash -Algorithm SHA1 -LiteralPath $path).Hash.ToLower() }
 
-if (-not (Test-Path (Join-Path $app "golf.exe"))) { Die "The 'app' folder is missing next to setup.ps1. Unzip the whole download first, then run Setup.cmd." }
+if (-not (Test-Path -LiteralPath (Join-Path $app "golf.exe"))) { Die "The 'app' folder is missing next to setup.ps1. Unzip the whole download first, then run Setup.cmd." }
+if ($Disc -and $GameDir) { Die "Choose either -Disc or -GameDir, not both." }
+if ($Quiet -and (-not $NoCd -or (-not $Disc -and -not $GameDir))) { Die "With -Quiet, supply -NoCd and either -Disc or -GameDir." }
 
 Say "=== $title ==="
 if (-not $Quiet) {
-  Info ("This installs SimGolf Remastered on your PC.`n`nYou need your own copy of the game:`n  1. the SimGolf disc image (an .iso, or the .7z/.zip it came in)`n  2. the version 1.02 'no-CD' golf.exe (a .zip, or the bare golf.exe)`n`nSee INSTALL.txt for where to get them. Nothing from your copy leaves your PC.")
+  Info ("This installs SimGolf Remastered on your PC.`n`nYou need your own copy of the game:`n  1. a SimGolf disc image OR an existing installed SimGolf folder`n  2. the version 1.02 'no-CD' golf.exe (a .zip, or the bare golf.exe)`n`nThe remaster runs the 1.02 program code. A 1.03 golf.exe cannot replace it, even when using a 1.03 install folder.`n`nSee INSTALL.txt. Nothing from your copy leaves your PC.")
 }
 
 # ---- where to install
@@ -72,16 +77,45 @@ if (-not $Dir) {
   }
 }
 $Dir = [System.IO.Path]::GetFullPath($Dir)
-if ((Test-Path (Join-Path $Dir "game")) -and -not $Quiet) {
+$ancestor = $Dir
+while ($ancestor) {
+  if (Test-Path -LiteralPath $ancestor) {
+    if ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { Die "Choose an install folder without junctions or symbolic links." }
+  }
+  $ancestor = [IO.Path]::GetDirectoryName($ancestor)
+}
+if (Test-Path -LiteralPath $Dir) {
+  $links = Get-ChildItem -LiteralPath $Dir -Force -Recurse -Attributes ReparsePoint
+  if ($links) { Die "Choose an install folder without junctions or symbolic links." }
+}
+if ((Test-Path -LiteralPath (Join-Path $Dir "game")) -and -not $Quiet) {
   if (-not (Ask "SimGolf is already installed in:`n$Dir`n`nInstall again over it? (Your saved games are kept.)")) { exit 0 }
 }
-New-Item -ItemType Directory -Force $Dir | Out-Null
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("simgolf-setup-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
 try {
+  # ---- choose the data source
+  if (-not $Disc -and -not $GameDir) {
+    $choice = [System.Windows.Forms.MessageBox]::Show($owner, "Where should setup get your game files?`n`nYes = an existing SimGolf install folder`nNo = a disc image`nCancel = stop setup", $title, "YesNoCancel", "Question")
+    if ($choice -eq "Cancel") { Die "Setup was cancelled." }
+    if ($choice -eq "Yes") { $GameDir = Pick-Folder "Choose the existing SimGolf folder containing its art, sound and data" $env:USERPROFILE }
+    else { $Disc = Pick "Choose the SimGolf disc image (.iso, or the .7z/.zip it came in)" "Disc image or archive|*.iso;*.bin;*.img;*.mdf;*.7z;*.zip;*.rar|All files|*.*" }
+  }
+  if ($GameDir) {
+    $GameDir = [IO.Path]::GetFullPath($GameDir).TrimEnd('\', '/')
+    $target = $Dir.TrimEnd('\', '/')
+    if ($GameDir -ieq $target -or $target.StartsWith($GameDir + '\', [StringComparison]::OrdinalIgnoreCase) -or $GameDir.StartsWith($target + '\', [StringComparison]::OrdinalIgnoreCase)) {
+      Die "Choose a separate install folder outside the existing SimGolf folder."
+    }
+    Say "Checking the existing SimGolf files..."
+    $checkLog = Join-Path $tmp "folder-check.log"
+    $checkErr = Join-Path $tmp "folder-check.err"
+    $checked = Start-Process -FilePath (Join-Path $app "sgsetup.exe") -ArgumentList @("check-folder", "`"$GameDir`"") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $checkLog -RedirectStandardError $checkErr
+    if ($checked.ExitCode -ne 0) { Die ((Get-Content $checkErr -Raw) + "`nUse a clean matching folder or the disc image instead.") }
+  }
   # ---- the no-CD golf.exe
-  if (-not $NoCd) { $NoCd = Pick "Choose the no-CD golf.exe, or the zip it came in" "No-CD golf.exe or zip|*.zip;*.exe|All files|*.*" }
+  if (-not $NoCd) { $NoCd = Pick "Choose the version 1.02 no-CD golf.exe (the remaster runs 1.02 program code), or its zip" "No-CD golf.exe or zip|*.zip;*.exe|All files|*.*" }
   if (-not (Test-Path -LiteralPath $NoCd)) { Die "Cannot find $NoCd" }
   $exe = Join-Path $tmp "golf.exe"
   if ($NoCd -match '\.zip$') {
@@ -94,12 +128,12 @@ try {
   } else { Copy-Item -LiteralPath $NoCd $exe }
   $sha = Sha1-Of $exe
   if ($sha -ne $NOCD_SHA1) {
-    Die "That golf.exe is not the version 1.02 no-CD file this needs (its fingerprint is $sha, expected $NOCD_SHA1). Get 'SIMGOLF.102.ENG.MYTH.NOCD.ZIP' as described in INSTALL.txt."
+    Die "That golf.exe is not the version 1.02 no-CD file this needs (its fingerprint is $sha, expected $NOCD_SHA1). The remaster runs the 1.02 program code; a 1.03 golf.exe cannot replace it. See INSTALL.txt."
   }
   Say "golf.exe checked: version 1.02 no-CD."
 
   # ---- the disc image
-  if (-not $Disc) { $Disc = Pick "Choose the SimGolf disc image (.iso, or the .7z/.zip it came in)" "Disc image or archive|*.iso;*.bin;*.img;*.mdf;*.7z;*.zip;*.rar|All files|*.*" }
+  if (-not $GameDir) {
   if (-not (Test-Path -LiteralPath $Disc)) { Die "Cannot find $Disc" }
   if ($Disc -match '\.(7z|zip|rar)$') {
     Say "Opening the archive (this can take a minute)..."
@@ -111,31 +145,33 @@ try {
     if (-not $img) { Die "There is no disc image (.iso or .bin) inside $([IO.Path]::GetFileName($Disc))." }
     $Disc = $img.FullName
   }
+  }
 
   # ---- our program files
   Say "Copying the game program to $Dir ..."
   & (Join-Path $here "copy_app.ps1") -App $app -Dir $Dir   # keeps the player's mods.ini (task-114i)
 
   # ---- unpack the player's own game
-  Say "Unpacking your SimGolf disc (about a minute)..."
+  Say $(if ($GameDir) { "Copying your checked SimGolf files..." } else { "Unpacking your SimGolf disc (about a minute)..." })
   $sg = Join-Path $Dir "sgsetup.exe"
   $log = Join-Path $tmp "sgsetup.log"
   $err = Join-Path $tmp "sgsetup.err"
-  $p = Start-Process -FilePath $sg -ArgumentList @("install", "`"$Disc`"", "`"$exe`"", "`"$Dir`"") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $log -RedirectStandardError $err
+  $installArgs = if ($GameDir) { @("install", "--game-dir", "`"$GameDir`"", "`"$exe`"", "`"$Dir`"") } else { @("install", "`"$Disc`"", "`"$exe`"", "`"$Dir`"") }
+  $p = Start-Process -FilePath $sg -ArgumentList $installArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $log -RedirectStandardError $err
   $msg = (Get-Content $err -ErrorAction SilentlyContinue | Where-Object { $_ -like "error:*" } | Select-Object -Last 1)
   if ($p.ExitCode -ne 0) {
-    if ($msg) { Die (($msg -replace '^error:\s*', '') + "`n`nSee INSTALL.txt, 'If something goes wrong'.") }
-    Die "Unpacking the disc failed (code $($p.ExitCode))."
+    if ($msg) { Die ((Get-Content $err -Raw) + "`n`nSee INSTALL.txt, 'If something goes wrong'.") }
+    Die "Installing the game data failed (code $($p.ExitCode))."
   }
   Say ((Get-Content $log | Select-Object -Last 1))
   # The program needs the no-CD golf.exe's name? No: the game code is read from image\golf.bin.
   # Keep golf_nocd.exe out of the install: it is only used to build image\golf.bin.
-  Remove-Item (Join-Path $Dir "sgsetup.exe"), (Join-Path $Dir "jgld-nops.json") -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $Dir "sgsetup.exe"), (Join-Path $Dir "jgld-nops.json") -Force -ErrorAction SilentlyContinue
 
   # ---- settings
   $ini = Join-Path $Dir "golf.ini"
-  if (-not (Test-Path $ini)) { Copy-Item (Join-Path $Dir "golf.ini.template") $ini }
-  Remove-Item (Join-Path $Dir "golf.ini.template") -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path -LiteralPath $ini)) { Copy-Item -LiteralPath (Join-Path $Dir "golf.ini.template") -Destination $ini }
+  Remove-Item -LiteralPath (Join-Path $Dir "golf.ini.template") -Force -ErrorAction SilentlyContinue
 
   # ---- HD art pack (separate download)
   $artDir = Join-Path $Dir "art\upscaled"
@@ -202,5 +238,5 @@ try {
     if (Ask "SimGolf Remastered is installed.`n`nStart it now?") { Start-Process (Join-Path $Dir "golf.exe") -WorkingDirectory $Dir }
   }
 } finally {
-  Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -12,7 +12,9 @@
 #include <strings.h>
 
 #include "mods/mods.h"
+#include "port/dialogs_frosted.h"
 #include "port/hd_native.h"
+#include "port/options_frosted.h"
 #include "port/host.h"
 #include "port/runtime.h"
 #include "port/ui/ui_hud.h"
@@ -36,6 +38,8 @@ static uint32_t g_art_pub;
 // render thread
 static UiCtx *g_ui;
 static UiHud g_hud = UI_HUD_INIT;
+static volatile int g_esc;    // Esc pressed on the course (task-112): the draw decides what it does
+static volatile int g_dock_mode = -1;   // the game's dock mode at the last drawn frame (input reads it)
 static volatile int g_tuck;   // a click on the course or Esc: the tray tucks away (jwe: the build bar folds up)
 static volatile int g_toggle_hidden;   // the hide key was pressed (task-57)
 static double g_eat_until;             // swallow the text event that follows the hide key until then
@@ -282,6 +286,24 @@ static void draw(const HdUiFrame *f, void *user) {
     g_toggle_hidden = 0;
     g_hud.hidden = !g_hud.hidden;
   }
+  g_dock_mode = s.dock_mode;
+  if (g_esc) {   // Esc: close what is open, cancel the tool, and only then the Menu (ui_hud_escape)
+    g_esc = 0;
+    HudAction ea[2];
+    const char *what = "";
+    int en = ui_hud_escape(&g_hud, &s, ea, 2, &what);
+    static double close_until;   // a close click is on its way: another Esc must not send a second one (it would toggle the tray back)
+    if (en && (!strcmp(what, "tool") || !strcmp(what, "close"))) {
+      if (now < close_until) en = 0, what = "wait";
+      else close_until = now + 1500;
+    }
+    fprintf(stderr, "hud: esc %s\n", what);
+    if (en) {
+      lock();
+      for (int i = 0; i < en && g_qn < QMAX; i++) g_q[g_qn++] = ea[i];
+      unlock();
+    }
+  }
   if (g_tuck) {
     g_tuck = 0;
     if (g_hud.density) g_hud.tray_hidden = 1;
@@ -355,7 +377,11 @@ static int input(SDL_Event *e, int course, void *user) {
       if (e->window.event == SDL_WINDOWEVENT_LEAVE || e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) ui_input_reset(g_ui);
       return 0;
     case SDL_KEYDOWN: {
-      if (e->key.keysym.sym == SDLK_ESCAPE) g_tuck = 1;
+      if (e->key.keysym.sym == SDLK_ESCAPE) fprintf(stderr, "hud: esc key (visible %d, options %d, dialog %d)\n", g_visible, opt_is_open(), dlgf_active());
+      if (e->key.keysym.sym == SDLK_ESCAPE && g_visible && !opt_is_open() && !dlgf_active()) {
+        if (!e->key.repeat) g_esc = 1;   // each Esc is one step (the draw runs ui_hud_escape)
+        return 1;
+      }
       // the hide key (task-57): only while the course view is up (not in a dialog that takes typing)
       SDL_Keycode hk = hide_key(NULL, 0);
       if (hk != SDLK_UNKNOWN && e->key.keysym.sym == hk && g_visible &&
@@ -387,7 +413,9 @@ static int input(SDL_Event *e, int course, void *user) {
     return 0;
   }
   int to = ui_route_event(g_ui, &u);
-  if (u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) g_tuck = 1;   // back on the course
+  // back on the course: the tray tucks away, except while a tool places something (course and buildings
+  // trays, the dock open): the player keeps placing and the tray stays (task-112, as the original toolbar)
+  if (u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME) && !(g_dock_mode == 0 || g_dock_mode == 1)) g_tuck = 1;
   // While one of our clicks is on its way to the game, its mouse state must
   // not change under it: hold the real pointer back for those frames.
   if (g_injecting) return 1;

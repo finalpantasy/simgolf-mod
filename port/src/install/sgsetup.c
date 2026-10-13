@@ -15,6 +15,7 @@
 // end; "error: <plain sentence>" on stderr and exit 2 for a wrong file, 1
 // for anything else.
 #include <windows.h>
+#include <bcrypt.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,117 @@
 #include "libunshield.h"
 
 #define GROUP "Program Files (ENGLISH)"
+#define NOCD_SHA1 "6f05a3ae3b5050ed82dc0010c03842a2e0ab166b"
+static void fail(int code, const char *msg);
+
+typedef struct { const char *path; unsigned long long size; const char *sha256; } GameFile;
+#ifndef SGSETUP_MANIFEST_HEADER
+#define SGSETUP_MANIFEST_HEADER "game-files.h"
+#endif
+#include SGSETUP_MANIFEST_HEADER
+
+static int file_hash(const char *path, LPCWSTR algorithm, char *hex) {
+  FILE *f = fopen(path, "rb");
+  if (!f) return 0;
+  BCRYPT_ALG_HANDLE alg = NULL;
+  BCRYPT_HASH_HANDLE hash = NULL;
+  DWORD size = 0, used = 0;
+  unsigned char digest[32], block[65536];
+  int ok = BCryptOpenAlgorithmProvider(&alg, algorithm, NULL, 0) >= 0;
+  if (ok) ok = BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, (PUCHAR)&size, sizeof size, &used, 0) >= 0 && size <= sizeof digest;
+  if (ok) ok = BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0) >= 0;
+  size_t n;
+  while (ok && (n = fread(block, 1, sizeof block, f)) != 0)
+    ok = BCryptHashData(hash, block, (ULONG)n, 0) >= 0;
+  ok = ok && !ferror(f);
+  if (ok) ok = BCryptFinishHash(hash, digest, size, 0) >= 0;
+  if (hash) BCryptDestroyHash(hash);
+  if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+  fclose(f);
+  if (ok) {
+    for (DWORD i = 0; i < size; i++) sprintf(hex + i * 2, "%02x", digest[i]);
+    hex[size * 2] = 0;
+  }
+  return ok;
+}
+
+static int joined_path(char *out, size_t size, const char *root, const char *rel) {
+  int n = snprintf(out, size, "%s\\%s", root, rel);
+  return n >= 0 && (size_t)n < size;
+}
+
+// Do not follow junctions or symlinks in a folder supplied to the installer.
+static int regular_source(const char *path) {
+  char p[MAX_PATH * 3];
+  if (strlen(path) >= sizeof p) return 0;
+  strcpy(p, path);
+  for (char *c = p; ; c++) {
+    if (*c == '/' || *c == '\\' || !*c) {
+      char save = *c;
+      *c = 0;
+      if (strlen(p) > 2) {
+        DWORD a = GetFileAttributesA(p);
+        if (a == INVALID_FILE_ATTRIBUTES || (a & FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
+        if (!save && (a & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+      }
+      *c = save;
+      if (!save) break;
+    }
+  }
+  return 1;
+}
+
+static void safe_destination(const char *path) {
+  char p[MAX_PATH * 3];
+  DWORD n = GetFullPathNameA(path, sizeof p, p, NULL);
+  if (!n || n >= sizeof p) fail(2, "the install folder path is too long");
+  for (char *c = p; ; c++) {
+    if (*c == '\\' || *c == '/' || !*c) {
+      char save = *c;
+      *c = 0;
+      DWORD a = GetFileAttributesA(p);
+      if (a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_REPARSE_POINT))
+        fail(2, "choose an install folder without junctions or symbolic links");
+      *c = save;
+      if (!save) break;
+    }
+  }
+}
+
+static int validate_folder(const char *source) {
+  DWORD attr = GetFileAttributesA(source);
+  if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
+    fail(2, "choose the existing SimGolf folder, not its golf.exe");
+  int bad = 0;
+  for (size_t i = 0; i < sizeof game_files / sizeof game_files[0]; i++) {
+    const GameFile *g = &game_files[i];
+    char p[MAX_PATH * 3], hex[65];
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (!joined_path(p, sizeof p, source, g->path) || !regular_source(p) ||
+        !GetFileAttributesExA(p, GetFileExInfoStandard, &a)) {
+      fprintf(stderr, "error: missing or unreadable game file: %s\n", g->path);
+      bad++;
+    } else if ((((unsigned long long)a.nFileSizeHigh << 32) | a.nFileSizeLow) != g->size ||
+               !file_hash(p, BCRYPT_SHA256_ALGORITHM, hex) || strcmp(hex, g->sha256)) {
+      fprintf(stderr, "error: changed game file: %s\n", g->path);
+      bad++;
+    }
+  }
+  if (bad) fail(2, "these game files do not match the original English disc; use a clean matching folder or the disc image instead. Nothing was copied");
+  printf("ok %u game files checked\n", (unsigned)(sizeof game_files / sizeof game_files[0]));
+  return 0;
+}
+
+static void separate_folders(const char *source, const char *out) {
+  char s[MAX_PATH * 3], d[MAX_PATH * 3];
+  DWORD sn = GetFullPathNameA(source, sizeof s, s, NULL), dn = GetFullPathNameA(out, sizeof d, d, NULL);
+  if (!sn || !dn || sn >= sizeof s || dn >= sizeof d) fail(2, "the source or install folder path is too long");
+  while (sn && (s[sn-1] == '\\' || s[sn-1] == '/')) s[--sn] = 0;
+  while (dn && (d[dn-1] == '\\' || d[dn-1] == '/')) d[--dn] = 0;
+  if ((!_strnicmp(s, d, sn) && (!d[sn] || d[sn] == '\\' || d[sn] == '/')) ||
+      (!_strnicmp(d, s, dn) && (!s[dn] || s[dn] == '\\' || s[dn] == '/')))
+    fail(2, "choose a separate install folder outside the existing SimGolf folder");
+}
 
 static void fail(int code, const char *msg) {
   fprintf(stderr, "error: %s\n", msg);
@@ -69,6 +181,7 @@ static uint8_t *read_all(const char *path, size_t *n) {
 }
 
 static int write_all(const char *path, const void *p, size_t n) {
+  safe_destination(path);
   mkparent(path);
   FILE *f = fopen(path, "wb");
   if (!f) return 0;
@@ -176,6 +289,7 @@ static Entry *disc_root(Disc *d, int *n) {
 }
 
 static int disc_copy(Disc *d, const Entry *e, const char *out) {
+  safe_destination(out);
   mkparent(out);
   FILE *f = fopen(out, "wb");
   if (!f) return 0;
@@ -276,14 +390,24 @@ static void rmtree(const char *dir) {   // the scratch folder: plain files, no l
   RemoveDirectoryA(dir);
 }
 
-static int install(const char *disc_path, const char *exe_path, const char *out) {
+static int install(const char *disc_path, const char *exe_path, const char *out, int from_folder) {
   char nops[MAX_PATH], gamedir[MAX_PATH * 2], scratch[MAX_PATH * 2], p[MAX_PATH * 3];
   GetModuleFileNameA(NULL, nops, MAX_PATH);
   char *sl = strrchr(nops, '\\');
   snprintf(sl ? sl + 1 : nops, MAX_PATH - (sl ? (size_t)(sl + 1 - nops) : 0), "jgld-nops.json");
   snprintf(gamedir, sizeof gamedir, "%s\\game", out);
   snprintf(scratch, sizeof scratch, "%s\\setup-scratch", out);
+  safe_destination(out);
+  safe_destination(gamedir);
+  safe_destination(scratch);
 
+  char hash[65];
+  if (!file_hash(exe_path, BCRYPT_SHA1_ALGORITHM, hash) || strcmp(hash, NOCD_SHA1))
+    fail(2, "the remaster runs version 1.02 program code and needs the exact version 1.02 no-CD golf.exe; the 1.03 golf.exe cannot replace it");
+  if (from_folder) {
+    separate_folders(disc_path, out);
+    validate_folder(disc_path); // Complete preflight before any destination writes.
+  }
   size_t en = 0;
   uint8_t *exe = read_all(exe_path, &en);
   if (!exe) fail(2, "the no-CD golf.exe could not be read");
@@ -291,6 +415,30 @@ static int install(const char *disc_path, const char *exe_path, const char *out)
   uint8_t *gimg = map_pe(exe, en, &gn);
   if (!gimg) fail(2, "that golf.exe is not a Windows program");
 
+  int total = 0, files = 0;
+  char jgld[MAX_PATH * 3] = "";
+  if (from_folder) {
+    total = (int)(sizeof game_files / sizeof game_files[0]);
+    for (int i = 0; i < total; i++) {
+      char src[MAX_PATH * 3];
+      const GameFile *g = &game_files[i];
+      if (!joined_path(src, sizeof src, disc_path, g->path) || !joined_path(p, sizeof p, gamedir, g->path))
+        fail(2, "a game file path is too long");
+      safe_destination(p);
+      mkparent(p);
+      if (!CopyFileA(src, p, FALSE)) fail(1, "copying the checked game files failed (is the disk full?)");
+      // Check copied bytes too, in case a source file changed after preflight.
+      if (!file_hash(p, BCRYPT_SHA256_ALGORITHM, hash) || strcmp(hash, g->sha256))
+        fail(2, "a game file changed while copying; close the original game and run setup again");
+      files++;
+      if (!_stricmp(g->path, "jgld.dll")) snprintf(jgld, sizeof jgld, "%s", p);
+      if (i % 25 == 0) printf("progress %d %d %s\n", i, total, g->path), fflush(stdout);
+    }
+    // Keep player records out of the import; an empty original table is sufficient.
+    snprintf(p, sizeof p, "%s\\top10.sve", gamedir);
+    if (GetFileAttributesA(p) == INVALID_FILE_ATTRIBUTES && !write_all(p, "", 0))
+      fail(1, "creating the high-score table failed");
+  } else {
   Disc d;
   if (!disc_open(&d, disc_path)) fail(2, "that file does not look like a CD image (.iso, .bin, .img or .mdf)");
   int ne = 0;
@@ -316,8 +464,8 @@ static int install(const char *disc_path, const char *exe_path, const char *out)
   UnshieldFileGroup *g = unshield_file_group_find(us, GROUP);
   if (!g) fail(2, "that disc image is not the SimGolf CD (no game files in the installer)");
   mkdirs(gamedir);
-  int total = (int)(g->last_file - g->first_file + 1), done = 0, files = 0;
-  char jgld[MAX_PATH * 3] = "";
+  total = (int)(g->last_file - g->first_file + 1);
+  int done = 0;
   for (int i = (int)g->first_file; i <= (int)g->last_file; i++, done++) {
     if (!unshield_file_is_valid(us, i)) continue;
     const char *dir = unshield_directory_name(us, unshield_file_directory(us, i));
@@ -328,6 +476,7 @@ static int install(const char *disc_path, const char *exe_path, const char *out)
     char *r = rel;
     while (*r == '\\') r++;
     snprintf(p, sizeof p, "%s\\%s", gamedir, r);
+    safe_destination(p);
     mkparent(p);
     if (!unshield_file_save(us, i, p)) {
       fprintf(stderr, "error: unpacking %s failed\n", r);
@@ -346,6 +495,7 @@ static int install(const char *disc_path, const char *exe_path, const char *out)
     }
   fclose(d.f);
   rmtree(scratch);
+  }
   if (!jgld[0]) fail(2, "jgld.dll was not in the installer; is this the right disc?");
 
   size_t jn = 0, jin = 0;
@@ -363,7 +513,12 @@ static int install(const char *disc_path, const char *exe_path, const char *out)
 }
 
 int main(int argc, char **argv) {
-  if (argc == 5 && !strcmp(argv[1], "install")) return install(argv[2], argv[3], argv[4]);
-  fprintf(stderr, "usage: sgsetup install <disc image> <golf.exe> <install folder>\n");
+  if (argc == 5 && !strcmp(argv[1], "install")) return install(argv[2], argv[3], argv[4], 0);
+  if (argc == 6 && !strcmp(argv[1], "install") && !strcmp(argv[2], "--game-dir"))
+    return install(argv[3], argv[4], argv[5], 1);
+  if (argc == 3 && !strcmp(argv[1], "check-folder")) return validate_folder(argv[2]);
+  fprintf(stderr, "usage: sgsetup install <disc image> <1.02 golf.exe> <install folder>\n"
+                  "       sgsetup install --game-dir <game folder> <1.02 golf.exe> <install folder>\n"
+                  "       sgsetup check-folder <game folder>\n");
   return 2;
 }

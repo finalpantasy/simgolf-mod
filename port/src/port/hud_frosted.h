@@ -16,6 +16,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "port/shot_readout.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +40,7 @@ enum {   // art slots (game sprites read back with alpha)
 
 // One game message (task-62): what the game's news strip said, kept for the HUD's history.
 #define HUD_MSG_MAX 50
-enum { HUD_SHOW_NONE = 0, HUD_SHOW_GOLFER = 1, HUD_SHOW_HOLE = 2, HUD_SHOW_BUILDING = 3 };   // BUILDING (task-53): target is the building's record number
+enum { HUD_SHOW_NONE = 0, HUD_SHOW_GOLFER = 1, HUD_SHOW_HOLE = 2, HUD_SHOW_BUILDING = 3, HUD_SHOW_STAFF = 4 };   // BUILDING (task-53): target is the building's record number
 typedef struct HudMsg {
   char text[400];
   char date[24];     // the game's date when it came
@@ -50,7 +51,8 @@ typedef struct HudMsg {
 } HudMsg;
 
 #define HUD_GOLFER_MAX 152
-#define HUD_STAFF_MAX 64
+#include "port/staff.h"
+#define HUD_STAFF_MAX STAFF_CAPACITY
 typedef struct HudSnap {
   int valid;
   uint32_t serial;
@@ -88,6 +90,8 @@ typedef struct HudSnap {
   int pro_shot;           // golf's shot choice 0x58f330: 0 straight, -1 fade, 1 draw, 3 high backspin, 4 low punch
   int pro_skill[10];      // Power Hitter .. Luck, 0..10 (or the [skills] cap)
   char pro_name[32];
+  int shot_readout;
+  char shot_text[SHOT_READOUT_LINES][SHOT_READOUT_TEXT];
   // task-96 / task-97: the design chooser for amenities and the clubhouse cue
   int design;             // 0x56a514: the design the armed tool will place (-1: none picked yet, landmarks)
   int design_n;           // designs the armed amenity offers (0: the tool has no choice); mod tables can widen it
@@ -101,6 +105,7 @@ typedef struct HudSnap {
   struct { short slot; signed char hole; signed char mood; char name[28]; } golfer[HUD_GOLFER_MAX];
   int mood_count[5];      // golfers per mood: 0 furious .. 4 delighted (golf's faces 1-2, 3-4, 5-6, 7-8, 9-10)
   int staff_n;
+  int staff_limit;
   struct { short rec; signed char job; char name[28]; int wage; } staff[HUD_STAFF_MAX];   // job: 0..7 as HUD_JOB_NAMES
   int staff_sel;          // record of the selected employee, -1 none
   int staff_moving;       // record being moved (the next click on the course places them), -1 none
