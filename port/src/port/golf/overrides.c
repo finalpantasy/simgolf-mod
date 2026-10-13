@@ -17,9 +17,23 @@
 // total is set to rounds * the median of the other holes (20 minutes with none). fixes.hole_time=0 skips it.
 int fix_hole_time(void) {
   if (!mods_get_int("fixes.hole_time", 1)) return 0;
+  // PR #3: loaded participants can still carry the old signed-byte start.
+  // Repair them even when the accumulated hole total needs no repair.
+  int changed = 0;
+  int clock = *(int *)(uintptr_t)0x834170;
+  if (clock > 255) {
+    for (int i = 0; i < 0x98; i++) {   // the original 152 saved participant records
+      unsigned char *golfer = (unsigned char *)(uintptr_t)(0x5794b8 + i * 0x100);
+      int *start = (int *)(golfer + 0xc0);
+      if (golfer[0x21] == 1 && *start >= -128 && *start <= 127) {
+        *start = clock;
+        changed = 1;
+      }
+    }
+  }
   enum { REC = 0x208, ROUNDS = 0x575ad0, TIME = 0x575c9c, PER_MIN = 40, MINUTE_FLOOR = 20 };
   int r1 = *(int *)(ROUNDS + REC), t1 = *(int *)(TIME + REC);
-  if (r1 <= 0 || t1 <= 0) return 0;
+  if (r1 <= 0 || t1 <= 0) return changed;
   int avg[19], n = 0, worst = 0;
   for (int h = 2; h <= 18; h++) {
     int r = *(int *)(ROUNDS + h * REC), t = *(int *)(TIME + h * REC);
@@ -31,7 +45,7 @@ int fix_hole_time(void) {
   int a1 = t1 / r1;
   int limit = n ? worst * 4 : 60 * PER_MIN;
   if (limit < 60 * PER_MIN) limit = 60 * PER_MIN;
-  if (a1 <= limit) return 0;
+  if (a1 <= limit) return changed;
   for (int i = 1; i < n; i++)   // insertion sort for the median
     for (int j = i; j > 0 && avg[j - 1] > avg[j]; j--) { int t = avg[j]; avg[j] = avg[j - 1]; avg[j - 1] = t; }
   int typical = n ? avg[n / 2] : MINUTE_FLOOR * PER_MIN;
