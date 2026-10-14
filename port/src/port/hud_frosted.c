@@ -30,6 +30,9 @@ static double g_snap_t = -1e9;
 static HudAction g_q[QMAX];
 static int g_qn;
 static volatile int g_injecting, g_visible;
+static SDL_atomic_t g_history_visible;   // published by the render thread after drawing the HUD
+
+int hudf_history_visible(void) { return SDL_AtomicGet(&g_history_visible); }
 static struct {
   uint32_t *px;
   int w, h;
@@ -245,6 +248,7 @@ static void draw(const HdUiFrame *f, void *user) {
   g_drawn_t = f->now_ms;
   if (g_failed || !g_want) {
     g_visible = 0;
+    SDL_AtomicSet(&g_history_visible, 0);
     if (g_ui) ui_skip_frame(g_ui);
     return;
   }
@@ -256,6 +260,7 @@ static void draw(const HdUiFrame *f, void *user) {
     snprintf(fonts, sizeof fonts, "%s", port_host_path("/fonts/plus-jakarta-sans"));
     g_ui = ui_create(r, &t, fonts); ui_debug_name(g_ui, "hud");
     if (!g_ui) {
+      SDL_AtomicSet(&g_history_visible, 0);
       g_failed = 1;
       return;
     }
@@ -278,6 +283,7 @@ static void draw(const HdUiFrame *f, void *user) {
   int show = f->course && s.valid && s.visible && now - t < STALE_MS && w > 0 && hud_shown();
   g_visible = show;
   if (!show) {
+    SDL_AtomicSet(&g_history_visible, 0);
     ui_skip_frame(g_ui);
     return;
   }
@@ -317,8 +323,12 @@ static void draw(const HdUiFrame *f, void *user) {
   }
   ui_begin(g_ui, f->target, w, h, hud_scale(h), f->target, now);
   HudAction acts[16];
+  int history_before = g_hud.hist_open;
   int n = ui_hud_draw(g_ui, &g_hud, &s, g_tex, acts, 16);
   ui_end(g_ui);
+  // X and row actions close after drawing the panel. Keep later layers clear
+  // through that closing frame; the next frame restores their controls.
+  SDL_AtomicSet(&g_history_visible, !g_hud.hidden && g_hud.density == HUD_JWE && (history_before || g_hud.hist_open));
   {   // one line when the tray tucks away or comes back, the build bar opens or folds, the HUD hides (tests read these)
     static int last_tucked = -1, last_bar = -1, last_hidden = -1;
     if (g_hud.tray_hidden != last_tucked) {

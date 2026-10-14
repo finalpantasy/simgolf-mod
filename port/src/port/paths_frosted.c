@@ -22,6 +22,7 @@
 static UiCtx *g_ui_w, *g_ui_t;
 static int g_world_reg, g_top_reg, g_failed;
 static volatile int g_want;
+static volatile int g_history_guard = 1;
 static volatile int g_user_on;
 static volatile double g_drawn_t = -1e9;
 static volatile float g_view_x, g_view_y, g_view_px = 1;
@@ -180,6 +181,12 @@ static void draw(const HdUiFrame *f, void *user) {
   }
   g_view_x = m.view_x, g_view_y = m.view_y, g_view_px = m.px;
   g_top_visible = 1;
+  // The later top layer must leave the visible history and its input unobscured.
+  // The world tint and the player's view setting remain active underneath it.
+  if (g_history_guard && hudf_history_visible()) {
+    ui_end(c);
+    return;
+  }
   // the button
   float pad;
   UiRect br = button_rect(c, &pad);
@@ -252,7 +259,7 @@ static int input(SDL_Event *e, int course, void *user) {
   if (!g_ui_t) return 0;
   u.x = g_view_x + (cx + 0.5f) * g_view_px;
   u.y = g_view_y + (cy + 0.5f) * g_view_px;
-  if (!g_top_visible) {
+  if (!g_top_visible || (g_history_guard && hudf_history_visible())) {
     ui_input_reset(g_ui_t);
     return 0;
   }
@@ -264,6 +271,7 @@ static void refresh_switch(void) {
   unsigned ser = mods_serial();
   if (ser != seen) {
     seen = ser;
+    g_history_guard = mods_get_int("fixes.history_paths", 1) != 0;
     const char *v = mods_get("ui.paths");
     g_want = v && (!strcasecmp(v, "frosted_mint") || !strcasecmp(v, "frosted-mint"));
   }

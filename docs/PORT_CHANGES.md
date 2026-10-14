@@ -451,3 +451,5 @@ Screen-space lines and curves already receive projected camera coordinates. Thei
 Staff tile bytes at coordinates 128 through 159 are interpreted as unsigned positions. The shared decoder retains wrapped negative targets outside the supported map range, including the 255 unassigned marker. It is used by worker simulation, hire positioning, the selected staff map marker and weed coverage. Record layout and serialized bytes remain unchanged. `fixes.staff_tiles=0` restores the original signed reads.
 
 Accepted news posts are captured for HUD history immediately, before another post can replace the original single news slot. Original acceptance, display, timer and RNG calls are preserved. The hook restores formatter text, decimal scratch and cached year. Frame polling still handles loaded state and does not duplicate captured posts; fixes.news_history=0 retains the earlier polling behavior.
+
+Message history takes priority over the cart-path button and help while open. The world path view and its selected state remain intact; closing history restores the controls. `fixes.history_paths=0` restores the previous overlap.

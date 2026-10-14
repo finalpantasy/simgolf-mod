@@ -133,6 +133,7 @@ typedef struct {
 } HudAction;
 
 // render side (hud_frosted.c), called from the game thread
+int hudf_history_visible(void);               // drawn history panel; does not change the HUD
 int hudf_enabled(void);                       // ui.hud=frosted_mint and the native layer is up
 void hudf_publish(const HudSnap *s);
 int hudf_take_action(HudAction *a);           // next queued action, 1 if any

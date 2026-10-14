@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: message history remains readable and clickable while cart-path help is enabled. Closing history restores the path controls.
+
 - Fixed: closely spaced notices are preserved in message history, including repeated accepted notices.
 
 - Fixed: pathway and landmark placement outlines stay aligned with the ground after smooth camera movement. The same correction applies to screen-space guide lines.
