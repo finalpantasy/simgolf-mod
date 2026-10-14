@@ -1,4 +1,4 @@
-# SimGolf Remastered
+# SimGolf Remastered for Windows
 
 [![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-support%20this%20mod-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/finalpantasy)
 
@@ -8,7 +8,7 @@ and 4K, widescreen, smooth scrolling and zoom, a cleaner look for the menus and
 course HUD, an Options page, and a way to change the game with mods.
 
 This download contains **no game files**. You bring your own copy of the game
-(the disc image and the version 1.02 no-CD `golf.exe`); the installer unpacks
+(an installed game folder or disc image, and the version 1.02 no-CD `golf.exe`); the installer prepares
 it on your PC and nothing from it ever leaves your computer.
 
 ![The showcase course in HD with the new HUD](screenshots/course-hd.jpg)
@@ -22,7 +22,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## What you get
 
-### Included in the current 0.1.4 source
+### New in 0.1.4
 - **Staff:** the original default of 20 paid staff, adjustable up to 100 in Options > Gameplay. Expanded teams persist in game and course saves.
 - **Controls:** orderly Esc handling, build trays that stay open, clearer weed notices, and aligned tee lines and cart shadows.
 - **Setup:** use your own existing SimGolf installation folder or a disc image. Both require the checked version 1.02 no-CD program.
@@ -30,7 +30,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 ### New in 0.1.3: the whole game, playable in the new interface
 Everything from the original game is being made reachable from the new screens. This release fills the biggest gaps:
-- **Your pro is back.** A new career starts with **Create your pro** (clear steps, quick clicks), then a new **skill points** page with big + and - buttons and a points counter. Each accomplishment gets its own page and opens the same skill page with your 3 new points. **People > Your pro** has Profile, Skills, Practice, Match and Tournament.
+- **Your pro is back.** Edit your pro through **People > Your pro**, and open the **skill points** page through Practice, with big + and - buttons and a points counter. Each accomplishment gets its own page and opens the same skill page with your 3 new points. **People > Your pro** has Profile, Skills, Practice, Match and Tournament.
 - **People tab lists:** every golfer with their mood and hole (click one to jump to them), and every staff member with **Hire, Fire, Move and Rename**.
 - **Building:** a design chooser with a picture of every bench, flower bed, landmark, scenic tree and bridge. **Landmarks place again.** Greens and the clubhouse get Rotate (Tab).
 - Smaller fixes: building upgrades unlock at the right level, N cancels a match again (name tags are Shift+N), backing out of theme packs keeps your theme, and menus lay out text much faster.
@@ -82,7 +82,7 @@ Everything from the original game is being made reachable from the new screens. 
 ## Install in four steps
 
 1. Get your game files (see [INSTALL.md](INSTALL.md) for exactly where):
-   the SimGolf disc image and the v1.02 no-CD zip.
+   your existing SimGolf installation folder or disc image, plus your matching v1.02 no-CD program.
 2. Download `SimGolf-Remastered-v*-windows.zip` from the
    [Releases page](../../releases) and unzip it (right-click, Extract All).
 3. Double-click **Setup.cmd** and answer the questions. Say yes to the HD art
@@ -96,8 +96,7 @@ Full step-by-step help and fixes for common problems are in [INSTALL.md](INSTALL
 Being worked on now:
 - **Realistic water**: calm, clear in the shallows, deeper further out, waves that wash up the beach and slide back, ripples that catch the sky and the sun
 - **Consistent icons** everywhere in the new interface, and the membership roster key with its icons
-- **More staff**: a setting to hire more than the original limit
-- The last original screens checked and redone: shot readout, tournament pairing, saving your pro
+- Tournament startup and remaining original-screen polish
 
 Planned:
 - **Hardcore mode**: a tougher economy where upkeep and rival clubs keep money tight for years, a pro who ages and retires, and an optional ironman save
