@@ -166,6 +166,9 @@ static int hud_shown(void) {
 
 // ui.hud_density: jwe (default, the maintainer's pick R5, set by the ui_hud mod), regular, compact, minimal, ...
 static int hud_density(void) {
+  // Keep the selected Corners layout even when an older options file names an alternative.
+  // The legacy parser is retained only for explicit compatibility comparisons.
+  if (mods_get_int("fixes.hud_layout", 1)) return HUD_JWE;
   static unsigned seen = ~0u;
   static int d;
   unsigned ser = mods_serial();

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Changed: one supported course layout, retaining the selected Corners toolbar and stats. Alternate toolbar and course-screen layout choices are removed from Options.
+- Fixed: selecting a building no longer draws a second placement/Rotate card over its open tray. Placement help remains available when the tray is closed.
+
 - Fixed: rapid zoom changes remain smooth through short rendering delays.
 
 - Fixed: message history remains readable and clickable while cart-path help is enabled. Closing history restores the path controls.

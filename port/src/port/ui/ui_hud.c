@@ -1971,9 +1971,12 @@ static int place_chip_flags(const HudSnap *s, int tool, int i) {
   return f;
 }
 
-static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, Acts *a) {
+static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, Acts *a, int building_tray_open) {
   int club = s->clubhouse, n = club ? 0 : s->design_n, tool = s->build_tool;
   int lot = !club && n <= 0 && tool >= 6 && tool <= 14 && building_rotates(tool);   // task-115: a lot that turns
+  // The visible Buildings tray already names this lot and supplies Rotate (Tab).
+  // Keep the independent card when that tray is tucked away, and keep all design cards.
+  if (lot && building_tray_open) return;
   if (!club && n <= 0 && !lot) return;
   const UiTokens *t = ui_tokens(c);
   UiRect scr = ui_screen(c);
@@ -2109,7 +2112,10 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
     case D_LAND: landscape_tray(c, h, s, art, dock_r, &a); break;
     case D_PEOPLE: people_tray(c, h, s, dock_r, &a); break;
   }
-  place_panel(c, h, s, art, &a);
+  // Only these trays draw their own Rotate button; compatibility layouts keep the card.
+  int building_tray_rotate = tray_open && active_item(s) == D_BUILD &&
+                             (h->density == HUD_REGULAR || h->density >= HUD_BARS);
+  place_panel(c, h, s, art, &a, building_tray_rotate);
   shot_readout(c, s);
   if (h->density == HUD_JWE) news_ui(c, h, s, &a);
   return a.n;

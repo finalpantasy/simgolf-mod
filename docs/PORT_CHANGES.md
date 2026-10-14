@@ -208,7 +208,7 @@ Setting `ui.hud=frosted_mint|original` (mods store, built-in mod `ui_hud`). docs
 
 ### task-26c: the jwe layout is the default
 
-`mods/builtin/ui_hud/mod.toml` sets `ui.hud_density = jwe` (the maintainer's pick R5; the other densities stay switchable, `ui.hud=original` still restores the original HUD). `src/port/ui/ui_hud.c`: the R5 cluster measures its play / pause control instead of assuming a width, sits on the new `UI_PANEL_READABLE` glass (`ui_kit.c`: frosted over `glass.solid`, 7:1 text contrast over any picture), a small camera pill (zoom in / out, rotate left / right) sits in the bottom right corner, and news toasts sit just under the cluster. `src/port/hud_frosted.c` logs `hud: tray tucked|shown` for tests. Tests: `tests/native/hud_click_jwe.txt` and `hud_regular.ini` (regular stays click tested), `hud.sh`, `tests/ui/test_ui.c` (contrast of the readable glass).
+`mods/builtin/ui_hud/mod.toml` sets `ui.hud_density = jwe` (the selected Corners layout; alternate toolbar and course-screen choices are no longer offered in Options. `fixes.hud_layout=0` permits explicit legacy density comparisons, and `ui.hud=original` remains an original-game data control). `src/port/ui/ui_hud.c`: the R5 cluster measures its play / pause control instead of assuming a width, sits on the new `UI_PANEL_READABLE` glass (`ui_kit.c`: frosted over `glass.solid`, 7:1 text contrast over any picture), a small camera pill (zoom in / out, rotate left / right) sits in the bottom right corner, and news toasts sit just under the cluster. `src/port/hud_frosted.c` logs `hud: tray tucked|shown` for tests. Tests: `tests/native/hud_click_jwe.txt` and `hud_regular.ini` (regular stays click tested), `hud.sh`, `tests/ui/test_ui.c` (contrast of the readable glass).
 
 ## task-33: bridge input timing and fixes (native only)
 
@@ -457,3 +457,21 @@ Message history takes priority over the cart-path button and help while open. Th
 Smooth zoom now gives back animation time for frame delays over 12 ms, including the old unchecked 12..20 ms interval. `fixes.zoom_clock=0` restores the previous clock guard.
 
 Native bridge performance reports include input delivery state, distinguishing queued events and the original key mailbox from fully consumed input. This is read-only telemetry; ordinary key and pause behavior are preserved.
+
+
+### One supported course layout and one building placement control (2026-10-14)
+
+Normal play keeps the selected Corners toolbar and stats arrangement, including
+when an older options file names another density. Options no longer offers
+alternate toolbar layouts or the original course-screen selector. The explicit
+legacy density comparison uses `fixes.hud_layout=0`; the original game UI remains
+available through its data control.
+
+While a Buildings tray with Rotate is visible, its selected lot no longer draws
+a second floating title/Rotate card over the course. Closing that tray retains
+the standalone placement card and its Rotate control. Clubhouse and design-choice
+cards are preserved; legacy trays without Rotate also retain their card.
+
+The live regression exercises stale settings, real Tab and Rotate clicks, tray
+closing/reopening and the Options page at 1080p and 4K. An independent pixel gate
+checks that the duplicate card is absent only when the Buildings tray is open.
