@@ -235,7 +235,8 @@ static uint32_t le32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | 
 // The root folder's entries; *n is set to the count.
 static Entry *disc_root(Disc *d, int *n) {
   uint32_t lba = le32(d->root + 2), size = le32(d->root + 10);
-  if (size > (16u << 20)) return NULL;   // task-114p: a root folder is a few sectors; a damaged disc can claim 4 GB
+  *n = 0;
+  if (size < 34 || size > (16u << 20)) return NULL;   // task-114p: a root folder is a few sectors; a damaged disc can claim 4 GB
   uint32_t ns = (size + 2047) / 2048;
   uint8_t *data = malloc((size_t)ns * 2048 + 1);
   if (!data) return NULL;
@@ -255,9 +256,11 @@ static Entry *disc_root(Disc *d, int *n) {
     }
     const uint8_t *e = data + p;
     // a record must fit its sector run, hold the 33 byte header and carry a name that fits inside it
-    if (len < 34 || p + len > ns * 2048u || 33u + e[32] > len) break;
+    if (len < 34 || (uint32_t)len > size - p || p % 2048u + len > 2048u ||
+        e[32] < 1 || 33u + e[32] > len) { free(out); free(data); *n = 0; return NULL; }
     int nl = e[32];
     if (!(nl == 1 && e[33] <= 1)) {
+      if (*n >= 16384) { free(out); free(data); *n = 0; return NULL; }
       if (*n == cap) {
         Entry *grown = realloc(out, (size_t)(cap = cap ? cap * 2 : 64) * sizeof *out);
         if (!grown) { free(out); free(data); *n = 0; return NULL; }
@@ -308,12 +311,15 @@ static int disc_copy(Disc *d, const Entry *e, const char *out) {
 
 static uint8_t *map_pe(const uint8_t *b, size_t n, size_t *out_n) {
   if (n < 0x40 || b[0] != 'M' || b[1] != 'Z') return NULL;
-  uint32_t pe = le32(b + 0x3c);
-  if ((size_t)pe + 24 + 64 > n || memcmp(b + pe, "PE\0\0", 4)) return NULL;   // size_t: pe near 4 GB must not wrap
+  size_t pe = le32(b + 0x3c);
+  if (pe > n || n - pe < 24 || memcmp(b + pe, "PE\0\0", 4)) return NULL;
   unsigned nsec = b[pe + 6] | b[pe + 7] << 8, opt_size = b[pe + 20] | b[pe + 21] << 8;
-  uint32_t opt = pe + 24, size = le32(b + opt + 56), hdr = le32(b + opt + 60);
+  size_t opt = pe + 24;
+  if (opt_size < 64 || opt_size > n - opt || nsec > 96) return NULL;
+  if (b[opt] != 0x0b || b[opt + 1] != 0x01) return NULL;
+  uint32_t size = le32(b + opt + 56), hdr = le32(b + opt + 60);
   if (!size || size > (64u << 20)) return NULL;
-  if ((size_t)opt + opt_size > n || hdr > size) return NULL;
+  if (!hdr || hdr > size || hdr > n || nsec > (n - opt - opt_size) / 40u) return NULL;
   uint8_t *img = calloc(1, size);
   if (!img) return NULL;
   memcpy(img, b, hdr < size && hdr < n ? hdr : (size < n ? size : n));
@@ -338,7 +344,9 @@ static int apply_nops(uint8_t *img, size_t n, const char *json) {
   size_t jn = 0;
   char *t = (char *)read_all(json, &jn);
   if (!t) return -1;
-  t = realloc(t, jn + 1);
+  char *grown = realloc(t, jn + 1);
+  if (!grown) { free(t); return -1; }
+  t = grown;
   t[jn] = 0;
   long v[2];
   int k = 0, count = 0;
@@ -346,7 +354,7 @@ static int apply_nops(uint8_t *img, size_t n, const char *json) {
     if (*p >= '0' && *p <= '9') {
       v[k++] = strtol(p, &p, 10);
       if (k == 2) {
-        if (v[0] >= 0 && v[1] > 0 && (size_t)(v[0] + v[1]) <= n) memset(img + v[0], 0x90, (size_t)v[1]), count++;
+        if (v[0] >= 0 && v[1] > 0 && (size_t)v[0] <= n && (size_t)v[1] <= n - (size_t)v[0]) memset(img + v[0], 0x90, (size_t)v[1]), count++;
         k = 0;
       }
     } else p++;

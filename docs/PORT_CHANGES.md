@@ -483,3 +483,21 @@ and the rest of the course unobscured. Existing tile projection, connectivity,
 warning markers and controls are unchanged. `ui.paths_tint` defaults to 0.30;
 the separate overall opacity setting remains available. `fixes.paths_overlay=0`
 restores the earlier full network tint and course dimming for comparison.
+
+## 0.1.5: reviewed contributor fixes and render transitions
+
+Selected fixes from contributor fork PRs #2, #3, #4, #5, #6, #7, #10 and #12
+were adapted to the current source. The existing water path, file flush,
+portrait repairs, input queue and selected HUD layout were retained. The
+portrait build gate checks seven rules at eight verified sites, because the
+supported export uses its first slot anchor twice.
+
+The course presenter retains its last complete frame during a consumed build
+tab transition, and discards only unpublished transient art. Golfer-card
+capture masks its own recorded art after queued original actions run. Both
+preserve original UI controls. See
+[all fifteen PR verdicts](../port/docs/2026-10-14-pull-request-review.md).
+
+Focused checks: native x86 failure contracts, 124 HUD assertions, 53 golfer
+assertions, inspected HD captures at both resolutions, original UI controls,
+and build-tab transition A/B captures. The mandatory full check is pending.

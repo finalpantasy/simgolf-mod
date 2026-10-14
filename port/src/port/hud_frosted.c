@@ -4,6 +4,7 @@
 // published, routes the pointer (UI first, the rest to the game), and queues
 // what the player clicked for hud_game.c.
 #include "port/hud_frosted.h"
+#include "port/hud_tuck_policy.h"
 
 #include <SDL.h>
 #include <stdio.h>
@@ -51,6 +52,7 @@ static double g_eat_until;             // swallow the text event that follows th
 static int g_eat_char;
 static SDL_Texture *g_tex[HUD_ART_MAX];
 static uint32_t g_tex_serial[HUD_ART_MAX];
+static Uint32 g_tex_retry_at[HUD_ART_MAX];  // next GPU-upload attempt after a transient failure
 static int g_registered, g_failed;
 
 static void lock(void) {
@@ -134,20 +136,32 @@ static void load_tokens(UiTokens *t) {
 
 static void update_art(SDL_Renderer *r) {
   lock();
+  Uint32 now = SDL_GetTicks();
   for (int i = 0; i < HUD_ART_MAX; i++) {
     if (g_art[i].serial == g_tex_serial[i]) continue;
-    g_tex_serial[i] = g_art[i].serial;
-    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
-    g_tex[i] = NULL;
-    if (!g_art[i].px) continue;
-    g_tex[i] = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
-    if (g_tex[i]) {
-      SDL_UpdateTexture(g_tex[i], NULL, g_art[i].px, g_art[i].w * 4);
-      SDL_SetTextureBlendMode(g_tex[i], SDL_BLENDMODE_BLEND);
-      SDL_SetTextureScaleMode(g_tex[i], SDL_ScaleModeLinear);
-    } else {
-      g_tex_serial[i] = g_art[i].serial - 1;   // task-114k: the upload failed; ask again on the next frame instead of staying blank
+    if (!g_art[i].px) {  // an intentional clear, not an upload failure
+      if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+      g_tex[i] = NULL;
+      g_tex_serial[i] = g_art[i].serial;
+      g_tex_retry_at[i] = 0;
+      continue;
     }
+    if (g_tex_retry_at[i] && !SDL_TICKS_PASSED(now, g_tex_retry_at[i])) continue;
+    SDL_Texture *next = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888,
+                                          SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
+    if (!next || SDL_UpdateTexture(next, NULL, g_art[i].px, g_art[i].w * 4) != 0) {
+      // Preserve the last valid image and retry rather than marking it loaded.
+      // Throttle retries so low GPU memory cannot spin at monitor refresh rate.
+      if (next) SDL_DestroyTexture(next);
+      g_tex_retry_at[i] = now + 1000;
+      continue;
+    }
+    SDL_SetTextureBlendMode(next, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(next, SDL_ScaleModeLinear);
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i] = next;
+    g_tex_serial[i] = g_art[i].serial;
+    g_tex_retry_at[i] = 0;
   }
   unlock();
 }
@@ -431,9 +445,12 @@ static int input(SDL_Event *e, int course, void *user) {
     return 0;
   }
   int to = ui_route_event(g_ui, &u);
-  // back on the course: the tray tucks away, except while a tool places something (course and buildings
-  // trays, the dock open): the player keeps placing and the tray stays (task-112, as the original toolbar)
-  if (u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME) && !(g_dock_mode == 0 || g_dock_mode == 1)) g_tuck = 1;
+  if (u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
+    lock();
+    int placing = hudf_keep_tray_on_world_click(&g_snap);
+    unlock();
+    if (!placing) g_tuck = 1;
+  }
   // While one of our clicks is on its way to the game, its mouse state must
   // not change under it: hold the real pointer back for those frames.
   if (g_injecting) return 1;

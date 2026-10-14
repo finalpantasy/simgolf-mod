@@ -125,13 +125,15 @@ bool load(Sound &s) {
   size_t dataOff = 0, dataLen = 0;
   bool haveFmt = false, haveLoop = false;
   uint32_t ls = 0, le = 0;
-  for (size_t p = 12; p + 8 <= got;) {
+  for (size_t p = 12; p <= got - 8;) {
     uint64_t size = rd32(&b[p + 4]);   // 64 bits: a damaged size must not wrap the walk back to the start (task-114)
     size_t body = p + 8;
-    if (!memcmp(&b[p], "fmt ", 4) && body + 16 <= got) {
+    if (!memcmp(&b[p], "fmt ", 4) && size >= 16 && size <= got - body) {
       tag = rd16(&b[body]);
       s.channels = rd16(&b[body + 2]);
-      s.rate = (int)rd32(&b[body + 4]);
+      uint32_t hz = rd32(&b[body + 4]);
+      if (!hz || hz > 384000) return false;
+      s.rate = (int)hz;
       bits = rd16(&b[body + 14]);
       haveFmt = true;
     } else if (!memcmp(&b[p], "data", 4)) {
@@ -391,6 +393,12 @@ void snd_js_shutdown(void) {
   g_dev = 0;
   g_voices.clear();
   for (Sound &s : g_sounds) s = Sound();
+  if (g_wav) {
+    wav_header(g_wav, g_wav_frames);
+    fclose(g_wav);
+    g_wav = nullptr;
+    g_wav_frames = 0;
+  }
 }
 
 }  // extern "C"

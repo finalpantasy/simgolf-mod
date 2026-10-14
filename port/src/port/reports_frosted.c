@@ -39,6 +39,7 @@ static struct {
 static uint32_t g_art_pub;
 static SDL_Texture *g_tex[RP_ART];
 static uint32_t g_tex_serial[RP_ART];
+static Uint32 g_tex_retry_at[RP_ART];  // next GPU-upload attempt after a transient failure
 
 static void lock(void) {
   if (g_lock) SDL_LockMutex(g_lock);
@@ -71,20 +72,32 @@ void rpf_publish_art(int k, const uint32_t *argb, int w, int h) {
 
 static void update_art(SDL_Renderer *r) {
   lock();
+  Uint32 now = SDL_GetTicks();
   for (int i = 0; i < RP_ART; i++) {
     if (g_art[i].serial == g_tex_serial[i]) continue;
-    g_tex_serial[i] = g_art[i].serial;
-    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
-    g_tex[i] = NULL;
-    if (!g_art[i].px) continue;
-    g_tex[i] = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
-    if (g_tex[i]) {
-      SDL_UpdateTexture(g_tex[i], NULL, g_art[i].px, g_art[i].w * 4);
-      SDL_SetTextureBlendMode(g_tex[i], SDL_BLENDMODE_BLEND);
-      SDL_SetTextureScaleMode(g_tex[i], SDL_ScaleModeLinear);
-    } else {
-      g_tex_serial[i] = g_art[i].serial - 1;   // task-114k: the upload failed; ask again on the next frame instead of staying blank
+    if (!g_art[i].px) {  // an intentional clear, not an upload failure
+      if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+      g_tex[i] = NULL;
+      g_tex_serial[i] = g_art[i].serial;
+      g_tex_retry_at[i] = 0;
+      continue;
     }
+    if (g_tex_retry_at[i] && !SDL_TICKS_PASSED(now, g_tex_retry_at[i])) continue;
+    SDL_Texture *next = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888,
+                                          SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
+    if (!next || SDL_UpdateTexture(next, NULL, g_art[i].px, g_art[i].w * 4) != 0) {
+      // Preserve the last valid image and retry rather than marking it loaded.
+      // Throttle retries so low GPU memory cannot spin at monitor refresh rate.
+      if (next) SDL_DestroyTexture(next);
+      g_tex_retry_at[i] = now + 1000;
+      continue;
+    }
+    SDL_SetTextureBlendMode(next, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(next, SDL_ScaleModeLinear);
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i] = next;
+    g_tex_serial[i] = g_art[i].serial;
+    g_tex_retry_at[i] = 0;
   }
   unlock();
 }

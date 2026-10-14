@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 - 2026-10-14
+
+Clearer building controls and more reliable rendering and settings.
+
+- Fixed: build-tab and Escape transitions retain the last complete course frame instead of briefly showing a different texture layer.
+- Fixed: the old golfer-card artwork no longer appears behind its native replacement, including HD textures.
+- Fixed: resent terrain textures replace their existing cache entry after a successful upload, avoiding duplicate allocations.
+- Fixed: failed UI texture uploads preserve the previous image and retry; font, text-buffer and PNG allocation failures are handled safely.
+- Fixed: Windows file listings include courses and files beyond the old 512-entry cutoff.
+- Fixed: mod profiles, overrides and options preserve the previous file when writing or replacement fails.
+- Fixed: malformed WAV format chunks and invalid sample rates are rejected; local mix recordings finish their headers on shutdown.
+- Fixed: save/snapshot routing matches complete directory names. Similar names remain in the game folder.
+- Fixed: installer image parsing rejects incomplete records and invalid PE headers without changing the existing-folder installation workflow.
+- Fixed: construction tray retention follows the armed tool; ordinary course clicks and explicit Escape still dismiss controls.
+- Added: translation refuses mismatched portrait-fix anchors instead of silently dropping those repairs.
+- Reviewed: all 15 open contributor PRs. Useful changes from #2, #3, #4, #5, #6, #7, #10 and #12 were adapted; existing fixes and unverified developer tools were kept separate.
 
 - Changed: cart-path help uses a lighter tint and leaves buildings and the course background unobscured. Building connection warnings remain readable.
 

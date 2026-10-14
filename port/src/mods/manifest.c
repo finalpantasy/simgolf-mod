@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include "mods/mods_core.h"
 #include "tomlc99/toml.h"
 
@@ -516,7 +521,7 @@ int loadorder_read(ModLoadOrder *lo, const char *path) {
 
 int loadorder_write(const ModLoadOrder *lo, const char *path) {
   char tmp[700];
-  snprintf(tmp, sizeof tmp, "%s.tmp", path);
+  if (!path || snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return 0;
   FILE *f = fopen(tmp, "wb");
   if (!f) return 0;
   fprintf(f, "# Which mods load, in which order (docs/modding/CORE.md).\n"
@@ -529,9 +534,22 @@ int loadorder_write(const ModLoadOrder *lo, const char *path) {
     for (int j = 0; j < lo->p[i].nmods; j++) fprintf(f, "%s\"%s\"", j ? ", " : "", lo->p[i].mods[j]);
     fprintf(f, "]\n");
   }
-  fclose(f);
-  remove(path);
-  return rename(tmp, path) == 0;
+  // A failed write/replacement must never destroy the previous profile.
+  int ok = !ferror(f);
+  if (fflush(f) != 0) ok = 0;
+  if (fclose(f) != 0) ok = 0;
+  if (!ok) {
+    remove(tmp);
+    return 0;
+  }
+#ifdef _WIN32
+  // C rename() will not replace an existing destination on Windows.
+  ok = MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+  ok = rename(tmp, path) == 0;
+#endif
+  if (!ok) remove(tmp);
+  return ok;
 }
 
 void loadorder_free(ModLoadOrder *lo) {

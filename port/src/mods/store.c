@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include "mods/mods.h"
 #include "mods/mods_core.h"
 
@@ -183,10 +188,13 @@ static const char *ini_value(const Entry *e) { return e->val[MS_LIVE] ? e->val[M
 
 int mods_store_save_ini(const char *path) {
   if (!path || !*path) return 0;
-  FILE *f = fopen(path, "w");
-  if (!f) return 0;
-  fprintf(f, "; written by the game (mods_set persist), docs/modding/CORE.md\n");
+  char tmp[1024];
+  if (snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return 0;
   char *done = (char *)calloc((size_t)g_n + 1, 1);
+  if (!done) return 0;
+  FILE *f = fopen(tmp, "w");
+  if (!f) { free(done); return 0; }
+  fprintf(f, "; written by the game (mods_set persist), docs/modding/CORE.md\n");
   for (int i = 0; i < g_n; i++) {
     if (done[i] || !ini_value(&g_e[i])) continue;
     const char *dot = strchr(g_e[i].key, '.');
@@ -205,8 +213,17 @@ int mods_store_save_ini(const char *path) {
     }
   }
   free(done);
-  fclose(f);
-  return 1;
+  int ok = !ferror(f);
+  if (fflush(f) != 0) ok = 0;
+  if (fclose(f) != 0) ok = 0;
+  if (!ok) { remove(tmp); return 0; }
+#ifdef _WIN32
+  ok = MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+  ok = rename(tmp, path) == 0;
+#endif
+  if (!ok) remove(tmp);
+  return ok;
 }
 
 int mods_store_layer_keys(int layer, const char *prefix, const char **keys, const char **vals, int max) {

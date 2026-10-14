@@ -1628,6 +1628,14 @@ void hd_art_hide_from(int mark) {
   if (g_rec.n > mark && !logged++) fprintf(stderr, "art: golf's ball and shadow sprite copies hidden under the round ball (task-89)\n");
 }
 
+void hd_art_discard_pending(void) {
+  if (!g_on) return;
+  list_reset(&g_rec, HD_FRAME_W, HD_FRAME_H);
+  g_closed_ok[LC] = g_closed_ok[LT] = 0;
+  g_rec_which = LC;
+  g_hide_from = -1;
+}
+
 static void publish_one(int which, int ok) {
   g_pub_ok[which] = ok && g_closed_ok[which] && g_closed[which].n;
   if (!g_pub_ok[which]) return;

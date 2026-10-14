@@ -80,6 +80,7 @@
 #include "mods/mods.h"
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
+#include "port/hud_frosted.h"
 #include "port/hd_native.h"
 #include "port/dialogs_frosted.h"
 #include "port/frontend_frosted.h"
@@ -1030,7 +1031,9 @@ static void frame_log(Rt *t, int cw, int ch, double now) {
   if (!on) return;
   int cover = fef_cover_screen();
   int dgap = dlgf_gap(), rgap = rpf_gap();   // a dialog / report is up in the game and the layer drew none: the original shows
-  fprintf(f, "%d,%.1f,%d,%d,%ld,%d,%d\n", ++n, now - t0, t->course_view, cover, (long)g_frame_serial, dgap, rgap);
+  fprintf(f, "%d,%.1f,%d,%d,%ld,%d,%d", ++n, now - t0, t->course_view, cover, (long)g_frame_serial, dgap, rgap);
+  if (getenv("SIMGOLF_TEXTURE_TRACE")) fprintf(f, ",%d,%d", t->layered, t->layered_now);
+  fputc('\n', f);
   fflush(f);
   const char *at = getenv("SIMGOLF_FRAMELOG_AT");   // frame numbers to save whatever covers them, "3,40,300"
   int want = 0;
@@ -1039,7 +1042,8 @@ static void frame_log(Rt *t, int cw, int ch, double now) {
     q = strchr(q, ',');
     if (q) q++;
   }
-  if (prefix && *prefix && (want || ((dgap || rgap || (cover < 0 && !t->course_view)) && shots < 60))) {
+  int gap_shot = getenv("SIMGOLF_TEXTURE_TRACE") ? (t->course_view && !t->layered_now) : (dgap || rgap || (cover < 0 && !t->course_view));
+  if (prefix && *prefix && (want || (gap_shot && shots < 60))) {
     uint32_t *px = malloc((size_t)cw * ch * 4);
     char path[600];
     snprintf(path, sizeof path, "%s%d.bmp", prefix, n);
@@ -1421,6 +1425,14 @@ int hd_present(const uint16_t *screen) {
     if ((v = mods_get("display.zoom_ms")) && *v) set_key("zoom_ms", v);
   }
   if (!g_active) return 0;
+  if (!g_snap_fresh && g_frame_layered && g_frame_course && hud_course_transition() &&
+      !dlg_game_active() && !rp_game_active() && !opt_is_open() && fef_cover_screen() < 0 &&
+      mods_get_int("fixes.hud_transitions", 1)) {
+    // Original tray handlers present partial back-buffer updates. Keep the
+    // complete course, terrain, art and UI publication together until redraw.
+    hd_art_discard_pending();
+    return 1;
+  }
   static HdBallFrame balls;
   hdball_publish(&balls);   // task-41: this game frame's balls
   static uint8_t *mask;
@@ -1439,6 +1451,7 @@ int hd_present(const uint16_t *screen) {
   if (layered) {
     memcpy(g_ui, screen, (size_t)FRAME_W * FRAME_H * 2);
     g_frame_cam = g_snap_cam;
+    hud_course_frame_presented();
   }
   memcpy(&g_frame_ball, &balls, sizeof balls);
   g_frame_layered = layered;

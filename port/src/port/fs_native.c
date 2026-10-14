@@ -19,8 +19,11 @@
 // The folder a game-relative path lives in: the per-instance user folder
 // (SIMGOLF_USER_DIR, task-13) for saves and snapshots, else the game folder.
 static const char *base_for(const char *rel) {
-  if (!_strnicmp(rel, "Saved Games", 11) || !_strnicmp(rel, "Snapshots", 9)) return host_user_dir();
-  return host_game_dir();
+  // Redirect only the save/snapshot *directories*, not paths whose names
+  // merely begin with the same characters (such as "Saved Games Backup").
+  int saves = !_strnicmp(rel, "Saved Games", 11) && (rel[11] == 0 || rel[11] == '/');
+  int snaps = !_strnicmp(rel, "Snapshots", 9) && (rel[9] == 0 || rel[9] == '/');
+  return saves || snaps ? host_user_dir() : host_game_dir();
 }
 
 void fs_init(void) {

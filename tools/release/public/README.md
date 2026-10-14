@@ -22,6 +22,12 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## What you get
 
+### New in 0.1.5
+- **Clearer building:** one supported Corners layout, lighter path shading and placement outlines aligned with the camera.
+- **Cleaner transitions:** no temporary texture-layer swap while changing build tabs, and no old golfer panel behind the new card.
+- **Reliability:** safer mod-settings writes, complete course/file listings, texture-upload recovery and additional installer and sound guards.
+- All 15 open contributor PRs were reviewed. See [the individual decisions](port/docs/2026-10-14-pull-request-review.md).
+
 ### New in 0.1.4
 - **Staff:** the original default of 20 paid staff, adjustable up to 100 in Options > Gameplay. Expanded teams persist in game and course saves.
 - **Controls:** orderly Esc handling, build trays that stay open, clearer weed notices, and aligned tee lines and cart shadows.

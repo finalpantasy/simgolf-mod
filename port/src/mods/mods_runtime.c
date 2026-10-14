@@ -247,7 +247,9 @@ const char *mods_option_path(void) { return g_opt_path; }
 
 static void option_write(void) {
   if (!g_opt_path[0]) return;
-  FILE *f = fopen(g_opt_path, "w");
+  char tmp[MAX_PATH + 8];
+  if (snprintf(tmp, sizeof tmp, "%s.tmp", g_opt_path) >= (int)sizeof tmp) return;
+  FILE *f = fopen(tmp, "w");
   if (!f) return;
   fprintf(f, "; options.ini: your choices from the in-game Options page (delete this file to go back to the defaults)\n");
   char done[OPT_MAX] = {0};
@@ -264,7 +266,11 @@ static void option_write(void) {
       done[j] = 1;
     }
   }
-  fclose(f);
+  int ok = !ferror(f);
+  if (fflush(f) != 0) ok = 0;
+  if (fclose(f) != 0) ok = 0;
+  if (!ok || !MoveFileExA(tmp, g_opt_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    remove(tmp);  // Preserve the old settings file if persistence failed.
 }
 
 // The Options page sets a value: it takes effect now (the store); the file follows with mods_option_flush.

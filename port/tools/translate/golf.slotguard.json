@@ -23,5 +23,29 @@
     "gs_slot((int)piVar4)"
    ]
   ]
+ },
+ "required_patch_counts": {
+  "FUN_00462020": [
+   [
+    "(&DAT_0081ca6c)[iStack_334 * 0x16]",
+    2
+   ],
+   [
+    "(&DAT_0081ca6c)[(int)piStack_350 * 0x16]",
+    1
+   ],
+   [
+    "(&DAT_0081ca6c)[uVar8 * 0x16]",
+    1
+   ],
+   [
+    "(&DAT_0081ca6c)[iVar7 * 0x16]",
+    1
+   ],
+   [
+    "(&DAT_0081ca6c)[(int)piVar4 * 0x16]",
+    1
+   ]
+  ]
  }
 }

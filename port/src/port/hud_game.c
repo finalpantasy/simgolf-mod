@@ -72,6 +72,8 @@ static int g_nrects;
 
 // injection
 static int g_inj, g_inj_x, g_inj_y, g_inj_frames;
+static double g_course_transition_until;
+static int g_course_transition_consumed;
 static HudAction g_goal;
 static int g_goal_on, g_goal_steps;
 static int g_staff_tab, g_staff_tab_wait;   // task-112: open the Staff tab once the People tray is up
@@ -85,6 +87,10 @@ int hud_mx(int x) { return g_on ? -10000 : x; }
 int hud_my(int y) { return g_on ? -10000 : y; }
 int hud_ylim(int y) { return g_on ? 100000 : y; }
 int hud_injecting(void) { return g_inj; }
+int hud_course_transition(void) { return g_on && host_now_ms() < g_course_transition_until; }
+void hud_course_frame_presented(void) {
+  if (g_course_transition_consumed) g_course_transition_until = 0;
+}
 
 // Scripted clicks (harness, bridge: SDL events without a window, in frame
 // pixels) still reach the old wheel and trays, so scripts and tools written
@@ -104,6 +110,7 @@ int hud_old_click(void) {
   // the click being handled is ours: make sure it carries our point
   G32(MOUSE_X) = g_inj_x;
   G32(MOUSE_Y) = g_inj_y;
+  if (hud_course_transition()) g_course_transition_consumed = 1;
   g_inj = 0;
   hudf_set_injecting(0);
   return 1;
@@ -903,6 +910,13 @@ static void inject(int x, int y) {
   g_inj_x = x;
   g_inj_y = y;
   g_inj_frames = 0;
+  if (g_goal_on && (g_goal.goal == HUD_GOAL_COURSE || g_goal.goal == HUD_GOAL_EXTRAS ||
+                   g_goal.goal == HUD_GOAL_BUILDINGS || g_goal.goal == HUD_GOAL_LANDSCAPE || g_goal.goal == HUD_GOAL_CLOSE)) {
+    // The current fresh snapshot predates this click. Keep the token until a
+    // fresh course frame after the original handler has consumed it.
+    g_course_transition_until = host_now_ms() + 750;
+    g_course_transition_consumed = 0;
+  }
   hudf_set_injecting(1);
   FUN_004657e0(x, y);
 }

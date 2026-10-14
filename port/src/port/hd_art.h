@@ -30,6 +30,9 @@ void hd_art_course_done(const uint16_t *bits, int pitch);
 // and hands both to the render thread (layered=0: no course layer, the
 // course list is not shown).
 void hd_art_publish(int layered, const uint16_t *screen);
+void hd_art_discard_pending(void);          // discard an unpublished transient frame; keep published art intact
+int hd_art_mark(void);                      // start of a replaced original draw
+void hd_art_hide_from(int mark);            // hide only art recorded since that mark
 
 // Debug overlay (task-113). The sprite that owns canvas pixel (x, y) of the last published frame: the sheet
 // (index.tsv name), frame, look, which list drew it (HD_ART_TOP: golf's own UI over the course, or the whole

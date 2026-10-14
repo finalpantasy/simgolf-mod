@@ -30,6 +30,7 @@
 
 #include "port/golfers_frosted.h"
 #include "port/hd_native.h"
+#include "port/hd_art.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
@@ -77,6 +78,7 @@ static int g_n_want;
 
 // card
 static int g_card_cap;
+static int g_card_art_mark = -1;
 static uint16_t *g_save;
 static size_t g_save_cap;
 static int g_save_w, g_save_h;
@@ -477,6 +479,7 @@ int gw_native_card(void) { return g_on && gwf_card_enabled(); }   // for hud_gam
 
 void gc_begin(int slot) {
   g_card_cap = 0;
+  g_card_art_mark = -1;
   if (!g_on || !gwf_card_enabled()) return;
   int pitch, is565, w, h;
   uint16_t *bb = back_pixels(&pitch, &is565, &w, &h);
@@ -493,6 +496,7 @@ void gc_begin(int slot) {
   g_card_cap = 1;
   g_n_rec = 0;
   run_actions(slot);
+  g_card_art_mark = hd_art_mark();
 }
 
 int gc_text(int fn, const char *text, int x, int y, unsigned colour) {
@@ -617,6 +621,7 @@ static void fill_card(int slot, GwCard *g) {
 void gc_end(int slot) {
   if (!g_card_cap) return;
   g_card_cap = 0;
+  hd_art_hide_from(g_card_art_mark);
   // the head, read while the original card's pixels are still in the frame (capture() restores what it touches)
   if (slot != g_port_slot || ++g_port_frames > 120) {
     g_port_slot = slot;

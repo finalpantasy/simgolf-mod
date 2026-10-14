@@ -142,6 +142,8 @@ void hudf_set_injecting(int on);              // the game thread is feeding it a
 
 // game side (hud_game.c), for the render side and tests
 int hud_injecting(void);
+int hud_course_transition(void);            // bounded, tagged original tray transition
+void hud_course_frame_presented(void);      // a complete course frame after consumption ends the transition
 
 #ifdef __cplusplus
 }

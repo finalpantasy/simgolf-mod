@@ -11,5 +11,17 @@
     "cVar1 = head_default_skin(1, iVar7);"
    ]
   ]
+ },
+ "required_patch_counts": {
+  "FUN_00462020": [
+   [
+    "cVar1 = (&DAT_004d5b38)[(char)(&DAT_004d60aa)[iVar7 * 0x230] * 0x44];",
+    1
+   ],
+   [
+    "cVar1 = (&DAT_004d55e8)[(char)(&DAT_004d60aa)[iVar7 * 0x230] * 0x44];",
+    1
+   ]
+  ]
  }
 }

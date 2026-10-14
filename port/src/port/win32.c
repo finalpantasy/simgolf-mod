@@ -12,6 +12,7 @@
 #include "port/host.h"
 #endif
 #include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1021,11 +1022,33 @@ nu CloseHandle(nu h) {
 }
 
 // FindFirstFileA: the whole listing is gathered up front.
-typedef struct { int n, pos; struct { char name[260]; int dir; unsigned size; } e[512]; } FindObj;
+typedef struct { char name[260]; int dir; unsigned size; } FindEntry;
+typedef struct {
+  int n, pos, cap, failed;
+  FindEntry *e;
+} FindObj;
 
 static void find_add(void *ctx, const char *name, int is_dir, unsigned size) {
   FindObj *f = ctx;
-  if (f->n >= 512) return;
+  if (f->failed) return;
+  if (f->n == f->cap) {
+    if (f->cap > INT_MAX / 2) {
+      f->failed = 1;
+      return;
+    }
+    int next = f->cap ? f->cap * 2 : 128;
+    if ((size_t)next > SIZE_MAX / sizeof *f->e) {
+      f->failed = 1;
+      return;
+    }
+    FindEntry *grown = realloc(f->e, (size_t)next * sizeof *grown);
+    if (!grown) {
+      f->failed = 1;
+      return;
+    }
+    f->e = grown;
+    f->cap = next;
+  }
   snprintf(f->e[f->n].name, 260, "%s", name);
   f->e[f->n].dir = is_dir;
   f->e[f->n].size = size;
@@ -1043,10 +1066,15 @@ static void find_fill(FindObj *f, nu data) {
 nu FindFirstFileA(nu pattern, nu data) {
   API_TRACE();
   FindObj *f = calloc(1, sizeof *f);
+  if (!f) {
+    g_last_error = 8;  // ERROR_NOT_ENOUGH_MEMORY
+    return 0xffffffffu;
+  }
   fs_list(S(pattern), find_add, f);
-  if (!f->n) {
+  if (f->failed || !f->n) {
+    g_last_error = f->failed ? 8 : 2;
+    free(f->e);
     free(f);
-    g_last_error = 2;
     return 0xffffffffu;
   }
   find_fill(f, data);
@@ -1066,7 +1094,10 @@ nu FindNextFileA(nu h, nu data) {
 
 nu FindClose(nu h) {
   API_TRACE();
-  free(obj_get(h, OBJ_FIND));
+  FindObj *f = obj_get(h, OBJ_FIND);
+  if (!f) return 0;
+  free(f->e);
+  free(f);
   obj_free(h);
   return 1;
 }

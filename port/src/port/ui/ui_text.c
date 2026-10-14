@@ -2,6 +2,7 @@
 #include "port/ui/ui_text.h"
 
 #include <math.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,7 +61,7 @@ int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
     t->f[i].weight = k_weights[i];
     t->f[i].info = calloc(1, sizeof(stbtt_fontinfo));
     t->f[i].data = read_file(path);
-    if (!t->f[i].data || !stbtt_InitFont(INFO(t, i), t->f[i].data, stbtt_GetFontOffsetForIndex(t->f[i].data, 0))) {
+    if (!t->f[i].info || !t->f[i].data || !stbtt_InitFont(INFO(t, i), t->f[i].data, stbtt_GetFontOffsetForIndex(t->f[i].data, 0))) {
       fprintf(stderr, "ui: font %s not loaded\n", path);
       continue;
     }
@@ -86,12 +87,16 @@ int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
   for (int i = 0; i < 256; i++) t->curve[i] = (uint8_t)(powf(i / 255.0f, 1.0f / t->gamma) * 255.0f + 0.5f);
   t->aw = t->ah = 2048;
   t->alpha = malloc((size_t)t->aw * t->ah);
+  if (!t->alpha) {
+    fprintf(stderr, "ui: cannot allocate glyph atlas pixels; text rendering disabled\n");
+    return loaded;  // callers may still show the UI using icons/art
+  }
   if (r) {
     t->atlas = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, t->aw, t->ah);
     if (t->atlas) {
       SDL_SetTextureBlendMode(t->atlas, SDL_BLENDMODE_BLEND);
       SDL_SetTextureScaleMode(t->atlas, SDL_ScaleModeNearest);
-    }
+    } else t->atlas_retry_at = SDL_GetTicks() + 1000;
   }
   atlas_reset(t);
   return loaded;
@@ -155,6 +160,7 @@ static int glyph_index(UiText *t, int file, uint32_t cp) {
 }
 
 static UitGlyph *glyph(UiText *t, int file, int px, int g) {
+  if (!t->alpha) return NULL;  // no rasterization without CPU atlas storage
   uint32_t key = 0x80000000u | (uint32_t)file << 26 | (uint32_t)(px & 1023) << 16 | (uint32_t)(g & 0xFFFF);
   uint32_t h = (key * 2654435761u) >> 19;   // 13 bits
   for (int probe = 0; probe < UIT_CACHE; probe++) {
@@ -227,9 +233,10 @@ static void upload(UiText *t) {
         for (int x = 0; x < w; x++)
           px[(size_t)y * w + x] = (uint32_t)t->alpha[(size_t)(t->dy0 + y) * t->aw + t->dx0 + x] << 24 | 0xFFFFFFu;
       SDL_Rect r = {t->dx0, t->dy0, w, h};
-      SDL_UpdateTexture(t->atlas, &r, px, w * 4);
+      int uploaded = SDL_UpdateTexture(t->atlas, &r, px, w * 4) == 0;
       free(px);
-    }
+      if (!uploaded) return;  // keep the dirty rectangle for retry
+    } else return;  // CPU allocation failed: do not mark glyphs uploaded
   }
   t->dirty = 0;
 }
@@ -276,15 +283,40 @@ void uit_metrics(UiText *t, int weight, float px, float *ascent, float *descent)
 
 float uit_draw(UiText *t, float x, float y, int weight, float px, const char *s, float tracking, UiColor c) {
   int f = pick(t, weight);
-  if (f < 0 || !s || !*s || !t->atlas) return x;
+  if (f < 0 || !s || !*s) return x;
+  if (!t->atlas) {
+    if (!t->r || !t->alpha) return x;
+    Uint32 now = SDL_GetTicks();
+    if (t->atlas_retry_at && !SDL_TICKS_PASSED(now, t->atlas_retry_at)) return x;
+    t->atlas = SDL_CreateTexture(t->r, SDL_PIXELFORMAT_ARGB8888,
+                                 SDL_TEXTUREACCESS_STATIC, t->aw, t->ah);
+    if (!t->atlas) {
+      t->atlas_retry_at = now + 1000;
+      return x;
+    }
+    SDL_SetTextureBlendMode(t->atlas, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(t->atlas, SDL_ScaleModeNearest);
+    // Alpha glyph pixels were already allocated; upload them on first draw.
+    t->dirty = 1;
+    t->dx0 = t->dy0 = 0;
+    t->dx1 = t->aw;
+    t->dy1 = t->ah;
+    t->atlas_retry_at = 0;
+  }
   int ipx = (int)(px + 0.5f);
   stbtt_fontinfo *info = INFO(t, f);
   float scale = stbtt_ScaleForMappingEmToPixels(info, (float)ipx);
   size_t n = strlen(s);
+  if (n > (size_t)(INT_MAX - 64) / 4) return x;
   if ((int)n * 4 > t->cap) {
-    t->cap = (int)n * 4 + 64;
-    t->v = realloc(t->v, sizeof *t->v * t->cap);
-    t->idx = realloc(t->idx, sizeof *t->idx * t->cap / 4 * 6);
+    int cap = (int)n * 4 + 64;
+    SDL_Vertex *v = realloc(t->v, sizeof *t->v * (size_t)cap);
+    if (!v) return x;
+    t->v = v;
+    int *idx = realloc(t->idx, sizeof *t->idx * (size_t)(cap / 4) * 6);
+    if (!idx) return x;
+    t->idx = idx;
+    t->cap = cap;  // publish only after both allocations succeed
   }
   t->nv = t->ni = 0;
   float by = floorf(y + 0.5f), pen = x;

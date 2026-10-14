@@ -27,6 +27,7 @@
 
 #include "port/hd_art.h"
 #include "port/hd_native.h"
+#include "mods/mods.h"
 #include "port/water_native.h"
 
 extern int terrain_hd_build(void);
@@ -294,10 +295,23 @@ static void take(SDL_Renderer *r, long shown) {
     NewTex *n = &s->tex[i];
     SDL_Texture *t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, n->w, n->h);
     if (t) {
-      SDL_UpdateTexture(t, NULL, n->rgba, n->w * 4);
+      if (SDL_UpdateTexture(t, NULL, n->rgba, n->w * 4) != 0) {
+        SDL_DestroyTexture(t);
+        t = NULL;
+      }
+    }
+    if (t) {
       SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
-      GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry));
-      R.tex[R.ntex++] = (TexEntry){n->serial, t};
+      int found = -1;
+      if (mods_get_int("fixes.terrain_cache", 1))
+        for (int j = R.ntex - 1; j >= 0; j--) if (R.tex[j].serial == n->serial) { found = j; break; }
+      if (found >= 0) {
+        SDL_DestroyTexture(R.tex[found].tex);
+        R.tex[found].tex = t;
+      } else {
+        GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry));
+        R.tex[R.ntex++] = (TexEntry){n->serial, t};
+      }
     }
     if (n->water) water_take_texture(n->serial, n->w, n->h, n->rgba);   // task-78: the water pass keeps its own copy
     free(n->rgba);

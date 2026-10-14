@@ -104,6 +104,11 @@ static void load_cfg(void) {
 #undef K
   }
   fclose(f);
+  // PR3: validate editable radii before converting them to texture sizes.
+  if (!(C.radius >= 0.25 && C.radius <= 64)) C.radius = 2.0;
+  if (!(C.radius_min_px >= 0.5 && C.radius_min_px <= 128)) C.radius_min_px = 2.2;
+  if (!(C.radius_max_px >= C.radius_min_px && C.radius_max_px <= 128))
+    C.radius_max_px = C.radius_min_px > 48 ? C.radius_min_px : 48;
   double l = sqrt(C.lx * C.lx + C.ly * C.ly + C.lz * C.lz);
   if (l > 0) C.lx /= l, C.ly /= l, C.lz /= l;
   if (C.npal < 2) {   // a palette of at least two colours, else the built-in one
@@ -389,6 +394,7 @@ static double ball_sample(double X, double Y, double r, uint32_t rgb, double *c)
 static SDL_Texture *make_ball(SDL_Renderer *rd, double r, uint32_t rgb, int *dout) {
   int D = (int)ceil(2 * r) + 4;
   uint32_t *px = calloc((size_t)D * D, 4);
+  if (!px) { *dout = 0; return NULL; }
   double c0 = D / 2.0;
   for (int j = 0; j < D; j++)
     for (int i = 0; i < D; i++) {
@@ -429,6 +435,7 @@ static SDL_Texture *ball_tex(SDL_Renderer *rd, double r, uint32_t rgb, int *d) {
     g_nbt = 0;
   }
   SDL_Texture *t = make_ball(rd, key / 4.0, rgb, d);
+  if (!t) return NULL;  // PR3: retry a failed allocation instead of caching it.
   g_bt[g_nbt].key = key;
   g_bt[g_nbt].rgb = rgb;
   g_bt[g_nbt].tex = t;

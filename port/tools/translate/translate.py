@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+from required_patches import validate_required_patches
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--export", required=True)
@@ -53,8 +54,11 @@ if args.config:
     stem = os.path.splitext(args.config)[0]
     for extra in sorted(glob.glob(stem + ".*.json")):
         with open(extra) as f:
-            for name, lst in json.load(f).get("patches", {}).items():
+            extra_cfg = json.load(f)
+            for name, lst in extra_cfg.get("patches", {}).items():
                 cfg.setdefault("patches", {}).setdefault(name, []).extend(lst)
+            for name, lst in extra_cfg.get("required_patch_counts", {}).items():
+                cfg.setdefault("required_patch_counts", {}).setdefault(name, []).extend(lst)
 native = {int(k, 16): v for k, v in cfg.get("native", {}).items()}   # addr -> C name
 skip = {int(k, 16) for k in cfg.get("skip", [])}
 patches = cfg.get("patches", {})                                    # name -> [[old, new], ...]
@@ -460,6 +464,15 @@ while work:
         t = byname.get(m.group(1))
         if t and not t["name"].startswith("Unwind@"):
             work.append(int(t["addr"], 16))
+
+# PR10: required portrait crash fixes must reach the selected translated body.
+translated_required = [d for a, d in selected.items()
+                      if a not in native and "thunk" not in d
+                      and c_ident(d["name"]) not in override_names]
+try:
+    validate_required_patches(translated_required, cfg.get("required_patch_counts", {}), patches)
+except ValueError as error:
+    sys.exit(str(error))
 
 # ---------------------------------------------------------------- void returns used
 # Ghidra infers each function's return type on its own, so a function it

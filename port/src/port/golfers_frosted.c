@@ -35,6 +35,7 @@ static uint32_t g_art_pub;
 static UiCtx *g_ui_w, *g_ui_c;   // the world layer (tags, bubbles: under the HUD) and the card layer (over it)
 static SDL_Texture *g_tex[GW_ART_MAX];
 static uint32_t g_tex_serial[GW_ART_MAX];
+static Uint32 g_tex_retry_at[GW_ART_MAX];  // next GPU-upload attempt after a transient failure
 static int g_registered, g_card_registered, g_failed;
 static volatile int g_want;
 static volatile double g_drawn_t = -1e9, g_card_drawn_t = -1e9;
@@ -202,20 +203,32 @@ static void load_tokens(UiTokens *t) {
 
 static void update_art(SDL_Renderer *r) {
   lock();
+  Uint32 now = SDL_GetTicks();
   for (int i = 0; i < GW_ART_MAX; i++) {
     if (g_art[i].serial == g_tex_serial[i]) continue;
-    g_tex_serial[i] = g_art[i].serial;
-    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
-    g_tex[i] = NULL;
-    if (!g_art[i].px) continue;
-    g_tex[i] = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
-    if (g_tex[i]) {
-      SDL_UpdateTexture(g_tex[i], NULL, g_art[i].px, g_art[i].w * 4);
-      SDL_SetTextureBlendMode(g_tex[i], SDL_BLENDMODE_BLEND);
-      SDL_SetTextureScaleMode(g_tex[i], SDL_ScaleModeLinear);
-    } else {
-      g_tex_serial[i] = g_art[i].serial - 1;   // task-114k: the upload failed; ask again on the next frame instead of staying blank
+    if (!g_art[i].px) {  // an intentional clear, not an upload failure
+      if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+      g_tex[i] = NULL;
+      g_tex_serial[i] = g_art[i].serial;
+      g_tex_retry_at[i] = 0;
+      continue;
     }
+    if (g_tex_retry_at[i] && !SDL_TICKS_PASSED(now, g_tex_retry_at[i])) continue;
+    SDL_Texture *next = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888,
+                                          SDL_TEXTUREACCESS_STATIC, g_art[i].w, g_art[i].h);
+    if (!next || SDL_UpdateTexture(next, NULL, g_art[i].px, g_art[i].w * 4) != 0) {
+      // Preserve the last valid image and retry rather than marking it loaded.
+      // Throttle retries so low GPU memory cannot spin at monitor refresh rate.
+      if (next) SDL_DestroyTexture(next);
+      g_tex_retry_at[i] = now + 1000;
+      continue;
+    }
+    SDL_SetTextureBlendMode(next, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(next, SDL_ScaleModeLinear);
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i] = next;
+    g_tex_serial[i] = g_art[i].serial;
+    g_tex_retry_at[i] = 0;
   }
   unlock();
 }

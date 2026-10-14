@@ -6,14 +6,20 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
-typedef struct { uint8_t *p; size_t n, cap; uint32_t bits; int nbits; } Out;
+typedef struct { uint8_t *p; size_t n, cap; uint32_t bits; int nbits; int oom; } Out;
 
 static void put(Out *o, uint8_t b) {
+  if (o->oom) return;
   if (o->n == o->cap) {
-    o->cap = o->cap ? o->cap * 2 : 1 << 16;
-    o->p = realloc(o->p, o->cap);
+    size_t cap = o->cap ? o->cap * 2 : 1 << 16;
+    if (cap < o->cap) { o->oom = 1; return; }
+    uint8_t *p = realloc(o->p, cap);
+    if (!p) { o->oom = 1; return; }
+    o->p = p;
+    o->cap = cap;
   }
   o->p[o->n++] = b;
 }
@@ -67,6 +73,12 @@ static void deflate(Out *o, const uint8_t *d, size_t n) {
   bits(o, 1, 2);   // fixed Huffman
   int32_t *head = malloc(sizeof(int32_t) << HBITS);
   int32_t *prev = malloc(sizeof(int32_t) * WIN);
+  if (!head || !prev) {
+    free(head);
+    free(prev);
+    o->oom = 1;
+    return;
+  }
   memset(head, 0xff, sizeof(int32_t) << HBITS);
   size_t i = 0;
   while (i < n) {
@@ -147,9 +159,17 @@ static int paeth(int a, int b, int c) {
 }
 
 int ui_png_write(const char *path, const uint32_t *argb, int w, int h, int pitch_px) {
-  size_t row = (size_t)w * 3 + 1;
-  uint8_t *raw = malloc(row * h), *cur = malloc((size_t)w * 3), *up = calloc((size_t)w * 3, 1);
-  if (!raw || !cur || !up) return 0;
+  if (!path || !argb || w <= 0 || h <= 0 || pitch_px < w ||
+      (size_t)w > (SIZE_MAX - 1) / 3) return 0;
+  size_t rgb = (size_t)w * 3, row = rgb + 1;
+  if ((size_t)h > SIZE_MAX / row) return 0;
+  uint8_t *raw = malloc(row * (size_t)h), *cur = malloc(rgb), *up = calloc(rgb, 1);
+  if (!raw || !cur || !up) {
+    free(raw);
+    free(cur);
+    free(up);
+    return 0;
+  }
   for (int y = 0; y < h; y++) {
     const uint32_t *s = argb + (size_t)y * pitch_px;
     for (int x = 0; x < w; x++) {
@@ -166,7 +186,14 @@ int ui_png_write(const char *path, const uint32_t *argb, int w, int h, int pitch
     memcpy(up, cur, (size_t)w * 3);
   }
   Out z = {0};
-  deflate(&z, raw, row * h);
+  deflate(&z, raw, row * (size_t)h);
+  if (z.oom || z.n > UINT32_MAX) {
+    free(z.p);
+    free(raw);
+    free(cur);
+    free(up);
+    return 0;
+  }
   FILE *f = fopen(path, "wb");
   int ok = f != NULL;
   if (f) {
@@ -178,7 +205,8 @@ int ui_png_write(const char *path, const uint32_t *argb, int w, int h, int pitch
     chunk(f, "IDAT", z.p, z.n);
     chunk(f, "IEND", NULL, 0);
     ok = !ferror(f);
-    fclose(f);
+    if (fclose(f) != 0) ok = 0;
+    if (!ok) remove(path);  // do not leave an invalid partial PNG
   }
   free(z.p);
   free(raw);
