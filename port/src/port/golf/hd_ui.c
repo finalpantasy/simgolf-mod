@@ -56,6 +56,8 @@
 #define TILE_TYPES 0x5722e8      // golf's terrain type per tile, [x * 50 + y]
 
 int terrain_grid_size(int *w, int *h);   // platform/terrain_dll.cpp
+void terrain_set_line_offset_fix(int on);
+void place_frame_begin(void);
 void terrain_set_view_offset(int ox, int oy);   // platform/terrain_dll.cpp
 int *FUN_00430020(int x, int y, int *tx, int *ty, int exact);   // screenToWorld (generated)
 void gdi_set_view(const void *bits, int dx, int dy);   // gdi.c: GDI text and blits follow the view
@@ -185,6 +187,7 @@ static void overscan_begin(void) {
 
 void hd_ui_frame_camera(void) {
   sub_apply();
+  place_frame_begin();
   opt_game_frame();
   dbg_overlay_frame();
   overscan_begin();

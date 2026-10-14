@@ -9,6 +9,8 @@
 uintptr_t staff_base(void);
 uintptr_t staff_translate(uintptr_t addr);
 int staff_max(void);
+// Unsigned map coordinates, preserving the legacy 255 no-zone sentinel.
+int staff_tile_coord(int raw);
 int staff_paid_count(void);
 int staff_free_slot(int job);
 int staff_can_hire(void);

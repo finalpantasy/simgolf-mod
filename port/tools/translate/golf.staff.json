@@ -41,6 +41,14 @@
     ],
     "FUN_0040aa80": [
       [
+        "(char)(&DAT_00585860)[iVar4]",
+        "staff_tile_coord((&DAT_00585860)[iVar4])"
+      ],
+      [
+        "(char)(&DAT_00585861)[iVar4]",
+        "staff_tile_coord((&DAT_00585861)[iVar4])"
+      ],
+      [
         "iVar3 = FUN_00459400();",
         "if (!staff_can_hire()) return 0;\n  iVar3 = FUN_00459400();"
       ],
@@ -88,6 +96,14 @@
       ]
     ],
     "FUN_00402a40": [
+      [
+        "(char)(&DAT_00585860)[iVar17]",
+        "staff_tile_coord((&DAT_00585860)[iVar17])"
+      ],
+      [
+        "(char)(&DAT_00585861)[iVar17]",
+        "staff_tile_coord((&DAT_00585861)[iVar17])"
+      ],
       [
         "0x3f < (int)local_24",
         "(STAFF_CAPACITY-1) < (int)local_24"
@@ -224,6 +240,14 @@
       ]
     ],
     "FUN_00436e50": [
+      [
+        "(char)(&DAT_00585860)[iVar7]",
+        "staff_tile_coord((&DAT_00585860)[iVar7])"
+      ],
+      [
+        "(char)(&DAT_00585861)[iVar7]",
+        "staff_tile_coord((&DAT_00585861)[iVar7])"
+      ],
       [
         "0x586b63",
         "(staff_base()+STAFF_BYTES+0x13)"

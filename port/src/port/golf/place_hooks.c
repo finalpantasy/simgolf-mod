@@ -11,7 +11,11 @@
 #define G8(a) (*(volatile int8_t *)(uintptr_t)(a))
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 
+void terrain_set_line_offset_fix(int on);
+
 #ifdef __EMSCRIPTEN__
+
+void place_frame_begin(void) { terrain_set_line_offset_fix(1); }
 
 void place_center(int *tx, int *ty) { (void)tx, (void)ty; }
 
@@ -19,6 +23,16 @@ void place_center(int *tx, int *ty) { (void)tx, (void)ty; }
 
 const char *mods_get(const char *key);   // mods/mods.h (that header is not used here: golf's own types are)
 unsigned mods_serial(void);
+
+void place_frame_begin(void) {
+  static unsigned seen = ~0u;
+  unsigned serial = mods_serial();
+  if (serial != seen) {
+    seen = serial;
+    const char *v = mods_get("fixes.placement_lines");
+    terrain_set_line_offset_fix(!v || v[0] != '0');
+  }
+}
 
 static int on(void) {
   static unsigned seen = ~0u;

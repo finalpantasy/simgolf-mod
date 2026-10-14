@@ -437,7 +437,8 @@ static void weed_check(const char *date) {
   for (int r = 0; r < EMP_COUNT && nz < HUD_STAFF_MAX; r++) {
     int st = G8(EMP_BASE + r * 0x4c + 0x12) & 0xff, job = G8(EMP_BASE + r * 0x4c + 0x13);
     if (st == 0 || (job != -4 && job != -6)) continue;
-    int zx = G8(EMP_BASE + r * 0x4c + 0x10), zy = G8(EMP_BASE + r * 0x4c + 0x11);
+    int zx = staff_tile_coord(G8(EMP_BASE + r * 0x4c + 0x10));
+    int zy = staff_tile_coord(G8(EMP_BASE + r * 0x4c + 0x11));
     if (zx < 0 || zy < 0) continue;
     cx[nz] = zx, cy[nz] = zy, cr[nz] = (st & 8) ? 16 : 12;
     nz++;

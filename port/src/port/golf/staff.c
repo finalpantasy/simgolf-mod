@@ -34,6 +34,24 @@ int staff_max(void) {
 #endif
   return n < 1 ? 1 : n > STAFF_HIRE_MAX ? STAFF_HIRE_MAX : n;
 }
+// Staff zone coordinates are bytes, not signed positions. Large maps use
+// 128..159; wrapped negative legacy targets stay negative. Save bytes are unchanged.
+int staff_tile_coord(int raw) {
+#ifndef __EMSCRIPTEN__
+  static unsigned seen = ~0u;
+  static int enabled = 1;
+  unsigned serial = mods_serial();
+  if (serial != seen) {
+    seen = serial;
+    const char *v = mods_get("fixes.staff_tiles");
+    enabled = !v || atoi(v) != 0;
+  }
+  if (!enabled) return (int8_t)raw;
+#endif
+  unsigned char tile = (unsigned char)raw;
+  // Preserve wrapped negative legacy targets beyond every supported map.
+  return tile < GRID_MAX_SIDE ? (int)tile : (int8_t)raw;
+}
 int staff_paid_count(void) {
   const unsigned char *base = (void *)staff_base(); int n = 0;
   for (int i = 0; i < STAFF_CAPACITY; i++) {

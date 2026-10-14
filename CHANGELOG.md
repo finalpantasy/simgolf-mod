@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: pathway and landmark placement outlines stay aligned with the ground after smooth camera movement. The same correction applies to screen-space guide lines.
+- Fixed: employee work zones support coordinates 128 and above on large maps, while preserving legacy negative targets and existing save bytes.
+
 ## 0.1.4 - 2026-10-13
 
 Staff expansion and safer play. More setup choices, cleaner controls, and fixes for saves, reports and course details.

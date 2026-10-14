@@ -442,3 +442,10 @@ golf draws the terrain trees (the cell classes whose decoration type is 13: tree
 | src/port/golf/overrides.c, src/port/ghidra_prelude.h | `far_trees()`, `sprq_begin()` (reads `[ui] far_trees` once per frame), `g_sprq`, `SPRQ_*` | The switch and the storage. |
 | src/port/golf/ball_hooks.c | reads the queue entries from `g_sprq` | The round ball's sprite match. |
 | tests/native/far_trees.sh, .mjs, tools/check.sh | Showcase Resort at zoom 1 and 2, on and off: pictures and game state; `--evidence`: 1080p and 4K pictures, Huge course frame rate | Evidence and the check.sh stage. |
+
+
+## Placement alignment and large-map staff coordinates
+
+Screen-space lines and curves already receive projected camera coordinates. Their 2D drawing pass temporarily clears the terrain camera offset and restores it before world geometry resumes. This removes the repeated offset in pathway and landmark outlines. `fixes.placement_lines=0` restores the earlier drawing behavior.
+
+Staff tile bytes at coordinates 128 through 159 are interpreted as unsigned positions. The shared decoder retains wrapped negative targets outside the supported map range, including the 255 unassigned marker. It is used by worker simulation, hire positioning, the selected staff map marker and weed coverage. Record layout and serialized bytes remain unchanged. `fixes.staff_tiles=0` restores the original signed reads.

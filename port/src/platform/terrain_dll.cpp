@@ -62,6 +62,7 @@ float g_nrm[TERRAIN_MAX * TERRAIN_MAX * 9][3];        // 0x10070a18
 unsigned g_tex[37][25][9];                        // 0x100687f8 [set][variant][frame]
 int g_courseType;                                 // 0x10070a0c
 float g_pitch;                                    // 0x10070a10
+static bool g_screen_lines_fixed = true;
 int g_view_ox, g_view_oy;   // sub-tile camera offset, canvas px (task-37; 0 = the DLL)
 int g_rot;                                        // 0x10070a14, 0..3
 float g_heightStep = 15.0f;                       // 0x10063e54
@@ -1122,6 +1123,8 @@ void terrain_set_surface(const TerrainSurface *surface) {
 // The sub-tile camera (golf/hd_ui.c, task-37): the course is drawn (ox, oy)
 // canvas px further right and down than golf's whole-tile camera puts it.
 // Callers redraw the whole terrain after a change.
+extern "C" void terrain_set_line_offset_fix(int on) { g_screen_lines_fixed = on != 0; }
+
 extern "C" void terrain_set_view_offset(int ox, int oy) {
   g_view_ox = ox;
   g_view_oy = oy;
@@ -1629,6 +1632,8 @@ namespace {
 // down, no lighting or texture, blending on, colour from an RGB555 value.
 void begin2D(int rgb555, int width, float alpha) {
   TerrainState *s = g_inst;
+  // Endpoints are already projected to the canvas, including the camera shift.
+  if (g_screen_lines_fixed) g_gl.setScreenOffset(0, 0);
   g_gl.matrixMode(tgl::Context::PROJECTION);
   g_gl.pushMatrix();
   g_gl.loadIdentity();
@@ -1647,6 +1652,8 @@ void begin2D(int rgb555, int width, float alpha) {
 }
 
 void end2D() {
+  // World-space terrain still needs the sub-tile camera shift.
+  g_gl.setScreenOffset((float)g_view_ox, (float)-g_view_oy);
   g_gl.lighting = true;
   g_gl.texture2D = true;
   g_gl.blend = false;
