@@ -41,6 +41,8 @@ typedef struct {
 
 // The ease: 0 -> 1 over x in 0..1.
 double hdz_ease(double x);
+void hdz_wait_frame(HdZoom *g, double now, int fixed);
+void hdz_wait_picture(HdZoom *g, double now, double before, int fixed);
 
 // A frame's camera in tiles, sub-tile part included.
 void hdz_frame_cam(const HdUiCamera *f, double *cx, double *cy);

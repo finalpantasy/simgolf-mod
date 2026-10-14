@@ -109,9 +109,10 @@ typedef struct {
   int layers, smooth, ui_probe;
   int smooth_zoom, zoom_ms;   // task-56
   int overscan, edge_fix;     // task-68
+  int fix_zoom_clock;
 } Cfg;
 
-static Cfg g_cfg = {1, 1, 0, 0, F_SHARP, 1, 0, 0, 0, 1, 0, 0, "", 0, 1, 1, 0, 1, 200, 2, 1};
+static Cfg g_cfg = {1, 1, 0, 0, F_SHARP, 1, 0, 0, 0, 1, 0, 0, "", 0, 1, 1, 0, 1, 200, 2, 1, 1};
 static double g_ui_px = 1;            // the scale in use: output px per canvas px (course view)
 static int g_active;                  // the render thread presents
 static int g_mod_on = 1;              // mods.ini hd_presentation (0: the original throughout)
@@ -707,10 +708,11 @@ static void zoom_settle(Rt *t, double now) {
       if (t->zsnap_ok && t->zsnap_zoom < floor) floor = t->zsnap_zoom;
       // A stall (golf's new picture takes a while to upload) must not eat the glide: the clock gives back
       // all but one frame of it.
-      if (now - g->last_t > 20) g->t0 += now - g->last_t - 12;
+      double clock_before = g->t0;
+      hdz_wait_frame(g, now, g_cfg.fix_zoom_clock);
       hdz_view(g, now, &v, &cx, &cy);
       if (v < floor - 1e-6) {
-        g->t0 += now - g->last_t;
+        hdz_wait_picture(g, now, clock_before, g_cfg.fix_zoom_clock);
         hdz_view(g, now, &v, &cx, &cy);
         if (v < floor - 1e-6) g->t0 = now;
       }
@@ -1407,6 +1409,7 @@ int hd_present(const uint16_t *screen) {
   static unsigned seen_serial;
   if (mods_serial() != seen_serial) {
     seen_serial = mods_serial();
+    g_cfg.fix_zoom_clock = mods_get_int("fixes.zoom_clock", 1) != 0;
     const char *v = mods_get("display.smooth");
     if (v && *v && (g_cfg.layers || !g_cfg.hd)) {
       g_cfg.smooth = atoi(v) != 0;

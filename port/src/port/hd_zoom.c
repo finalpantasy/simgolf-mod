@@ -32,6 +32,21 @@ void hdz_view(const HdZoom *g, double now, double *v, double *cx, double *cy) {
   *cy = g->c0y + (g->c1y - g->c0y) * f;
 }
 
+// Give stalled frames back to the glide. The default limits every clock step,
+// including the 12..20 ms gap that the original guard let through unchanged.
+void hdz_wait_frame(HdZoom *g, double now, int fixed) {
+  double elapsed = now - g->last_t;
+  if (elapsed > (fixed ? 12 : 20)) g->t0 += elapsed - 12;
+}
+
+// Waiting for a new picture consumes no glide time. A frame already refunded
+// part of its delay above, so replace that refund instead of adding it twice.
+void hdz_wait_picture(HdZoom *g, double now, double before, int fixed) {
+  double elapsed = now - g->last_t;
+  if (fixed) g->t0 = before + elapsed;
+  else g->t0 += elapsed;
+}
+
 int hdz_over(const HdZoom *g, double now) { return now >= g->t0 + g->dur; }
 
 void hdz_begin(HdZoom *g, double now, const HdUiCamera *live, double slide_x, double slide_y, const HdUiZoom *e,
