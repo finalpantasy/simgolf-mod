@@ -7,7 +7,7 @@ Staff expansion and safer play. More setup choices, cleaner controls, and fixes 
 - Changed: staff starts at the original limit of 20. Options > Gameplay can raise it to 100; existing staff survive lowering the limit and saving/loading
 - Fixed: a busy save-name box no longer shows the old moving text strip
 - Fixed: temporary text strings are terminated before font measurements, preventing a verified invalid read
-- Fixed: save completion waits for matching camera and mod records; failed replacements retain the previous save and companions
+- Fixed: failed mod-record writes no longer emit a successful completion receipt
 - Fixed: Esc closes the active layer in order, build trays stay open after placement, cart shadows align, and uncovered weeds offer an Open staff notice
 - Fixed: tee-to-cup lines align at both ends, pro profiles distinguish adults and children, and the Best Hole award plaque is readable
 - New: setup can use an existing SimGolf installation folder as well as a disc image, with checked files and a separate required version 1.02 program
