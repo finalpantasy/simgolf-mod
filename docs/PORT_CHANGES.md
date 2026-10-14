@@ -455,3 +455,5 @@ Accepted news posts are captured for HUD history immediately, before another pos
 Message history takes priority over the cart-path button and help while open. The world path view and its selected state remain intact; closing history restores the controls. `fixes.history_paths=0` restores the previous overlap.
 
 Smooth zoom now gives back animation time for frame delays over 12 ms, including the old unchecked 12..20 ms interval. `fixes.zoom_clock=0` restores the previous clock guard.
+
+Native bridge performance reports include input delivery state, distinguishing queued events and the original key mailbox from fully consumed input. This is read-only telemetry; ordinary key and pause behavior are preserved.

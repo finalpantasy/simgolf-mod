@@ -840,6 +840,7 @@ static void cmd_perf(Buf *b) {
              "\"pagefile_mb\":%.1f,\"input_queued\":%d,\"pid\":%lu",
           g_fps, g_ticks, g_skipped, pmc.WorkingSetSize / 1048576.0, pmc.PeakWorkingSetSize / 1048576.0,
           pmc.PagefileUsage / 1048576.0, g_nacts, GetCurrentProcessId());
+  bprintf(b, ",\"input_delivery\":%d", key_state());
 }
 
 static Pending *add_pending(int ci, const char *id, WaitKind k, unsigned target) {
