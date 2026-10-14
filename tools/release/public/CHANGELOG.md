@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Changed: cart-path help uses a lighter tint and leaves buildings and the course background unobscured. Building connection warnings remain readable.
+
 - Changed: one supported course layout, retaining the selected Corners toolbar and stats. Alternate toolbar and course-screen layout choices are removed from Options.
 - Fixed: selecting a building no longer draws a second placement/Rotate card over its open tray. Placement help remains available when the tray is closed.
 

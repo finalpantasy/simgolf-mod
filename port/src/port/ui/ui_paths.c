@@ -24,19 +24,25 @@ static void quad(UiDraw *d, const PvMap *m, const PvQuad *q, UiColor col) {
   uid_triangle(d, x[0], y[0], x[2], y[2], x[3], y[3], col);
 }
 
-void ui_paths_draw_view(UiCtx *c, const PvNote *n, const PvMap *m, UiRect view_rect, float alpha) {
+static void path_tint(UiDraw *d, const PvMap *m, const PvQuad *q, const PvOpts *o, UiColor col) {
+  if (!o->subtle || q->path) quad(d, m, q, col);
+}
+
+void ui_paths_draw_view(UiCtx *c, const PvNote *n, const PvMap *m, UiRect view_rect, const PvOpts *o) {
   const UiTokens *t = ui_tokens(c);
   UiDraw *d = ui_drawer(c);
+  float alpha = o->opacity;
   if (alpha < 0.2f) alpha = 0.2f;
   if (alpha > 1.5f) alpha = 1.5f;
-  // the veil: the whole course view dims, then the network lights up
-  UiColor veil = {18, 30, 26, (uint8_t)fminf(255, 118 * alpha)};
-  uid_rrect(d, view_rect, 0, veil);
+  if (!o->subtle) {
+    UiColor veil = {18, 30, 26, (uint8_t)fminf(255, 118 * alpha)};
+    uid_rrect(d, view_rect, 0, veil);
+  } else alpha *= o->tint;
   UiColor amber = {255, 178, 66, (uint8_t)fminf(255, 130 * alpha)};
-  for (int i = 0; i < n->n_off && n->n_net + i < PV_QUADS; i++) quad(d, m, &n->q[n->n_net + i], amber);
+  for (int i = 0; i < n->n_off && n->n_net + i < PV_QUADS; i++) path_tint(d, m, &n->q[n->n_net + i], o, amber);
   UiColor mint = t->accent;
   mint.a = (uint8_t)fminf(255, 118 * alpha);
-  for (int i = 0; i < n->n_net && i < PV_QUADS; i++) quad(d, m, &n->q[i], mint);
+  for (int i = 0; i < n->n_net && i < PV_QUADS; i++) path_tint(d, m, &n->q[i], o, mint);
 }
 
 // ------------------------------------------------------------------ markers

@@ -3,7 +3,7 @@
 # works only when a cart path joins it to the clubhouse; Easy and Sandbox: not needed). This only makes it
 # visible: a small "No path" marker over every building the clubhouse's path network does not reach, a path
 # view (key Y or the button at the right edge; it also turns on by itself while a path or building is being
-# placed) that tints every joined tile and dims the rest, and a "Show the building" button on the game's
+# placed) that lightly highlights only path tiles, and a "Show the building" button on the game's
 # monthly warning. Reads the game's flags, never changes them. Switch it off with `ui_paths=0` in
 # data/mods.ini, `[ui] paths=original` there, the vanilla profile, or --no-mods. Needs the native presenter
 # (hd_presentation).
@@ -19,7 +19,8 @@ load_after = ["hd_presentation", "ui_font", "ui_hud", "ui_golfers"]
 [settings]
 "ui.paths" = "frosted_mint"
 # ui.paths_key: the path view key (an SDL key name, none = off). ui.paths_markers: 1/0 the "No path" markers.
-# ui.paths_opacity: strength of the tint (1 = the first design).
+# ui.paths_opacity: overall opacity. Tint controls path shading independently of building markers.
 "ui.paths_key" = "y"
 "ui.paths_markers" = "1"
 "ui.paths_opacity" = "1"
+"ui.paths_tint" = "0.30"

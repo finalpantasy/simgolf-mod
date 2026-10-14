@@ -1,5 +1,5 @@
 // Frosted Mint cart path help (simgolf mod, task-53): the path view (every tile of the clubhouse's
-// cart path network tinted, the rest dimmed) and a small "No path" marker over every building the
+// cart paths lightly tinted) and a small "No path" marker over every building the
 // network does not reach. A pure function of one PvNote, the snapshot the game thread takes of a course
 // frame (paths_game.c), drawn with the kit. Plain data and the kit: no game code.
 //
@@ -20,6 +20,7 @@
 
 typedef struct PvQuad {
   int16_t p[8];   // the four corners of one tile, canvas px: x0, y0, x1, y1, x2, y2, x3, y3 (around the tile)
+  uint8_t path;   // a real path tile; buildings also carry the network but do not need a ground tint
 } PvQuad;
 
 typedef struct PvBuilding {
@@ -56,11 +57,13 @@ typedef struct PvMap {
 typedef struct PvOpts {
   int markers;   // draw the "No path" markers
   float opacity; // glass opacity of the tint (1 = the first design)
+  int subtle;    // only actual path tiles, without a course-wide veil or building-footprint tint
+  float tint;    // additional path tint opacity, independent of the building markers
 } PvOpts;
 
-// The path view: the veil over the course, the network's tiles in mint, the unreached path tiles in amber.
-// view_rect is the canvas area on the target (the veil covers it).
-void ui_paths_draw_view(UiCtx *c, const PvNote *n, const PvMap *m, UiRect view_rect, float alpha);
+// Joined paths in mint, unreached paths in amber. The legacy comparison also tints building footprints
+// and dims view_rect; the default leaves buildings and the rest of the course unchanged.
+void ui_paths_draw_view(UiCtx *c, const PvNote *n, const PvMap *m, UiRect view_rect, const PvOpts *o);
 // The markers over unconnected buildings (under the HUD). The legend line of the view is drawn by _draw_legend.
 void ui_paths_draw_markers(UiCtx *c, const PvNote *n, const PvMap *m, const PvOpts *o, int hover_idx);
 // Index into n->bld of the unconnected building whose marker is under (px, py) on the target, -1 if none.

@@ -7,6 +7,7 @@
 #include "port/paths_frosted.h"
 
 #include <SDL.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,6 +106,9 @@ static void read_opts(PvOpts *o) {
   if (v && (!strcmp(v, "0") || str_is(v, "off") || str_is(v, "false"))) o->markers = 0;
   double d = mods_get_num("ui.paths_opacity", 1);
   if (d >= 0.2 && d <= 1.5) o->opacity = (float)d;
+  o->subtle = mods_get_int("fixes.paths_overlay", 1);
+  d = mods_get_num("ui.paths_tint", 0.30);
+  o->tint = (float)fmax(0.05, fmin(1.5, d));
 }
 
 static void make_map(const HdUiFrame *f, PvMap *m) {
@@ -173,7 +177,7 @@ static void draw(const HdUiFrame *f, void *user) {
   if (!top) {
     if (n->view) {
       UiRect vr = ui_rect(m.view_x, m.view_y, (float)f->canvas_w * m.px, (float)f->canvas_h * m.px);
-      ui_paths_draw_view(c, n, &m, vr, o.opacity);
+      ui_paths_draw_view(c, n, &m, vr, &o);
     }
     ui_paths_draw_markers(c, n, &m, &o, hov);
     ui_end(c);

@@ -65,6 +65,8 @@ static int add_quad(PvQuad *q, int a, int b) {
   corner(a + 1, b, &x, &y), q->p[2] = x, q->p[3] = y;
   corner(a + 1, b + 1, &x, &y), q->p[4] = x, q->p[5] = y;
   corner(a, b + 1, &x, &y), q->p[6] = x, q->p[7] = y;
+  const uint16_t *flags = (const uint16_t *)g_grid[9];
+  q->path = (flags[a * g_map_w + b] & 0x20) != 0;
   return 1;
 }
 

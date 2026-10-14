@@ -475,3 +475,11 @@ cards are preserved; legacy trays without Rotate also retain their card.
 The live regression exercises stale settings, real Tab and Rotate clicks, tray
 closing/reopening and the Options page at 1080p and 4K. An independent pixel gate
 checks that the duplicate card is absent only when the Buildings tray is open.
+
+## Cart-path overlay readability
+
+The path view now lightly tints actual path tiles and leaves building footprints
+and the rest of the course unobscured. Existing tile projection, connectivity,
+warning markers and controls are unchanged. `ui.paths_tint` defaults to 0.30;
+the separate overall opacity setting remains available. `fixes.paths_overlay=0`
+restores the earlier full network tint and course dimming for comparison.
