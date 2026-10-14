@@ -80,6 +80,7 @@ uint FUN_0040d6a0(void) {
 
 void hud_save(void) {}
 void hud_restore(void) {}
+void hud_news_posted(void) {}
 void hud_note_script_click(int x, int y) { (void)x, (void)y; }
 int hud_on(void) { return 0; }
 int hud_mx(int x) { return x; }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: closely spaced notices are preserved in message history, including repeated accepted notices.
+
 - Fixed: pathway and landmark placement outlines stay aligned with the ground after smooth camera movement. The same correction applies to screen-space guide lines.
 - Fixed: employee work zones support coordinates 128 and above on large maps, while preserving legacy negative targets and existing save bytes.
 

@@ -46,6 +46,7 @@ uint32_t FUN_004074a0(int design, int full);                                    
 uint32_t FUN_004676e0(uint32_t slot, int what);                                            // golfer name -> text_buf
 uint32_t FUN_00467600(int rec);                                                            // employee name (or its default) -> text_buf
 const char *mods_get(const char *key);
+unsigned mods_serial(void);
 
 
 int pv_building_of_text(const char *text);   // paths_game.c (task-53)
@@ -317,8 +318,8 @@ static void copy_str(char *dst, int cap, const char *src) {
 // NEWS_TEXT (0x5a6d40) with screen_state (0x569498) == 1 while it shows, the subject in 0x4c2e08
 // (>= 0: the golfer slot whose portrait the strip shows) and the display timer in 0x5a7144 (set to
 // length / 3 + 16 at a post, counted down by the tick). A post is seen here as screen_state going to 1,
-// or the timer going up while it shows (a forced message over the old one). Nothing in the game code
-// is changed: the HUD only reads. What the message is about: the golfer slot when the game names one;
+// or the timer going up while it shows (a forced message over the old one). Accepted posts also
+// capture here immediately, before another post can replace the single news slot. What the message is about: the golfer slot when the game names one;
 // else the hole whose name the text starts with (the hole hotkeys then do the camera jump).
 static HudMsg g_hist[HUD_MSG_MAX];
 static int g_hist_n, g_hist_seq, g_news_seq;
@@ -354,10 +355,10 @@ static int hole_of_text(const char *text) {
   return best;
 }
 
-static void note_messages(const char *date) {
+static void note_messages(const char *date, int posted) {
   int ss = G8(SCREEN_STATE), timer = G32(0x5a7144);
   const char *text = (const char *)(uintptr_t)NEWS_TEXT;
-  if (ss == 1 && text[0] && (g_prev_ss != 1 || timer > g_prev_timer || strncmp(text, g_prev_text, sizeof g_prev_text - 1) != 0)) {
+  if (ss == 1 && text[0] && (posted || g_prev_ss != 1 || timer > g_prev_timer || strncmp(text, g_prev_text, sizeof g_prev_text - 1) != 0)) {
     HudMsg *m;
     if (g_hist_n == HUD_MSG_MAX) {
       memmove(g_hist, g_hist + 1, sizeof g_hist[0] * (HUD_MSG_MAX - 1));
@@ -388,6 +389,32 @@ static void note_messages(const char *date) {
   g_prev_ss = ss;
   g_prev_timer = timer;
   copy_str(g_prev_text, sizeof g_prev_text, text);
+}
+
+// Called only after the original news function accepts and finishes a post.
+// Keep polling for load-time state, and suppress its duplicate through the same previous-state fields.
+void hud_news_posted(void) {
+  static unsigned seen = ~0u;
+  static int capture = 1;
+  unsigned serial = mods_serial();
+  if (serial != seen) {
+    seen = serial;
+    const char *v = mods_get("fixes.news_history");
+    capture = !v || atoi(v) != 0;
+  }
+  if (!capture) return;
+  char keep[512], numeric[12], date[24];
+  int16_t year = G16(0x5a6d3c);
+  memcpy(keep, (void *)(uintptr_t)TEXT_BUF, sizeof keep);
+  memcpy(numeric, (void *)(uintptr_t)0x58a528, sizeof numeric);
+  *(char *)(uintptr_t)TEXT_BUF = 0;
+  FUN_0040d7b0(G32(0x834170));
+  copy_str(date, sizeof date, (const char *)(uintptr_t)TEXT_BUF);
+  note_messages(date, 1);
+  // The formatters touch shared decimal scratch and the cached year as well as text_buf.
+  memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
+  memcpy((void *)(uintptr_t)0x58a528, numeric, sizeof numeric);
+  G16(0x5a6d3c) = year;
 }
 
 // ------------------------------------------------------------------ weeds (task-112)
@@ -849,7 +876,7 @@ static void read_state(HudSnap *s) {
   FUN_0040d7b0(G32(0x834170));
   copy_str(s->date, sizeof s->date, (const char *)(uintptr_t)TEXT_BUF);
   memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
-  note_messages(s->date);
+  note_messages(s->date, 0);
   weed_check(s->date);
   if (g_weed_until > host_now_ms() && g_weed_seq && !s->news_on) {   // the weed card shows while the game says nothing
     s->news_on = 1;

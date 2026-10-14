@@ -1,0 +1,11 @@
+{
+  "comment": "Capture accepted news before the next post overwrites the original single slot. No change to original acceptance, return value, display, or random calls.",
+  "patches": {
+    "FUN_0040cb00": [
+      [
+        "  return 1;",
+        "  hud_news_posted();\n  return 1;"
+      ]
+    ]
+  }
+}

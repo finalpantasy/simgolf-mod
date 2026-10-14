@@ -332,6 +332,7 @@ int fix_overlap_blocks(int tool);
 // browser build) every one is a no-op that keeps the original behaviour.
 void hud_save(void);          // before the old HUD draws: keep the course under it
 void hud_restore(void);       // after: put the course back, hand state to the new HUD
+void hud_news_posted(void);   // accepted news post: capture before the single slot is overwritten
 void opt_edit_prefs(void);     // the wrench menu's "Options..." (was Edit Preferences): the native Options page, else the original list
 int hud_on(void);             // the new HUD replaces the old one this frame
 int hud_mx(int x);            // mouse x for the old HUD's hover (parked off screen when on)
