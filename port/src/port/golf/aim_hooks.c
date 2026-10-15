@@ -61,6 +61,12 @@ void aim_dot(int x, int y, int col, int w, int a) {
     g_note.ex[g_note.n] = (int16_t)sat16(x);
     g_note.ey[g_note.n] = (int16_t)sat16(y);
     g_note.n++;
+    // Golf builds this preview after hd_ui_course_done, alongside its shot
+    // controls. Publish each completed sample so the final one is attached
+    // to the upcoming present instead of being cleared at the next frame.
+    g_note.magic = AIM_MAGIC;
+    g_note.serial = ++g_serial;
+    hd_ui_note3_set(&g_note, (int)sizeof g_note);
   }
 }
 

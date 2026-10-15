@@ -139,8 +139,15 @@ try {
     Say "Opening the archive (this can take a minute)..."
     $x = Join-Path $tmp "disc"
     New-Item -ItemType Directory -Force $x | Out-Null
-    & "$env:SystemRoot\System32\tar.exe" -xf $Disc -C $x 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Die "Windows could not open $([IO.Path]::GetFileName($Disc)). Unzip it yourself (7-Zip is free) and choose the .iso or .bin inside." }
+    # Windows PowerShell 5.1 can turn native stderr into a terminating error
+    # under Stop, before our recovery message runs. Capture it outside the pipeline.
+    $recovery = "Extract the game archive with 7-Zip (free), then run Setup again and choose the .iso or .bin inside. Keep choosing your version 1.02 no-CD file separately."
+    try {
+      $archiveProcess = Start-Process -FilePath "$env:SystemRoot\System32\tar.exe" -ArgumentList @('-xf', "`"$Disc`"", '-C', "`"$x`"") -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $tmp 'archive.log') -RedirectStandardError (Join-Path $tmp 'archive.err')
+    } catch {
+      Die "Windows could not start its archive extractor. $recovery"
+    }
+    if ($archiveProcess.ExitCode -ne 0) { Die "Windows could not open $([IO.Path]::GetFileName($Disc)). Some Windows versions cannot read its compression format. $recovery" }
     $img = Get-ChildItem $x -Recurse -File | Where-Object { $_.Extension -match '^\.(iso|bin|img|mdf)$' } | Sort-Object Length -Descending | Select-Object -First 1
     if (-not $img) { Die "There is no disc image (.iso or .bin) inside $([IO.Path]::GetFileName($Disc))." }
     $Disc = $img.FullName

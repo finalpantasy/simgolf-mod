@@ -496,6 +496,8 @@ static int draw_profile(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
   // ---- sayings: what the golfer says, in two columns (a click asks golf for new words)
   float sy = top_y + top_h + ui_s(c, 16);
   section_label(c, in.x, sy, in.w, "What this golfer says");
+  ui_text_fit(c, ui_rect(in.x + in.w - ui_s(c, 260), sy, ui_s(c, 260), ui_font(c, UI_TYPE_CAPTION).line), UI_TYPE_CAPTION,
+              t->text_tertiary, "Click the saying text to edit", 1);
   sy += ui_s(c, 22);
   float rw = (in.w - ui_s(c, 12)) / 2, rrow = ui_s(c, PF_SAY_ROW);
   int per_col = (p.n_say + 1) / 2;
@@ -504,18 +506,24 @@ static int draw_profile(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
     int col = i / per_col, row = i % per_col;
     UiRect rr = ui_rect(in.x + col * (rw + ui_s(c, 12)), sy + row * rrow, rw, rrow - ui_s(c, 4));
     uint32_t id = ui_idi(ui_id("pf.say"), i);
-    ui_hit(c, rr, ui_s(c, 10), id, UI_HIT_BLOCK | (editing ? 0 : UI_HIT_INTERACT));
-    float hov = ui_anim(c, id, !editing && ui_is_hot(c, id) ? 1.0f : 0.0f, t->motion_hover);
-    uid_rrect(d, rr, ui_s(c, 10), uid_alpha(t->surface_inset, (i % 2 ? 0.35f : 0.55f) + 0.4f * hov));
+    UiRect lr = ui_rect(rr.x + ui_s(c, 12), rr.y + ui_s(c, 3), rr.w - ui_s(c, 24), ui_font(c, UI_TYPE_CAPTION).line);
     char lab[RP_TEXT];
     snprintf(lab, sizeof lab, "%s", p.say[i].label);
     size_t L = strlen(lab);
     while (L && (lab[L - 1] == '.' || lab[L - 1] == ' ')) lab[--L] = 0;   // golf's "Hit a tree..." is the situation
     UiColor lc = text_colour(t, p.say[i].col);
     if (lc.r == t->text_primary.r && lc.g == t->text_primary.g && lc.b == t->text_primary.b) lc = t->text_secondary;
-    ui_text_in(c, ui_rect(rr.x + ui_s(c, 12), rr.y + ui_s(c, 3), rr.w - ui_s(c, 24), ui_font(c, UI_TYPE_CAPTION).line), UI_TYPE_CAPTION, lc, lab, 0);
     UiColor tc = p.say[i].tcol == 0x4210 || !p.say[i].text[0] ? t->text_tertiary : t->text_primary;
     UiRect tr = ui_rect(rr.x + ui_s(c, 12), rr.y + ui_s(c, 3) + ui_font(c, UI_TYPE_CAPTION).line, rr.w - ui_s(c, 24), ui_font(c, UI_TYPE_BODY).line);
+    // The event category is descriptive; only the golfer's actual saying opens the text editor.
+    ui_hit(c, tr, ui_s(c, 8), id, UI_HIT_BLOCK | (editing ? 0 : UI_HIT_INTERACT));
+    float hov = ui_anim(c, id, !editing && ui_is_hot(c, id) ? 1.0f : 0.0f, t->motion_hover);
+    uid_rrect(d, rr, ui_s(c, 10), uid_alpha(t->surface_inset, (i % 2 ? 0.35f : 0.55f) + 0.4f * hov));
+    ui_text_in(c, lr, UI_TYPE_CAPTION, lc, lab, 0);
+    if (i == 0) {
+      pf_ctl("saylabel0", lr);
+      pf_ctl("saytext0", tr);
+    }
     const char *dp = strstr(p.say[i].text, "DATA(");
     if (dp && !strchr(dp, ')')) g_raw_data++;   // an unclosed placeholder would show as it is
     const char *dq = dp ? strchr(dp, ')') : NULL;

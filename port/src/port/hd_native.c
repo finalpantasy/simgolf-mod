@@ -82,6 +82,7 @@
 #include "port/hd_art.h"
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
+#include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
 #include "port/frontend_frosted.h"
 #include "port/reports_frosted.h"
@@ -1425,11 +1426,11 @@ int hd_present(const uint16_t *screen) {
     if ((v = mods_get("display.zoom_ms")) && *v) set_key("zoom_ms", v);
   }
   if (!g_active) return 0;
-  if (!g_snap_fresh && g_frame_layered && g_frame_course && hud_course_transition() &&
-      !dlg_game_active() && !rp_game_active() && !opt_is_open() && fef_cover_screen() < 0 &&
-      mods_get_int("fixes.hud_transitions", 1)) {
-    // Original tray handlers present partial back-buffer updates. Keep the
-    // complete course, terrain, art and UI publication together until redraw.
+  if (HD_PRESENT_SHOULD_HOLD_COURSE(g_snap_fresh, g_frame_layered, g_frame_course,
+                                    hud_course_transition(), opt_is_open(), dlg_game_active(), rp_game_active(),
+                                    fef_cover_screen() >= 0, mods_get_int("fixes.hud_transitions", 1))) {
+    // Original tray handlers and the paused Options page can present partial
+    // back-buffer updates. Keep the complete course publication until redraw.
     hd_art_discard_pending();
     return 1;
   }

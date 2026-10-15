@@ -81,13 +81,18 @@ void ui_aim_draw(UiCtx *c, const AimNote *n, const PvMap *m, double t_ms) {
     lx = pin_x(m, n->gx[n->n - 1]);
     ly = pin_y(m, n->gy[n->n - 1]);
   }
-  float pulse = 1.0f + 0.06f * sinf((float)(t_ms * 0.004));
-  float rr = (9.0f + 0.9f * (float)(n->zoom > 0 ? n->zoom : 4)) * s * pulse;
-  ring(d, lx, ly, rr, rr * 0.5f, 2.2f * s, mint, uid_alpha(mint, 0.22f));
+  (void)t_ms;
+  // A small fixed target leaves the actual landing point visible at every zoom.
+  float rr = 5.0f * s;
+  ring(d, lx, ly, rr, rr * 0.5f, 1.3f * s, mint, (UiColor){0, 0, 0, 0});
   uid_rrect(d, (UiRect){lx - 2.2f * s, ly - 2.2f * s, 4.4f * s, 4.4f * s}, 2.2f * s, mint);
-  poly(d, curve, nc, 6.0f * s, dark);   // soft outline so the arrow reads on any grass
-  poly(d, curve, nc, 3.4f * s, mint);
-  poly(d, curve, nc, 1.2f * s, uid_alpha(white, 0.55f));
+  poly(d, curve, nc, 4.4f * s, dark);
+  poly(d, curve, nc, 2.0f * s, white);
+  // The original preview's flight samples make height and sideways bend readable.
+  for (int i = 1; i < n->n; i++) {
+    uid_rrect(d, (UiRect){e[i].x - 3.0f * s, e[i].y - 3.0f * s, 6.0f * s, 6.0f * s}, 3.0f * s, dark);
+    uid_rrect(d, (UiRect){e[i].x - 1.8f * s, e[i].y - 1.8f * s, 3.6f * s, 3.6f * s}, 1.8f * s, white);
+  }
   // the head
   P a = curve[nc - 1], b = curve[nc - 1 - (nc > 5 ? 4 : 1)];
   float dx = a.x - b.x, dy = a.y - b.y, len = sqrtf(dx * dx + dy * dy);
@@ -95,8 +100,10 @@ void ui_aim_draw(UiCtx *c, const AimNote *n, const PvMap *m, double t_ms) {
     dx /= len;
     dy /= len;
     float hl = 16 * s, hw = 9 * s, nx = -dy, ny = dx;
-    P tip = {a.x + dx * hl * 0.55f, a.y + dy * hl * 0.55f}, base = {a.x - dx * hl * 0.45f, a.y - dy * hl * 0.45f};
-    uid_triangle(d, tip.x + dx * 1.5f * s, tip.y + dy * 1.5f * s, base.x + nx * (hw + 1.5f * s), base.y + ny * (hw + 1.5f * s),
+    // End the arrow at golf's final sample. Extending beyond it moves the visible
+    // target past the cup on short shots even when the underlying aim is correct.
+    P tip = a, base = {a.x - dx * hl, a.y - dy * hl};
+    uid_triangle(d, tip.x, tip.y, base.x + nx * (hw + 1.5f * s), base.y + ny * (hw + 1.5f * s),
                  base.x - nx * (hw + 1.5f * s), base.y - ny * (hw + 1.5f * s), dark);
     uid_triangle(d, tip.x, tip.y, base.x + nx * hw, base.y + ny * hw, base.x - nx * hw, base.y - ny * hw, mint);
   }

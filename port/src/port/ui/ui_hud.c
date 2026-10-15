@@ -404,7 +404,9 @@ static int mini_tile(UiCtx *c, uint32_t id, UiRect r, const Tile *t, int flags, 
   if (t->labelled && g_s && (g_s->employee_overlay || g_s->dock_mode == 2) && (!strcmp(t->name, "Fire") || !strcmp(t->name, "Move") || !strcmp(t->name, "Rename") || !strcmp(t->name, "Hire")))
     people_log(t->name, r);
   else if (t->labelled && (!strcmp(t->name, "Skills") || !strcmp(t->name, "Edit pro") || !strcmp(t->name, "Profile") ||
-                            !strcmp(t->name, "Practice")))   // task-102b: the Your pro tiles, for the tests
+                            !strcmp(t->name, "Practice") || !strcmp(t->name, "Straight") ||
+                            !strcmp(t->name, "Fade") || !strcmp(t->name, "Draw") ||
+                            !strcmp(t->name, "High backspin") || !strcmp(t->name, "Low punch")))
     people_log(t->name, r);
   int hit = t->labelled ? ui_tile_mini_label(c, id, r, t->icon, t->name, flags, tip) : ui_tile_mini(c, id, r, t->art, t->icon, flags, tip);
   if (t->rotates) rot_badge(c, r);
@@ -1516,8 +1518,8 @@ static const char *const k_mood_word[5] = {"Furious", "Unhappy", "Okay", "Happy"
 
 // Tests read where the rows and buttons of the People lists are (window pixels): one line when one moves.
 static void people_log(const char *what, UiRect r) {
-  static struct { const char *what; int x, y, w, h; } last[12];
-  for (int i = 0; i < 12; i++) {
+  static struct { const char *what; int x, y, w, h; } last[16];
+  for (int i = 0; i < 16; i++) {
     if (last[i].what && strcmp(last[i].what, what)) continue;
     int x = (int)r.x, y = (int)r.y, w = (int)r.w, h = (int)r.h;
     if (last[i].what && last[i].x == x && last[i].y == y && last[i].w == w && last[i].h == h) return;

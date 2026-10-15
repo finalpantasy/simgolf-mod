@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.6 - 2026-10-14
+
+Clearer shot previews and fixes for Options, dialogs and award signs.
+
+- Fixed: HD course textures stay stable while Options is open, through rapid tab changes and when closing it.
+- Fixed: shot previews reach the native renderer after the original game has calculated their flight points.
+- Changed: the modern shot buttons keep a clearer white flight path, visible sample points and a small landing marker. The arrow stops at its actual final point.
+- Fixed: shot availability reads the ball's actual terrain position.
+- Fixed: award plaques retain their colors and draw a shadow instead of a bright green patch.
+- Fixed: numeric date hints display a readable calendar date in a compact popup.
+- Fixed: golfer profile category labels no longer open the saying editor. The saying text remains editable.
+- Changed: the exit option says Return to Main Menu.
+- Fixed: archive extraction failures reach clear recovery instructions in Windows PowerShell, including Windows versions without LZMA support. Extract those archives with 7-Zip and select their disc image.
+
 ## 0.1.5 - 2026-10-14
 
 Clearer building controls and more reliable rendering and settings.

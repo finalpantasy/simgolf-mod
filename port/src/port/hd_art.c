@@ -54,6 +54,7 @@
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
 #include "port/hd_art_geom.h"
+#include "port/hd_art_pixels.h"
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
@@ -517,7 +518,7 @@ static void on_cut(void *wrap, int src, int x, int y, int w, int h) {
 // course; on title, menu and report pages the whole page). Each owns the
 // canvas pixels its draws changed, checked against the picture at its end.
 
-enum { V_RGBA, V_IDX, V_SHADOW, V_RECOLOR, V_MASKED, V_SHADE };
+enum { V_RGBA, V_IDX, V_SHADOW, V_RECOLOR, V_MASKED, V_SHADE, V_INDEXED_SHADOW };
 enum { LC, LT };
 
 typedef struct {
@@ -644,7 +645,7 @@ static Key entry_key(const Entry *e, int shadow) {
   if (shadow) return make_key(e->shadow_file, e->view, e->frame, V_SHADOW, e->shadow_hash);
   if (e->view < 0) {
     uint32_t h = hash_bytes(&e->sx, 8, 2166136261u);
-    h = (h ^ (uint32_t)(e->variant == V_MASKED || e->variant == V_SHADE ? e->pal_hash + 1 : 0)) * 16777619u;
+    h = (h ^ (uint32_t)(e->variant == V_MASKED || e->variant == V_SHADE || e->variant == V_INDEXED_SHADOW ? e->pal_hash + 1 : 0)) * 16777619u;
     return make_key(e->file, 0xff, 0xff, e->variant, h);
   }
   return make_key(e->file, e->view, e->frame, e->variant, e->pal_hash);
@@ -730,7 +731,8 @@ static void frame_path(char *out, size_t n, int file, int view, int frame, const
 
 // Decoded sheets shared by the loaders (UI and building sheets are up to
 // 3200x2400; one decode serves every rectangle cut from it).
-typedef struct { int file, gray, w, h, refs; uint8_t *px; uint32_t used; } Sheet;
+enum { SHEET_RGBA, SHEET_MASK, SHEET_INDEXED };
+typedef struct { int file, format, w, h, refs; uint8_t *px; uint32_t used; } Sheet;
 #define NSHEET 3
 static Sheet g_sheet[NSHEET];
 static CRITICAL_SECTION g_sheet_lock;
@@ -832,10 +834,10 @@ static void sheet_alpha(int file, uint8_t *px, int w, int h) {
   free(idx);
 }
 
-static Sheet *sheet_get(int file, int gray) {
+static Sheet *sheet_get(int file, int format) {
   EnterCriticalSection(&g_sheet_lock);
   for (int i = 0; i < NSHEET; i++)
-    if (g_sheet[i].px && g_sheet[i].file == file && g_sheet[i].gray == gray) {
+    if (g_sheet[i].px && g_sheet[i].file == file && g_sheet[i].format == format) {
       g_sheet[i].refs++;
       g_sheet[i].used = ++g_sheet_tick;
       LeaveCriticalSection(&g_sheet_lock);
@@ -843,11 +845,21 @@ static Sheet *sheet_get(int file, int gray) {
     }
   LeaveCriticalSection(&g_sheet_lock);
   char path[MAX_PATH * 2];
-  snprintf(path, sizeof path, "%s/%s.png", g_dir, g_files[file].out);
   int w = 0, h = 0;
-  uint8_t *px = decode(path, gray ? -1 : 0, &w, &h, NULL);
+  uint8_t *px = NULL;
+  if (format == SHEET_INDEXED) {   // original 8-bit source indices for palette-driven still effects
+    snprintf(path, sizeof path, "%s/%s.png", g_xdir, g_files[file].out);
+    px = decode(path, 1, &w, &h, NULL);
+    if (!px) {
+      uint8_t ignored_pal[768];
+      px = load_game_original(g_files[file].src, &w, &h, ignored_pal);
+    }
+  } else {
+    snprintf(path, sizeof path, "%s/%s.png", g_dir, g_files[file].out);
+    px = decode(path, format == SHEET_RGBA ? 0 : -1, &w, &h, NULL);
+  }
   if (!px) return NULL;
-  if (!gray) sheet_alpha(file, px, w, h);
+  if (format == SHEET_RGBA) sheet_alpha(file, px, w, h);
   EnterCriticalSection(&g_sheet_lock);
   Sheet *s = NULL;
   for (int i = 0; i < NSHEET; i++)   // a free slot, else the least recently used one nobody holds
@@ -855,11 +867,11 @@ static Sheet *sheet_get(int file, int gray) {
   if (!s) {   // all held: this decode stays private
     LeaveCriticalSection(&g_sheet_lock);
     Sheet *p = calloc(1, sizeof *p);
-    *p = (Sheet){file, gray, w, h, -1, px, 0};
+    *p = (Sheet){file, format, w, h, -1, px, 0};
     return p;
   }
   free(s->px);
-  *s = (Sheet){file, gray, w, h, 1, px, ++g_sheet_tick};
+  *s = (Sheet){file, format, w, h, 1, px, ++g_sheet_tick};
   LeaveCriticalSection(&g_sheet_lock);
   return s;
 }
@@ -878,7 +890,7 @@ static void sheet_put(Sheet *s) {
 // A rectangle of a still (4x), with the soft alpha of its mask for UI art
 // (golf's DrawMasked: colour premultiplied over black, mask grey = alpha).
 static uint8_t *load_still(const Req *r, int *w, int *h) {
-  Sheet *c = sheet_get(r->file, 0);
+  Sheet *c = sheet_get(r->file, SHEET_RGBA);
   if (!c) {
     if (g_fails < 20) fprintf(stderr, "art: sheet %s cannot decode\n", g_files[r->file].src);
     return NULL;
@@ -896,8 +908,21 @@ static uint8_t *load_still(const Req *r, int *w, int *h) {
         o[3] = (uint8_t)(o[3] * r->pal[0xf8] / 255);
         o[0] = o[1] = o[2] = 0;
       }
-    if (r->mask >= 0) {
-      Sheet *m = sheet_get(r->mask, 1);
+    if (r->variant == V_INDEXED_SHADOW) {
+      Sheet *idx = sheet_get(r->file, SHEET_INDEXED);
+      int ow = g_files[r->file].w4 / 4, oh = g_files[r->file].h4 / 4;
+      int ok = idx && idx->w == ow && idx->h == oh &&
+               hd_art_shadow_indexed(out, W, H, idx->px, idx->w, idx->h, r->sx, r->sy, r->sw, r->sh, r->pal, 1);
+      if (!ok) {
+        if (g_fails < 20)
+          fprintf(stderr, "art: original indices unavailable for palette shadow %s\n", g_files[r->file].src);
+        free(out);
+        out = NULL;
+      }
+      if (idx) sheet_put(idx);
+    }
+    if (out && r->mask >= 0) {
+      Sheet *m = sheet_get(r->mask, SHEET_MASK);
       if (!m || m->w != c->w || m->h != c->h) {
         if (g_fails < 20)
           fprintf(stderr, "art: mask %s for %s: %s\n", g_files[r->mask].src, g_files[r->file].src,
@@ -1261,9 +1286,15 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     e.variant = V_RGBA;
     // task-78c: cliffs01.pcx holds the rock chips golf draws at cliff corners through these slots; they are
     // real rock pictures, not shading, and drawing them as shade painted dark wedges (the art pack's rocks stay)
-    // task-119 (tester F30): holemark.pcx, the hole number plaques at the tees (and the Top 100 / best hole ones), goes
-    // through the same slots and was painted as a black silhouette; it is a picture too
-    if ((slot == 27 || slot == 30) && !strstr(a->norm, "cliffs01") && !strstr(a->norm, "holemark")) {   // a shading sheet (index 0xf8: darken what is under it): black at golf's level
+    // task-119 (tester F30): holemark.pcx is a colored plaque with 0xf8..0xfb shadow ink.
+    // Keep the upscaled plaque pixels and turn only those original indexed inks into black alpha.
+    if ((slot == 27 || slot == 30) && strstr(a->norm, "holemark")) {
+      if (mods_get_int("fixes.award_shadow", 1)) {
+        e.variant = V_INDEXED_SHADOW;
+        e.pal_hash = shadow_levels(lut, lev);
+        memcpy(pal, lev, sizeof pal);
+      }
+    } else if ((slot == 27 || slot == 30) && !strstr(a->norm, "cliffs01")) {   // a shading sheet (index 0xf8: darken what is under it): black at golf's level
       e.variant = V_SHADE;
       e.pal_hash = shadow_levels(lut, lev);
       memcpy(pal, lev, sizeof pal);
@@ -2030,6 +2061,11 @@ void hd_art_init(int presenter_on) {
     fprintf(stderr, "art: no index.tsv in %s (tools/upscale/make_index.py); original art\n", g_dir);
     return;
   }
+  // Loader threads use this source tree for alpha masks and palette-indexed
+  // still effects, so finish the path before publishing the workers.
+  snprintf(g_xdir, sizeof g_xdir, "%s", g_dir);
+  char *up = strstr(g_xdir, "upscaled");
+  if (up) memcpy(up, "extracted", 9), up[9] = 0;
   g_tags = calloc(TAG_N, sizeof(Tag));
   g_ks = calloc(KS_N, sizeof(KeyState));
   g_tex = calloc(TEX_N, sizeof(Tex));
@@ -2048,9 +2084,6 @@ void hd_art_init(int presenter_on) {
     HANDLE th = CreateThread(NULL, 1 << 20, loader_main, NULL, 0, NULL);
     if (th) CloseHandle(th);
   }
-  snprintf(g_xdir, sizeof g_xdir, "%s", g_dir);
-  char *up = strstr(g_xdir, "upscaled");
-  if (up) memcpy(up, "extracted", 9), up[9] = 0;
   fprintf(stderr, "art: %d files indexed from %s in %.1f ms; looks:", n, g_dir, host_now_ms() - t0);
   for (int i = 0; i < NCAT; i++) fprintf(stderr, " %s=%s", k_cat[i], k_look[g_look[i]]);
   fprintf(stderr, "; texture budget %d MB, %d loaders\n", g_cache_mb, g_loaders);

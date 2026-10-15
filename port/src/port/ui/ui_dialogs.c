@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "port/ui/ui_dialog_text.h"
+
 enum { WRAP_MAX = 14 };
 
 // golf's text uses 0xA7 for the dollar sign and pads the choices with blanks
@@ -74,6 +76,7 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
   char texts[DLG_LINES][DLG_TEXT];
   int n_text = 0, n_item = 0;
   char items[DLG_LINES][DLG_TEXT];
+  const char *item_labels[DLG_LINES];
   int item_no[DLG_LINES];
   for (int i = 0; i < s->n_lines; i++) {
     char tmp[DLG_TEXT];
@@ -82,6 +85,7 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
       if (tmp[0] && n_text < DLG_LINES) snprintf(texts[n_text++], DLG_TEXT, "%s", tmp);
     } else if (n_item < DLG_LINES && tmp[0]) {   // golf's preferences list ends with a blank choice
       snprintf(items[n_item], DLG_TEXT, "%s", tmp);
+      item_labels[n_item] = items[n_item];
       item_no[n_item++] = s->line[i].item;
     }
   }
@@ -157,7 +161,9 @@ static int draw_list(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
       uid_rrect(d, r, rad, uid_alpha(t->surface_inset, 0.55f));
     }
     UiColor tc = dis ? t->text_tertiary : t->text_primary;
-    ui_text_fit(c, ui_rect(r.x + ui_s(c, 18), r.y, r.w - ui_s(c, checks ? 92 : 36), r.h), UI_TYPE_HEADING, tc, items[i], 0);
+    const char *override = s->kind == DLG_MENU ? ui_dialog_choice_label(item_labels, n_item, i) : NULL;
+    ui_text_fit(c, ui_rect(r.x + ui_s(c, 18), r.y, r.w - ui_s(c, checks ? 92 : 36), r.h), UI_TYPE_HEADING, tc,
+                override ? override : items[i], 0);
     if (checks) {
       int on = (s->mask >> no) & 1;
       float sw = ui_s(c, t->toggle_w), sh = ui_s(c, t->toggle_h);
@@ -282,17 +288,21 @@ static int draw_hire(UiCtx *c, const DlgSnap *s, DlgAction *acts, int max) {
 static int draw_hint(UiCtx *c, const DlgSnap *s, SDL_Texture *const *art, DlgAction *acts, int max) {
   const UiTokens *t = ui_tokens(c);
   int n_acts = 0;
+  UiRect scr = ui_screen(c);
   float pad = ui_s(c, t->pad_dialog);
-  float w = ui_s(c, 640);
   int portrait = s->has_art && art && art[DLG_ART_PORTRAIT];
   float pw = portrait ? ui_s(c, 112) : 0;
-  float text_w = w - 2 * pad - (portrait ? pw + ui_s(c, 20) : 0);
-  char lines[WRAP_MAX * 3][DLG_TEXT];
-  int n = 0;
-  char para[480];
+  float portrait_gap = portrait ? ui_s(c, 20) : 0;
+  char para[480], formatted[480];
   snprintf(para, sizeof para, "%s", s->text);
+  if (ui_dialog_format_date_hint(para, formatted, sizeof formatted)) snprintf(para, sizeof para, "%s", formatted);
   for (char *p = para; *p; p++)
     if (*p == '^' || *p == 10) *p = ' ';
+  float w = ui_dialog_hint_width(ui_text_width(c, UI_TYPE_BODY, para), pad, pw, portrait_gap,
+                                 ui_s(c, 360), ui_s(c, 640), scr.w - ui_s(c, 40));
+  float text_w = w - 2 * pad - pw - portrait_gap;
+  char lines[WRAP_MAX * 3][DLG_TEXT];
+  int n = 0;
   char wr[WRAP_MAX][DLG_TEXT];
   int k = wrap(c, UI_TYPE_BODY, para, text_w, wr);
   for (int i = 0; i < k && n < WRAP_MAX * 3; i++) snprintf(lines[n++], DLG_TEXT, "%s", wr[i]);

@@ -7,7 +7,7 @@
 #                 software renderer (no window, no GPU) or a hidden direct3d11 one
 
 set(SIMGOLF_UI_PLAIN src/port/ui/ui_tokens.c src/port/ui/ui_layout.c src/port/ui/ui_hit.c src/port/ui/ui_icons.c src/port/ui/ui_faces.c
-  src/port/ui/ui_png.c src/port/ui/ui_updates.c)
+  src/port/ui/ui_png.c src/port/ui/ui_updates.c src/port/ui/ui_dialog_text.c)
 set(SIMGOLF_UI_SDL src/port/ui/ui_draw.c src/port/ui/ui_text.c src/port/ui/ui_kit.c src/port/ui/ui_hud.c src/port/ui/ui_golfers.c src/port/ui/ui_paths.c src/port/ui/ui_aim.c src/port/ui/ui_frontend.c src/port/ui/ui_dialogs.c
   src/port/ui/ui_reports.c src/port/ui/ui_pages.c src/port/ui/ui_mods.c)
 
