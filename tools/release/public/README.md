@@ -87,6 +87,11 @@ Everything from the original game is being made reachable from the new screens. 
 
 ## Install in four steps
 
+**Windows 10:** if you downloaded the game archive from the Internet Archive,
+extract it with [7-Zip](https://www.7-zip.org/) first. During Setup, choose the
+`.iso` or `.bin` inside the extracted folder. Choose the version 1.02 no-CD ZIP
+separately; that ZIP can stay zipped. This avoids `LZMA codec is unsupported`.
+
 1. Get your game files (see [INSTALL.md](INSTALL.md) for exactly where):
    your existing SimGolf installation folder or disc image, plus your matching v1.02 no-CD program.
 2. Download `SimGolf-Remastered-v*-windows.zip` from the

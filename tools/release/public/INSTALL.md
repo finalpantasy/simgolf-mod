@@ -22,7 +22,17 @@ For the disc option, use either:
   <https://archive.org/details/sid-meiers-sim-golf-1641547> (about 250 MB), or
 - an `.iso` / `.bin` of your own SimGolf CD, made with any disc-image tool.
 
-You do not need to unzip it. Setup opens a `.7z` or `.zip` for you.
+**Windows 10: extract the game archive first.** Some Windows versions cannot
+read its LZMA compression and stop with `LZMA codec is unsupported`.
+
+1. Open the game archive from the Internet Archive with
+   [7-Zip](https://www.7-zip.org/) and extract it to a folder.
+2. Find the `.iso` or `.bin` inside the extracted folder.
+3. When Setup asks for the disc image, choose that extracted `.iso` or `.bin`.
+
+These steps apply to the **game archive**. The version 1.02 no-CD ZIP is
+selected separately and can stay zipped. Setup can open `.7z` or `.zip`
+archives when Windows supports their compression format.
 
 **b) The version 1.02 no-CD `golf.exe`.** This is usually a zip called
 `SIMGOLF.102.ENG.MYTH.NOCD.ZIP`, from Abandonware DOS:
@@ -51,6 +61,7 @@ Double-click **Setup.cmd**. If Windows says "Windows protected your PC", click
 Setup asks you:
 1. Where to install (the default is fine; it needs about 1.5 GB, plus 3 GB for HD art).
 2. Whether to use an existing installed folder or a disc image, then where it is.
+   On Windows 10, choose the extracted `.iso` or `.bin` for the disc option.
 3. Your version 1.02 no-CD zip or `golf.exe`.
 4. Whether to download the HD art pack. Say **Yes** unless you are short on space
    or on a slow connection. You can add it later: run Setup again and choose
@@ -92,7 +103,7 @@ Or just unzip the parts into the `art\upscaled` folder of your install, so that
 | "not the SimGolf CD" | The disc image is the wrong game or a damaged copy. Use the Internet Archive `.7z` above. |
 | "missing or unreadable game file" / "changed game file" | The listed data does not match the English disc. Use a clean matching install folder or the disc image. Setup does not accept changed files by skipping their checks. |
 | "choose a separate install folder" | Choose a new folder outside the existing game's folder. |
-| Windows could not open the `.7z` | Install the free 7-Zip, unpack the archive, and choose the `.iso` or `.bin` inside. |
+| "LZMA codec is unsupported" / Windows could not open the archive | Extract the game archive with 7-Zip, run Setup again, and choose the `.iso` or `.bin` inside. Choose the same version 1.02 no-CD ZIP separately; it can stay zipped. |
 | "Not enough free space" | The HD pack needs about 6 GB free while installing. Free some space or say No to HD art. |
 | A download stopped halfway | Run Setup again; it resumes. |
 | "damaged (checksum mismatch)" | Delete the file named and run Setup again. |
