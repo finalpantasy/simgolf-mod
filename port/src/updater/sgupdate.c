@@ -173,14 +173,17 @@ static int do_prepare(const char *zip, const char *sha, const char *stage) {
   char want[65], got[65];
   if (!read_expected(sha, want)) {
     logf_("prepare: no checksum in %s", sha);
+    rm_tree(stage);
     return 2;
   }
   if (!sha256_file(zip, got)) {
     logf_("prepare: cannot read %s", zip);
+    rm_tree(stage);
     return 1;
   }
   if (strcmp(want, got)) {
     logf_("prepare: CHECKSUM MISMATCH (expected %s, got %s): the zip is not used", want, got);
+    rm_tree(stage);
     return 2;
   }
   logf_("prepare: checksum ok (%s)", got);

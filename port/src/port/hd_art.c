@@ -530,6 +530,7 @@ typedef struct {
   int16_t shadow_file;         // -1: no shadow part
   uint32_t shadow_hash;
   int16_t sx, sy, sw, sh;      // stills: the source rectangle (1x pixels)
+  uint8_t shadow_max_index;    // V_INDEXED_SHADOW: last source index treated as a LUT plane
 } Entry;
 
 typedef struct {
@@ -587,7 +588,8 @@ typedef struct {
   Key key;
   int file, view, frame, variant;
   int sx, sy, sw, sh, mask;   // stills: the rectangle (1x) and the mask file (-1 none)
-  uint16_t pal[256];   // V_IDX/V_RECOLOR: RGB555 colours; V_SHADOW: alpha per level in pal[0xf8..0xfb]
+  int shadow_max_index;       // V_INDEXED_SHADOW: last source index treated as a LUT plane
+  uint16_t pal[256];   // V_IDX/V_RECOLOR: RGB555 colours; shadows: black alpha per index from 0xf8
 } Req;
 
 typedef struct {
@@ -646,6 +648,7 @@ static Key entry_key(const Entry *e, int shadow) {
   if (e->view < 0) {
     uint32_t h = hash_bytes(&e->sx, 8, 2166136261u);
     h = (h ^ (uint32_t)(e->variant == V_MASKED || e->variant == V_SHADE || e->variant == V_INDEXED_SHADOW ? e->pal_hash + 1 : 0)) * 16777619u;
+    if (e->variant == V_INDEXED_SHADOW) h = (h ^ e->shadow_max_index) * 16777619u;
     return make_key(e->file, 0xff, 0xff, e->variant, h);
   }
   return make_key(e->file, e->view, e->frame, e->variant, e->pal_hash);
@@ -666,6 +669,7 @@ static void want(const Entry *e, int shadow, const uint16_t *pal) {
     r->frame = e->frame;
     r->variant = shadow ? V_SHADOW : e->variant;
     r->sx = e->sx, r->sy = e->sy, r->sw = e->sw, r->sh = e->sh;
+    r->shadow_max_index = shadow ? 0 : e->shadow_max_index;
     r->mask = e->variant == V_MASKED ? (int)e->pal_hash : -1;
     if (pal) memcpy(r->pal, pal, 512);
     SetEvent(g_wake);
@@ -912,7 +916,8 @@ static uint8_t *load_still(const Req *r, int *w, int *h) {
       Sheet *idx = sheet_get(r->file, SHEET_INDEXED);
       int ow = g_files[r->file].w4 / 4, oh = g_files[r->file].h4 / 4;
       int ok = idx && idx->w == ow && idx->h == oh &&
-               hd_art_shadow_indexed(out, W, H, idx->px, idx->w, idx->h, r->sx, r->sy, r->sw, r->sh, r->pal, 1);
+               hd_art_shadow_indexed(out, W, H, idx->px, idx->w, idx->h, r->sx, r->sy, r->sw, r->sh,
+                                     r->pal, r->shadow_max_index, 1);
       if (!ok) {
         if (g_fails < 20)
           fprintf(stderr, "art: original indices unavailable for palette shadow %s\n", g_files[r->file].src);
@@ -1170,11 +1175,13 @@ static int pal_for(uint32_t sprite, uint32_t over, uint16_t *out, const uint8_t 
   return 1;
 }
 
-// The game's shadow levels: the alpha of black that makes 0xf8..0xfb look
-// like golf's light-level table on white.
-static uint32_t shadow_levels(uint32_t lut, uint16_t *pal) {
+// The game's light/shadow planes: black alpha that matches each LUT plane on
+// white. Slots 27 and 25 use the first plane; slot 30 has seven planes.
+static uint32_t shadow_levels(uint32_t lut, uint16_t *pal, int planes) {
   uint32_t h = 2166136261u;
-  for (int p = 0; p < 4; p++) {
+  if (planes < 1) planes = 1;
+  if (planes > 7) planes = 7;
+  for (int p = 0; p < planes; p++) {
     int a = 128;   // golf halves the colour when there is no table
     if (lut && mem_ok(lut + ((uint32_t)p << 16), 0x10000)) {
       uint16_t c = *(const uint16_t *)(uintptr_t)(lut + ((uint32_t)p << 16) + 0x7fff * 2);
@@ -1286,18 +1293,42 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     e.variant = V_RGBA;
     // task-78c: cliffs01.pcx holds the rock chips golf draws at cliff corners through these slots; they are
     // real rock pictures, not shading, and drawing them as shade painted dark wedges (the art pack's rocks stay)
+    // Still effects are selected by source file because these slots also draw
+    // ordinary course art, not only shade masks.
+    int course_shadow = mods_get_int("fixes.course_shadow", 1);
+    int still_effect = hd_art_still_effect(slot, a->norm, course_shadow);
     // task-119 (tester F30): holemark.pcx is a colored plaque with 0xf8..0xfb shadow ink.
     // Keep the upscaled plaque pixels and turn only those original indexed inks into black alpha.
-    if ((slot == 27 || slot == 30) && strstr(a->norm, "holemark")) {
+    if (still_effect == HD_ART_STILL_OPTIONAL_INDEXED_SHADOW) {
       if (mods_get_int("fixes.award_shadow", 1)) {
         e.variant = V_INDEXED_SHADOW;
-        e.pal_hash = shadow_levels(lut, lev);
+        e.shadow_max_index = (uint8_t)hd_art_still_shadow_max_index(slot, a->norm);
+        e.pal_hash = shadow_levels(lut, lev, e.shadow_max_index - 0xf8 + 1);
         memcpy(pal, lev, sizeof pal);
       }
-    } else if ((slot == 27 || slot == 30) && !strstr(a->norm, "cliffs01")) {   // a shading sheet (index 0xf8: darken what is under it): black at golf's level
-      e.variant = V_SHADE;
-      e.pal_hash = shadow_levels(lut, lev);
+    } else if (still_effect == HD_ART_STILL_INDEXED_SHADOW) {
+      e.variant = V_INDEXED_SHADOW;
+      e.shadow_max_index = (uint8_t)hd_art_still_shadow_max_index(slot, a->norm);
+      e.pal_hash = shadow_levels(lut, lev, e.shadow_max_index - 0xf8 + 1);
       memcpy(pal, lev, sizeof pal);
+    } else if (still_effect == HD_ART_STILL_SHADE) {   // index 0xf8: darken what is under it, black at golf's level
+      e.variant = V_SHADE;
+      e.pal_hash = shadow_levels(lut, lev, 4);
+      memcpy(pal, lev, sizeof pal);
+    }
+    static int slot_log = -1;
+    static unsigned char logged_effect[64][4];
+    if (slot_log < 0) slot_log = getenv("SIMGOLF_ART_SLOT_LOG") != NULL;
+    if (slot_log && strstr(a->norm, "course1.pcx") && e.sx == 549 && e.sy == 215 && e.sw == 43 && e.sh == 21 &&
+        slot >= 0 && slot < 64 && still_effect >= 0 && still_effect < 4 && !logged_effect[slot][still_effect]) {
+      const char *effect = still_effect == HD_ART_STILL_SHADE       ? "shade"
+                           : still_effect == HD_ART_STILL_INDEXED_SHADOW ? "indexed-shadow"
+                           : still_effect == HD_ART_STILL_OPTIONAL_INDEXED_SHADOW ? "optional-indexed-shadow"
+                                                                               : "normal";
+      logged_effect[slot][still_effect] = 1;
+      fprintf(stderr, "art: course1 probe slot %d path %s src %d,%d %dx%d course_shadow %d effect %s variant %d\n", slot,
+              a->norm, e.sx, e.sy, e.sw, e.sh, course_shadow, effect, e.variant);
+      fflush(stderr);
     }
     if (slot == 21 || slot == 20) {   // soft-edged UI art: its mask is a tagged still too
       Tag *m = tag_slot(mask, 0);
@@ -1323,7 +1354,7 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
       // the opaque RGBA upscale (a black box with a white silhouette, task-72).
       uint32_t lut_for = slot == 30 || slot == 27 || slot == 25 ? lut : 0;
       e.variant = V_SHADOW;
-      e.pal_hash = shadow_levels(lut_for, lev);
+      e.pal_hash = shadow_levels(lut_for, lev, 4);
       memcpy(pal, lev, sizeof pal);
     } else {
       if (e.variant != V_RGBA && !have_pal) return;
@@ -1331,7 +1362,7 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     }
     if (t->shadow && a->shadow >= 0) {
       e.shadow_file = (int16_t)a->shadow;
-      e.shadow_hash = shadow_levels(slot == 30 || slot == 27 || slot == 25 ? lut : 0, lev);
+      e.shadow_hash = shadow_levels(slot == 30 || slot == 27 || slot == 25 ? lut : 0, lev, 4);
     }
   }
   snap_end(s, &e, pal, lev);

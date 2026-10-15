@@ -138,7 +138,9 @@ static int relaunch_reserved(void) {
   // Kill the child with us (task manager, test timeouts).
   HANDLE job = CreateJobObjectA(NULL, NULL);
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION li = {0};
-  li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+  // Game children normally stay in the kill-on-close job. The update worker
+  // explicitly requests breakaway so it can finish after this launcher exits.
+  li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
   SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof li);
   AssignProcessToJobObject(job, pi.hProcess);
   int ok = 1;

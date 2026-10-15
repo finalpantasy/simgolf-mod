@@ -41,5 +41,9 @@ int ui_hud_escape(UiHud *h, const HudSnap *s, HudAction *out, int max_out, const
 // art: HUD_ART_MAX textures (NULL where none). Returns the number of actions.
 int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, HudAction *out, int max_out);
 
+// One supplemental control for the original course HUD. Leaves the old HUD
+// intact and offers Rotate (Tab) only while a rotatable lot is armed.
+int ui_hud_draw_original_rotate(UiCtx *c, const HudSnap *s, HudAction *out, int max_out);
+
 // Formats dollars as "$12,345" ("-$500" when negative).
 void ui_hud_money(char *buf, int cap, int dollars);

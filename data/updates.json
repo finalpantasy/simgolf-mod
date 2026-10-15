@@ -2,6 +2,20 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.7",
+      "date": "2026-10-15",
+      "name": "Updater repairs, clean shadows and clearer original-interface controls",
+      "summary": "Updater repairs, clean shadows and clearer original-interface controls.",
+      "notes": [
+        "Fixed: the updater can finish applying files and restart the game after the native launcher exits.",
+        "Fixed: the dark rectangular patch beneath the practice flag and golfer highlights now follows the original oval shadow mask.",
+        "Fixed: the cart-path control stays below the original money, fun and skill bars at different rendering sizes.",
+        "Added: a Rotate (Tab) button beside the original building tray. Tab and Escape retain their original actions.",
+        "Changed: the end-of-year summary uses a centered Frosted Mint page with a working Continue button.",
+        "Added: an optional community-theme importer for the supplied story, pro and celebrity ZIPs. It validates files, protects existing themes and keeps the original content available. Updating from 0.1.5 or 0.1.6: download this ZIP and run Setup.cmd manually once, choosing your existing Remastered install folder. The older in-game updater can exit before it applies an update. Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete. AI/crowding and other open reports remain under investigation."
+      ]
+    },
+    {
       "version": "0.1.6",
       "date": "2026-10-14",
       "name": "Clearer shot previews and fixes for Options, dialogs and award signs",

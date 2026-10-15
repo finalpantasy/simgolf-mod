@@ -1213,6 +1213,25 @@ static void pages_demo(RpSnap *s, int kind) {
     }
     return;
   }
+  if (kind == RP_END_YEAR) {
+    memset(s, 0, sizeof *s);
+    s->magic = RP_MAGIC, s->kind = kind;
+    snprintf(s->title, sizeof s->title, "End of Year 2001");
+    rp_demo_text(s, 0x196, 0x37, RP_AL_LEFT, 0, "End of Year 2001");
+    s->it[s->n - 1].big = 1;
+    rp_demo_text(s, 0x1d1, 0x5d, RP_AL_LEFT, 0, "This Year");
+    rp_demo_text(s, 0x236, 0x5d, RP_AL_LEFT, 0, "Last Year");
+    rp_demo_text(s, 0x194, 200, RP_AL_LEFT, 0, "Highlights");
+    rp_demo_text(s, 0x12d, 0x73, RP_AL_LEFT, 0, "Rounds played");
+    rp_demo_text(s, 0x236, 0x73, RP_AL_RIGHT, 0, "1,248");
+    rp_demo_text(s, 0x12d, 0x87, RP_AL_LEFT, 0, "Average score");
+    rp_demo_text(s, 0x236, 0x87, RP_AL_RIGHT, 0, "82.4");
+    rp_demo_text(s, 0x12d, 0x9b, RP_AL_LEFT, 0, "Course rating");
+    rp_demo_text(s, 0x236, 0x9b, RP_AL_RIGHT, 0, "4 stars");
+    rp_demo_text(s, 0x12d, 0xaf, RP_AL_LEFT, 0, "Membership grew by 18 percent this year.");
+    rp_demo_text(s, 0x12d, 0xc3, RP_AL_LEFT, 0, "Three golfers earned a place on the honor roll.");
+    return;
+  }
   if (kind == RP_SKILLS) {   // task-102: the pro's ten skill points, three spent
     static const char *const nm[10] = {"Power Hitter", "Long Driver", "Accurate Driver", "Accurate Irons", "Accurate Putter",
                                        "Draw Shot (R to L)", "Fade Shot (L to R)", "High Backspin Shot", "Recovery Skills", "Luck"};
@@ -1288,10 +1307,10 @@ static void pages_demo(RpSnap *s, int kind) {
 int ui_pages_raw_data(void);
 
 static int page_pages(Page *p, const char *out) {
-  static const struct { int kind; const char *name; } pages[5] = {{RP_PROFILE, "pages-profile"}, {RP_TRACTS, "pages-tracts"}, {-RP_PROFILE, "pages-pro-create"}, {RP_SKILLS, "pages-skills"}, {RP_PHOTO, "pages-board"}};
+  static const struct { int kind; const char *name; } pages[6] = {{RP_PROFILE, "pages-profile"}, {RP_TRACTS, "pages-tracts"}, {-RP_PROFILE, "pages-pro-create"}, {RP_SKILLS, "pages-skills"}, {RP_PHOTO, "pages-board"}, {RP_END_YEAR, "pages-year"}};
   static RpSnap snap;
   RpAction acts[8];
-  for (int pi = 0; pi < 5; pi++) {
+  for (int pi = 0; pi < 6; pi++) {
     pages_demo(&snap, pages[pi].kind);
     for (int f = 0; f < 4; f++) {
       begin_page(p, 90000.0 + pi * 5000 + f * 400);

@@ -524,3 +524,19 @@ paths in a disposable 100x100 sandbox and captures both switch settings.
 The translated theme scan starts at the first real filesystem entry. Native and portable listings already omit dot entries. The existing 16-pack theme list clips and scrolls its rows while selection buttons remain fixed.
 
 The trail-motion check compares speed over each recorded presentation interval. It keeps the original sampling window, moving-frame count, still-frame check and percentile limits, and rejects malformed timestamps. Pure controls distinguish smooth motion at irregular cadence from held frames followed by jumps.
+
+## Address-wide global type overrides
+
+The translator accepts `global_types` in the base config and sorted topic configs. An entry such as `"00834170": "int (*)"` overrides conflicting per-function declarations at that exact address. Later topic configs win. Comment keys beginning with `_` are ignored. This completes the reusable translator part of PR #3; loaded hole-1 participant repair was previously adapted with the validated 152-record bound.
+
+## Original course controls and year summary
+
+The original course HUD can show a supplemental Rotate button while a rotatable building is armed. `ui.original_rotate_button=0` restores the unaugmented original HUD. Keyboard and text events stay with the original game in this mode. HUD mode publication uses SDL atomics, and switching to the original mode clears the modern history visibility guard.
+
+The cart-path control anchors below the original stat plates using the actual canvas-to-target mapping. `fixes.paths_stats=0` restores the old fixed target-space position for comparison. The shared 142-pixel boundary also defines the original stat capture rectangle.
+
+The year summary records the original text through existing report hooks and routes Continue to the original hit area. `ui.reports=original` retains the legacy page. Runtime qualification invokes the real report function as a display fixture and clicks Continue; it does not claim a naturally completed year.
+
+## Native updater lifetime
+
+The native address-reservation launcher keeps ordinary game children in a kill-on-close job and permits explicit breakaway. The separate update worker requests breakaway so it survives game exit, applies staged files and restarts the player program. Focused Windows tests exercise job membership, wait-before-apply, paths containing spaces, both executable aliases, protected player files, rollback and cleanup. Existing 0.1.5/0.1.6 binaries need one manual update to acquire this repair.

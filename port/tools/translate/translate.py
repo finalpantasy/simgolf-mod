@@ -59,9 +59,12 @@ if args.config:
                 cfg.setdefault("patches", {}).setdefault(name, []).extend(lst)
             for name, lst in extra_cfg.get("required_patch_counts", {}).items():
                 cfg.setdefault("required_patch_counts", {}).setdefault(name, []).extend(lst)
+            cfg.setdefault("global_types", {}).update(extra_cfg.get("global_types", {}))
 native = {int(k, 16): v for k, v in cfg.get("native", {}).items()}   # addr -> C name
 skip = {int(k, 16) for k in cfg.get("skip", [])}
 patches = cfg.get("patches", {})                                    # name -> [[old, new], ...]
+# Address-wide overrides take precedence over individual Ghidra function types.
+global_types = {int(k, 16): v for k, v in cfg.get("global_types", {}).items() if not k.startswith("_")}
 
 funcs = []
 with open(os.path.join(args.export, "functions.jsonl")) as f:
@@ -818,6 +821,8 @@ def translate_fn(d):
                 if wide:
                     g = dict(g, ptr=wide[-1][1] or {2: "undefined2 (*)", 8: "undefined8 (*)"}.get(wide[-1][0], "undefined4 (*)"))
                     widened_globals.append(gname)
+        if int(g["addr"], 16) in global_types:
+            g = dict(g, ptr=global_types[int(g["addr"], 16)])
         if not re.search(r"\b%s\b" % re.escape(gname), c):
             continue
         ptr = g["ptr"] or "undefined4 (*)"

@@ -22,6 +22,13 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## What you get
 
+### New in 0.1.7
+- **Updater repair:** updates can finish and relaunch after the game closes. Users on 0.1.5 or 0.1.6 should install this ZIP manually once.
+- **Cleaner shadows:** no dark rectangle beneath the practice flag or golfer highlights.
+- **Original course controls:** Rotate (Tab) beside the building tray, with the path button clear of the stat bars.
+- **Year in review:** a centered year-end summary and Continue button.
+- **Community themes:** import compatible story, pro and celebrity ZIPs without replacing stock themes. See the [installation guide](INSTALL.md#add-a-community-theme).
+
 ### New in 0.1.5
 - **Clearer building:** one supported Corners layout, lighter path shading and placement outlines aligned with the camera.
 - **Cleaner transitions:** no temporary texture-layer swap while changing build tabs, and no old golfer panel behind the new card.

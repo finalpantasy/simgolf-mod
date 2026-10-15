@@ -120,7 +120,7 @@ static void rects(void) {
   int W = win_screen_w, H = win_screen_h;
   g_nrects = 0;
   g_rects[g_nrects++] = (R){0, 0, 240, 84};                      // banner, stars, hearts
-  g_rects[g_nrects++] = (R){W - 215, 0, 215, 142};               // money, fun, skill plates
+  g_rects[g_nrects++] = (R){W - 215, 0, 215, HUD_ORIGINAL_STATS_BOTTOM}; // money, fun, skill plates
   g_rects[g_nrects++] = (R){0, H - 220, W, 220};                 // wheel, trays, chip strip, tray tooltips
                                                                    // (bottom-anchored on a tall canvas, task-3 B4)
   for (int i = 0; i < g_nrects; i++) {
@@ -1113,7 +1113,20 @@ static void log_tile_changes(void) {
 }
 
 void hud_restore(void) {
-  if (!g_on) return;
+  if (!g_on) {
+    if (hudf_original_rotate_enabled()) {
+      memset(&g_snap, 0, sizeof g_snap);
+      g_snap.valid = 1;
+      g_snap.serial = ++g_serial;
+      g_snap.visible = G8(SCREEN_STATE) < 2;
+      g_snap.dock_mode = G32(DOCK_MODE);
+      g_snap.build_tool = G32(0x4c2854);
+      g_snap.shape = G32(0x5a34f0);
+      hudf_publish(&g_snap);
+      run_actions();
+    }
+    return;
+  }
   for (int i = 0; i < PAGES; i++)
     if (copy_rects(i, 2)) {
       g_target = i;

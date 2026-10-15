@@ -830,6 +830,76 @@ static int draw_photo(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpActi
   return na;
 }
 
+// ------------------------------------------------------------------ year summary board (FUN_0044cff0)
+
+#define YR_W 940.0f
+
+static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  int na = 0;
+  UiRect scr = ui_screen(c);
+  float margin = ui_s(c, t->edge_margin);
+  float design_h = 740.0f;
+  float k = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, YR_W), (scr.h - 2 * margin) / ui_s(c, design_h)));
+  if (k < 1.0f) ui_push_scale(c, k);
+  UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, YR_W), ui_s(c, design_h)));
+  scrim_and_panel(c, pr);
+  UiRect in = ui_inset_all(pr, ui_s(c, 28));
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = pr;
+
+  UiFont lf = ui_font(c, UI_TYPE_LABEL), tf = ui_font(c, UI_TYPE_TITLE);
+  ui_text_in(c, ui_rect(in.x, in.y, in.w, lf.line), UI_TYPE_LABEL, t->accent_soft_text, "YEAR IN REVIEW", 0);
+  char title[64];
+  fix_text(title, sizeof title, s->title[0] ? s->title : "End of year");
+  ui_text_fit(c, ui_rect(in.x, in.y + ui_s(c, 22), in.w, tf.line), UI_TYPE_TITLE, t->text_primary, title, 0);
+
+  UiRect content = ui_rect(in.x, in.y + ui_s(c, 78), in.w, in.h - ui_s(c, 142));
+  uid_rrect(d, content, ui_s(c, t->radius_card), uid_alpha(t->surface_inset, 0.28f));
+  const float x0 = 0x12d, xspan = 0x12c, yspan = 600.0f;
+  for (int i = 0; i < s->n; i++) {
+    const RpItem *it = &s->it[i];
+    if (it->type != RP_IT_TEXT || !it->s[0] || it->big) continue;   // s->title already carries golf's title-font text
+    char text[RP_TEXT];
+    fix_text(text, sizeof text, it->s);
+    float nx = ((float)it->x - x0) / xspan;
+    if (nx < 0.0f) nx = 0.0f;
+    if (nx > 1.0f) nx = 1.0f;
+    float x = content.x + nx * content.w;
+    float y = content.y + ((float)it->y / yspan) * content.h;
+    float w;
+    float align;
+    if (it->align == RP_AL_RIGHT) {
+      w = ui_s(c, 220);
+      x -= w;
+      align = 1.0f;
+    } else if (it->align == RP_AL_CENTRE) {
+      w = ui_s(c, 360);
+      x -= w * 0.5f;
+      align = 0.5f;
+    } else {
+      w = content.x + content.w - x;
+      align = 0.0f;
+    }
+    int header = it->y == 0x5d || it->y == 200;
+    int style = header ? UI_TYPE_HEADING : UI_TYPE_BODY;
+    UiFont f = ui_font(c, style);
+    UiColor color = text_colour(t, it->col);
+    if (!header && color.r == t->text_primary.r && color.g == t->text_primary.g && color.b == t->text_primary.b)
+      color = t->text_secondary;
+    ui_text_fit(c, ui_rect(x, y, w, f.line), style, color, text, align);
+  }
+
+  float bh = ui_s(c, 48), bw = ui_s(c, 180);
+  UiRect br = ui_rect(in.x + in.w - bw, in.y + in.h - bh, bw, bh);
+  pf_ctl("continue", br);
+  if (ui_button(c, ui_id("yr.continue"), br, "Continue", UI_ICON_CHEV, UI_BTN_PRIMARY, 0) && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  if (k < 1.0f) ui_pop_scale(c);
+  return na;
+}
+
 // ------------------------------------------------------------------ dispatch
 
 #include "ui_tracts.inc"
@@ -840,6 +910,7 @@ int ui_pages_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *
     case RP_TRACTS: return draw_tracts(c, s, art, acts, max);
     case RP_SKILLS: return draw_skills(c, s, acts, max);
     case RP_PHOTO: return draw_photo(c, s, art, acts, max);
+    case RP_END_YEAR: return draw_year(c, s, acts, max);
     default: return 0;
   }
 }

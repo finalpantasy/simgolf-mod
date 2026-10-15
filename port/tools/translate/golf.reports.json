@@ -1,5 +1,5 @@
 {
-  "comment": "task-28 (UI-8 reports): translator patches for the Frosted Mint reports panel. Merged into golf.json's patches (translate.py, <stem>.<topic>.json). The main loop (FUN_0040f5c0) wraps each report screen in rp_begin / rp_done and calls rp_tick every frame; inside each report (course report and SGA FUN_0044fb30, comments FUN_004546b0, histograph FUN_00455ed0, shortcuts FUN_0044e770, financial FUN_0044f6b0, roster FUN_00454c50, best scores FUN_00455a30, opened from the Information menu FUN_00432720) the text calls go through rp_t* / rp_tc (record, then draw as before) and rp_frame runs before each present and each loop pump. Hooks: port/src/port/reports_game.c (native), golf/reports_hooks.c (browser: originals). With ui.reports=original they record nothing and change nothing.",
+  "comment": "task-28 (UI-8 reports): translator patches for the Frosted Mint reports panel. Merged into golf.json's patches (translate.py, <stem>.<topic>.json). The main loop (FUN_0040f5c0) wraps each report screen in rp_begin / rp_done and calls rp_tick every frame; inside each report (course report and SGA FUN_0044fb30, comments FUN_004546b0, histograph FUN_00455ed0, shortcuts FUN_0044e770, financial FUN_0044f6b0, roster FUN_00454c50, best scores FUN_00455a30, opened from the Information menu FUN_00432720) the text calls go through rp_t* / rp_tc (record, then draw as before) and rp_frame runs before each present and each loop pump. Hooks: port/src/port/reports_game.c (native), golf/reports_hooks.c (browser: originals). With ui.reports=original they record nothing and change nothing. The end-of-year board FUN_0044cff0 uses the same snapshot hooks and its original Continue hit area.",
   "patches": {
     "FUN_0044fb30": [
       [
@@ -267,6 +267,84 @@
       [
         "FUN_00473e60(",
         "rp_chip("
+      ]
+    ],
+    "FUN_0044cff0": [
+      [
+        "local_4 = 0xffffffff;\n  pcStack_8 = FUN_004b79cd;",
+        "rp_begin(34);\n  local_4 = 0xffffffff;\n  pcStack_8 = FUN_004b79cd;"
+      ],
+      [
+        "FUN_00476700(",
+        "rp_t700("
+      ],
+      [
+        "FUN_00476750(",
+        "rp_t750("
+      ],
+      [
+        "iVar11 = iVar8 + 8;",
+        "iVar11 = iVar8 + 8;\n    rp_year_continue(iVar11);"
+      ],
+      [
+        "FUN_00480c80(&DAT_00519a60);",
+        "rp_frame();\n    FUN_00480c80(&DAT_00519a60);"
+      ],
+      [
+        "FUN_0045c030();",
+        "rp_frame();\n    FUN_0045c030();"
+      ],
+      [
+        "FUN_00483d30();",
+        "rp_frame();\n  FUN_00483d30();"
+      ],
+      [
+        "FUN_00473470();",
+        "rp_done();\n          FUN_00473470();"
+      ],
+      [
+        "return uVar7;",
+        "rp_done();\n      return uVar7;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0044cff0": [
+      [
+        "local_4 = 0xffffffff;\n  pcStack_8 = FUN_004b79cd;",
+        1
+      ],
+      [
+        "FUN_00476700(",
+        15
+      ],
+      [
+        "FUN_00476750(",
+        8
+      ],
+      [
+        "iVar11 = iVar8 + 8;",
+        1
+      ],
+      [
+        "FUN_00480c80(&DAT_00519a60);",
+        3
+      ],
+      [
+        "FUN_0045c030();",
+        1
+      ],
+      [
+        "FUN_00483d30();",
+        1
+      ],
+      [
+        "FUN_00473470();",
+        1
+      ],
+      [
+        "return uVar7;",
+        1
       ]
     ]
   }

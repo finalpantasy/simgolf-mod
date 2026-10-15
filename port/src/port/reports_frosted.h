@@ -39,6 +39,7 @@ enum {
   RP_PHOTO = 31,     // snapshot popup, the bulletin board of great shots (FUN_0046e810)
   RP_TRACTS = 32,    // year-end land purchase map (FUN_004587a0)
   RP_SKILLS = 33,    // task-102: the pro's skill points screen (FUN_0045f0f0)
+  RP_END_YEAR = 34,  // the year summary board (FUN_0044cff0)
 };
 
 enum { RP_AL_LEFT = 0, RP_AL_CENTRE = 1, RP_AL_RIGHT = 2 };

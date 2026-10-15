@@ -214,6 +214,8 @@ static DWORD WINAPI install_thread(LPVOID arg) {
   snprintf(stage, sizeof stage, "%s\\stage-%s", dir, u->latest);
   status(u, 1, "Downloading the update");
   if (!fetch(u->sha_url, NULL, NULL, 0, shaf, DOWNLOAD_TIMEOUT_MS) || !fetch(u->zip_url, NULL, NULL, 0, zipf, DOWNLOAD_TIMEOUT_MS)) {
+    remove(shaf);
+    remove(zipf);
     status(u, 2, "The download did not work. Nothing was changed.");
     return 0;
   }
@@ -224,6 +226,7 @@ static DWORD WINAPI install_thread(LPVOID arg) {
     status(u, 2, rc == 2 ? "The download does not match its checksum, so it was not used. Nothing was changed."
                          : "The download could not be unpacked. Nothing was changed.");
     remove(zipf);
+    remove(shaf);
     return 0;
   }
   const char *noapply = getenv("SIMGOLF_UPDATE_NO_APPLY");
@@ -243,7 +246,10 @@ static DWORD WINAPI install_thread(LPVOID arg) {
            (unsigned long)GetCurrentProcessId());
   STARTUPINFOA si = {sizeof si};
   PROCESS_INFORMATION pi;
-  if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS, NULL, app, &si, &pi)) {
+  // The native address-reservation launcher owns the game in a kill-on-close
+  // job. This updater must outlive the game process so it can wait for the EXE
+  // lock to clear, apply the release and relaunch the player program.
+  if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_BREAKAWAY_FROM_JOB, NULL, app, &si, &pi)) {
     status(u, 2, "The updater could not start. Nothing was changed.");
     return 0;
   }

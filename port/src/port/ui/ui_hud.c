@@ -2046,6 +2046,25 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
   ui_text_in(c, ui_rect(x + ui_s(c, 2), y, inner, ui_font(c, UI_TYPE_BODY).line), UI_TYPE_BODY, t->text_secondary, hint, 0);
 }
 
+int ui_hud_draw_original_rotate(UiCtx *c, const HudSnap *s, HudAction *out, int max_out) {
+  if (!c || !s || !s->valid || !s->visible || !building_rotates(s->build_tool)) return 0;
+  Acts a = {out, 0, max_out};
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  float w = rot_width(c), h = ui_s(c, t->button_h), margin = ui_s(c, t->edge_margin);
+  // The original building tray ends at about 62.5% of the wide course view.
+  // Keep this pill immediately beside it, aligned to the tray's top edge.
+  float x = scr.w * 0.66f, y = scr.h - ui_s(c, 160);
+  if (x + w > scr.w - margin) x = scr.w - margin - w;
+  if (y + h > scr.h - margin) y = scr.h - margin - h;
+  UiRect r = ui_rect(x, y, w, h);
+  uint32_t id = ui_id("hud.original.rotate");
+  if (ui_button(c, id, r, k_rot_label, UI_ICON_ROTR, UI_BTN_PILL, 0))
+    act(&a, (HudAction){HUD_ACT_KEY, 0, 0, 0, 9});
+  ui_tooltip(c, id, r, "Turn the building you are placing (Tab also works)");
+  return a.n;
+}
+
 static void shot_readout(UiCtx *c, const HudSnap *s) {
   if (!s->shot_readout) return;
   const UiTokens *t = ui_tokens(c);

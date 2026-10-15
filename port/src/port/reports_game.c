@@ -226,6 +226,7 @@ void rp_begin(int kind) {
   g_snap.magic = RP_MAGIC;
   g_snap.kind = kind;
   if (kind == RP_PHOTO) g_snap.ext[5] = g_serial + 1;   // a new board resets the renderer's history selection
+  if (kind == RP_END_YEAR) g_snap.ext[5] = g_serial + 1;
   g_npic = 0;
   g_ph_n = 0;
   memset(g_pic, 0, sizeof g_pic);
@@ -533,6 +534,14 @@ static void capture_pics(void) {
   }
 }
 
+void rp_year_continue(int y) {
+  if (!g_on || g_kind != RP_END_YEAR) return;
+  y += 0x16;   // the game's 0x226..0x251 button hit box is 44 pixels high
+  if (y < 0) y = 0;
+  if (y > 599) y = 599;
+  g_snap.ext[0] = y;
+}
+
 int rp_is_on(void) { return g_on; }
 int rp_game_active(void) { return g_kind != RP_NONE; }
 
@@ -822,6 +831,7 @@ static void rp_frame_body(void) {
   while (rpf_take_action(&a)) {
     // the land map has no Esc of its own: its leave control is the check button (golf's right click also leaves)
     if (a.kind == RP_A_CLOSE && g_kind == RP_TRACTS) a = (RpAction){RP_A_CLICK, 688 | (560 << 16)};
+    if (a.kind == RP_A_CLOSE && g_kind == RP_END_YEAR) a = (RpAction){RP_A_CLICK, 0x23c | (g_snap.ext[0] << 16)};
     if (a.kind == RP_A_CLOSE && g_kind == RP_PHOTO) a = (RpAction){RP_A_CLICK, 400 | (300 << 16)};   // golf waits for a click
     if (a.kind == RP_A_CLOSE && g_kind == RP_SKILLS) a = (RpAction){RP_A_CLICK, (g_sk.x0 + 0x15e) | (0x14e << 16)};   // its OK
     if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {

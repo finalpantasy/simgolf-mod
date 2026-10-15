@@ -24,6 +24,9 @@ extern "C" {
 
 #define HUD_ART_MAX 96
 
+// Bottom of the original top-right money, fun, and skill plates in game-canvas pixels.
+#define HUD_ORIGINAL_STATS_BOTTOM 142
+
 enum {   // art slots (game sprites read back with alpha)
   HUD_ART_TERRAIN = 0,      // 16 terrain tray slots
   HUD_ART_AMENITY = 16,     // 8 amenities
@@ -135,6 +138,7 @@ typedef struct {
 // render side (hud_frosted.c), called from the game thread
 int hudf_history_visible(void);               // drawn history panel; does not change the HUD
 int hudf_enabled(void);                       // ui.hud=frosted_mint and the native layer is up
+int hudf_original_rotate_enabled(void);       // ui.hud=original and its optional Rotate pill is enabled
 void hudf_publish(const HudSnap *s);
 int hudf_take_action(HudAction *a);           // next queued action, 1 if any
 void hudf_publish_art(int slot, const uint32_t *argb, int w, int h);   // NULL clears

@@ -81,6 +81,28 @@ source, not both. The installer worker also supports
 `sgsetup install --game-dir "game folder" "1.02 golf.exe" "install folder"`.
 `sgsetup check-folder "game folder"` checks data without installing it.
 
+## Updating from 0.1.5 or 0.1.6
+
+Download the new release ZIP, unzip it fully, close the game and run Setup.cmd.
+Choose your existing Remastered install folder when asked where to install it.
+Your saved games and existing settings are kept. These older versions need
+one manual update because their in-game updater can close before applying files.
+
+## Add a community theme
+
+Close the game, then run `Import-CommunityTheme.ps1` with the game's data folder
+and the two compatible theme ZIPs. `GameDir` is the folder containing `Data`,
+`Themes`, `Interface` and `Sounds`, which may differ from the folder containing
+the launcher.
+
+```powershell
+.\Import-CommunityTheme.ps1 -GameDir "C:\Games\SimGolf Remastered\game" -StoriesZip "C:\Downloads\Stories.zip" -ProsAndCelebsZip "C:\Downloads\Pros-and-Celebs.zip" -ThemeName "Community"
+```
+
+The importer adds a new folder under `Themes\Community` and leaves existing
+themes, settings and saved games intact. In the game, open **Themes**, select
+**Community**, then start a new game.
+
 ## Adding the HD art later, or downloading it yourself
 
 Go to the pack's page, <https://github.com/finalpantasy/simgolf-hd-art/releases>,

@@ -51,5 +51,6 @@ void rp_photo_blit(void *source, int target, int x, int y, int id) {
 }
 int rp_photo_limit(int vertical) { return vertical ? 440 : 600; }
 void rp_board_wait(int n) { FUN_0045bf80(n, 0); }
+void rp_year_continue(int y) { (void)y; }
 
 #endif

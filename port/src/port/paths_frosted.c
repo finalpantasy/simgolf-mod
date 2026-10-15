@@ -24,6 +24,7 @@ static UiCtx *g_ui_w, *g_ui_t;
 static int g_world_reg, g_top_reg, g_failed;
 static volatile int g_want;
 static volatile int g_history_guard = 1;
+static SDL_atomic_t g_stats_guard;
 static volatile int g_user_on;
 static volatile double g_drawn_t = -1e9;
 static volatile float g_view_x, g_view_y, g_view_px = 1;
@@ -130,14 +131,27 @@ static const PvNote *note_of(const HdUiFrame *f) {
 }
 
 // the button's place: the right edge under the stats at the top
-static UiRect button_rect(UiCtx *c, float *pad_out) {
+static UiRect button_rect(UiCtx *c, const HdUiFrame *f, float *pad_out) {
   const UiTokens *t = ui_tokens(c);
-  UiRect scr = ui_screen(c);
-  float b = ui_s(c, t->cam_button), pad = ui_s(c, 8), gap = ui_s(c, 4);
+  float b = ui_s(c, t->cam_button), pad = ui_s(c, 8), gap = ui_s(c, 8);
   float w = b + 2 * pad;
-  (void)gap;
   *pad_out = pad;
-  return ui_rect_round(ui_rect(scr.w - ui_s(c, 24) - w, ui_s(c, 204), w, w));
+  float right = ui_screen(c).w, y = ui_s(c, 204);
+  if (SDL_AtomicGet(&g_stats_guard)) {
+    right = (float)f->view.x + (float)f->view.w;
+    y = (float)f->view.y + HUD_ORIGINAL_STATS_BOTTOM * f->px + gap;
+  }
+  UiRect br = ui_rect_round(ui_rect(right - ui_s(c, 24) - w, y, w, w));
+  if (getenv("SIMGOLF_PATHS_LOG")) {
+    static int old_x = -1, old_y = -1;
+    if (old_x != (int)br.x || old_y != (int)br.y) {
+      old_x = (int)br.x, old_y = (int)br.y;
+      fprintf(stderr, "paths: button %.0f,%.0f size %.0fx%.0f target %.0fx%.0f stats_bottom %.1f\n",
+              br.x, br.y, br.w, br.h, ui_screen(c).w, ui_screen(c).h,
+              (float)f->view.y + HUD_ORIGINAL_STATS_BOTTOM * f->px);
+    }
+  }
+  return br;
 }
 
 // user: NULL the world layer, non-NULL the top layer
@@ -193,7 +207,7 @@ static void draw(const HdUiFrame *f, void *user) {
   }
   // the button
   float pad;
-  UiRect br = button_rect(c, &pad);
+  UiRect br = button_rect(c, f, &pad);
   ui_panel(c, br, ui_s(c, 22), 0);
   char tip[96], key[12];
   toggle_key(key, sizeof key);
@@ -276,6 +290,7 @@ static void refresh_switch(void) {
   if (ser != seen) {
     seen = ser;
     g_history_guard = mods_get_int("fixes.history_paths", 1) != 0;
+    SDL_AtomicSet(&g_stats_guard, mods_get_int("fixes.paths_stats", 1) != 0);
     const char *v = mods_get("ui.paths");
     g_want = v && (!strcasecmp(v, "frosted_mint") || !strcasecmp(v, "frosted-mint"));
   }

@@ -422,6 +422,7 @@ void rp_photo(int id, int x, int y);   // task-105: golf pinned accomplishment i
 void rp_photo_blit(void *source, int target, int x, int y, int id); // task-105: safe native scratch blit, original browser blit
 int rp_photo_limit(int vertical); // task-105: the actual source surface extent less the photo size; original when disabled
 void rp_board_wait(int n);      // task-105: the board's waits (FUN_0045bf80(n,0)); the turns' waits go while the native page is up
+void rp_year_continue(int y);   // the End of Year page original Continue hit centre
 void rp_pace(void);             // a task-73 page's wait between turns (golf's 50 ms, none while the native page is up)
 
 // task-32 (src/port/golf/frontend_hooks.c, frontend_game.c): the Frosted Mint

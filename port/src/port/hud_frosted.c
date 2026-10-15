@@ -25,12 +25,15 @@
 #define QMAX 32
 #define STALE_MS 300   // no course frame this long (a dialog runs its own loop): hide
 
+enum { HUD_MODE_OFF, HUD_MODE_FROSTED, HUD_MODE_ORIGINAL_ROTATE };
+
 static SDL_mutex *g_lock;
 static HudSnap g_snap;
 static double g_snap_t = -1e9;
 static HudAction g_q[QMAX];
 static int g_qn;
 static volatile int g_injecting, g_visible;
+static SDL_atomic_t g_mode;              // game thread publishes; render/input read
 static SDL_atomic_t g_history_visible;   // published by the render thread after drawing the HUD
 
 int hudf_history_visible(void) { return SDL_AtomicGet(&g_history_visible); }
@@ -60,6 +63,20 @@ static void lock(void) {
 }
 static void unlock(void) {
   if (g_lock) SDL_UnlockMutex(g_lock);
+}
+
+static void refresh_mode(void) {
+  static unsigned seen = ~0u;
+  unsigned ser = mods_serial();
+  if (ser == seen) return;
+  seen = ser;
+  const char *v = mods_get("ui.hud");
+  int mode = HUD_MODE_OFF;
+  if (v && (!strcasecmp(v, "frosted_mint") || !strcasecmp(v, "frosted-mint")))
+    mode = HUD_MODE_FROSTED;
+  else if (v && !strcasecmp(v, "original") && mods_get_int("ui.original_rotate_button", 1))
+    mode = HUD_MODE_ORIGINAL_ROTATE;
+  SDL_AtomicSet(&g_mode, mode);
 }
 
 // ------------------------------------------------------------------ game thread API
@@ -258,12 +275,11 @@ static float hud_scale(int h) {
 // The canvas -> target mapping of the last frame drawn (for the pointer).
 static volatile float g_view_x, g_view_y, g_view_px = 1;
 static volatile double g_drawn_t = -1e9;   // the presenter ran the layer (it is up)
-static volatile int g_want;
-
 static void draw(const HdUiFrame *f, void *user) {
   (void)user;
   g_drawn_t = f->now_ms;
-  if (g_failed || !g_want) {
+  int mode = SDL_AtomicGet(&g_mode);
+  if (g_failed || mode == HUD_MODE_OFF) {
     g_visible = 0;
     SDL_AtomicSet(&g_history_visible, 0);
     if (g_ui) ui_skip_frame(g_ui);
@@ -302,6 +318,19 @@ static void draw(const HdUiFrame *f, void *user) {
   if (!show) {
     SDL_AtomicSet(&g_history_visible, 0);
     ui_skip_frame(g_ui);
+    return;
+  }
+  if (mode == HUD_MODE_ORIGINAL_ROTATE) {
+    SDL_AtomicSet(&g_history_visible, 0);
+    ui_begin(g_ui, f->target, w, h, hud_scale(h), f->target, now);
+    HudAction rotate[1];
+    int n = ui_hud_draw_original_rotate(g_ui, &s, rotate, 1);
+    ui_end(g_ui);
+    if (n) {
+      lock();
+      if (g_qn < QMAX) g_q[g_qn++] = rotate[0];
+      unlock();
+    }
     return;
   }
   update_art(r);
@@ -381,7 +410,10 @@ static void draw(const HdUiFrame *f, void *user) {
 // Game thread, before golf sees the event; mouse positions in canvas pixels.
 static int input(SDL_Event *e, int course, void *user) {
   (void)user, (void)course;
-  if (!g_ui || !g_want) return 0;
+  int mode = SDL_AtomicGet(&g_mode);
+  if (!g_ui || mode == HUD_MODE_OFF) return 0;
+  if (mode == HUD_MODE_ORIGINAL_ROTATE &&
+      (e->type == SDL_KEYDOWN || e->type == SDL_TEXTINPUT || e->type == SDL_MOUSEWHEEL)) return 0;
   // Original modal loops own Escape too, even when their native skin is off.
   if (dlg_game_active() || rp_game_active()) return 0;
   UiEvent u = {0};
@@ -445,7 +477,7 @@ static int input(SDL_Event *e, int course, void *user) {
     return 0;
   }
   int to = ui_route_event(g_ui, &u);
-  if (u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
+  if (mode == HUD_MODE_FROSTED && u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
     lock();
     int placing = hudf_keep_tray_on_world_click(&g_snap);
     unlock();
@@ -453,27 +485,33 @@ static int input(SDL_Event *e, int course, void *user) {
   }
   // While one of our clicks is on its way to the game, its mouse state must
   // not change under it: hold the real pointer back for those frames.
-  if (g_injecting) return 1;
+  if (mode == HUD_MODE_FROSTED && g_injecting) return 1;
   return !(to & UI_ROUTE_GAME);
 }
 
 // ------------------------------------------------------------------ switch
 
 int hudf_enabled(void) {
-  static unsigned seen = ~0u;
-  unsigned ser = mods_serial();
-  if (ser != seen) {
-    seen = ser;
-    const char *v = mods_get("ui.hud");
-    g_want = v && (!strcasecmp(v, "frosted_mint") || !strcasecmp(v, "frosted-mint"));
-  }
+  refresh_mode();
+  int mode = SDL_AtomicGet(&g_mode);
   if (!g_lock) g_lock = SDL_CreateMutex();
-  if (g_want && !g_registered) {
+  if (mode != HUD_MODE_OFF && !g_registered) {
     // registered once; with ui.hud switched off later the layer draws nothing
     g_registered = hd_ui_add_layer(draw, NULL) && hd_ui_add_input(input, NULL);
     if (!g_registered) g_failed = 1;
   }
   // Only once the presenter has run the layer: with hd=0 (the original 800x600
   // window) nothing would draw the new HUD, so the original one stays.
-  return g_want && g_registered && !g_failed && host_now_ms() - g_drawn_t < 2000;
+  return mode == HUD_MODE_FROSTED && g_registered && !g_failed && host_now_ms() - g_drawn_t < 2000;
+}
+
+int hudf_original_rotate_enabled(void) {
+  refresh_mode();
+  int mode = SDL_AtomicGet(&g_mode);
+  if (!g_lock) g_lock = SDL_CreateMutex();
+  if (mode != HUD_MODE_OFF && !g_registered) {
+    g_registered = hd_ui_add_layer(draw, NULL) && hd_ui_add_input(input, NULL);
+    if (!g_registered) g_failed = 1;
+  }
+  return mode == HUD_MODE_ORIGINAL_ROTATE && g_registered && !g_failed;
 }
