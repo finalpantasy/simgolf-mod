@@ -689,6 +689,13 @@ static void read_design(HudSnap *s, int flags) {
               : tool == 2 ? 15 : tool == 4 ? mdata_cell(&c_land, "trays", "amenities", "landmark_designs", 14)
               : tool == 16 ? 7 : tool == 19 ? 8 : 0;
   if (s->design_n > 16) s->design_n = 16;
+  memset(s->landmark_perk, 0, sizeof s->landmark_perk);
+  if (tool == 4 && mods_get_int("fixes.landmark_perks", 1)) {
+    // drawAmenitiesPanel/FUN_00434cf0 selects these original strings by design & 3.
+    static const uint32_t labels[4] = {0x4c82b0, 0x4c82a0, 0x4c8290, 0x4c8280};
+    for (int i = 0; i < 4; i++)
+      copy_str(s->landmark_perk[i], sizeof s->landmark_perk[i], (const char *)(uintptr_t)labels[i]);
+  }
   if (tool == 4) {   // short names, the way the strip's label is built (scratch: text_buf)
     char keep[256];
     memcpy(keep, (void *)(uintptr_t)TEXT_BUF, sizeof keep);

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.13 - 2026-10-15
+
+Original landmark benefits are visible again.
+
+- Fixed: the modern landmark chooser shows the original benefit alongside the name and price, and in hover tips for available and locked designs.
+- Original prices, unlock requirements and landmark effects are preserved. The previous modern text remains available with fixes.landmark_perks=0.
+
+Original energy, mood and weed balance is preserved. Qualification uses focused checks and hidden game runs; the full 91-stage regression remains incomplete at 35/91.
+
+## 0.1.12 - 2026-10-15
+
+Sharper object pictures in the build interface.
+
+- Fixed: bench, landmark, flower-bed, scenic-tree and scenic-bridge choosers use the existing HD art pack when available.
+- Fixed: Course > Extras uses complete object pictures for the five design buttons.
+- Original art and interface choices remain available. Original dark golfer labels are retained by design.
+
+Original energy, mood and weed balance is preserved. No new artwork or original game data is bundled.
+
 ## 0.1.11 - 2026-10-15
 
 Cleaner reports, Home Site previews and dialogs.

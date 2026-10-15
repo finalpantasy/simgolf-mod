@@ -101,6 +101,7 @@ typedef struct HudSnap {
   unsigned landmark_mask; // 0x543cfc: landmark designs the player has (bit per design)
   unsigned landmark_free; // 0x822c70: landmark designs that cost nothing
   char landmark_name[16][20];   // FUN_004074a0's short names, "Sundial"
+  char landmark_perk[4][32];    // drawAmenitiesPanel: original benefit text, indexed by design & 3
   int clubhouse;          // placing the clubhouse (build tool 15, flag 0x800)
   int home_site_valid;    // the game's current Home Site preview is valid
   int home_site_value[4]; // dollars: lot value, site clear, site prep, profit

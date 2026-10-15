@@ -2046,7 +2046,8 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
     char cost[24];
     if ((s->landmark_free >> s->design) & 1u) snprintf(cost, sizeof cost, "free");
     else ui_hud_money(cost, sizeof cost, (s->design * 5 + 25) * 200);
-    snprintf(hint, sizeof hint, "%s, %s", s->landmark_name[s->design], cost);
+    const char *perk = s->landmark_perk[s->design & 3];
+    snprintf(hint, sizeof hint, "%s, %s%s%s", s->landmark_name[s->design], cost, perk[0] ? " - " : "", perk);
   } else snprintf(hint, sizeof hint, "Pick a design, then click the course.");
   float pad = ui_s(c, 12), segh = ui_s(c, 34), g = ui_s(c, 6), cw = ui_s(c, 58), ch = ui_s(c, 58);
   float title_w = ui_text_width(c, UI_TYPE_HEADING, title) + ui_s(c, 14), rw = rot_width(c);
@@ -2085,8 +2086,9 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
     snprintf(lab, sizeof lab, "%d", i + 1);
     int f = place_chip_flags(s, tool, i);
     if (tool == 4) {
-      if (f & UI_DISABLED) snprintf(tip, sizeof tip, "%s: not earned yet", s->landmark_name[i]);
-      else snprintf(tip, sizeof tip, "%s", s->landmark_name[i]);
+      const char *perk = s->landmark_perk[i & 3];
+      snprintf(tip, sizeof tip, "%s%s%s%s", s->landmark_name[i],
+               f & UI_DISABLED ? ": not earned yet" : "", perk[0] ? " - " : "", perk);
     } else snprintf(tip, sizeof tip, "%s %d", title, i + 1);
     int slot = tool == 1 ? HUD_ART_BENCH : tool == 2 ? HUD_ART_FLOWER : tool == 4 ? HUD_ART_LANDMARK : tool == 16 ? HUD_ART_TREE : HUD_ART_BRIDGE;
     SDL_Texture *pic = art ? art[slot + i] : NULL;   // the design as the original strip drew it; a number if none
