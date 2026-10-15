@@ -4,6 +4,9 @@
 
 Clearer building controls and more reliable rendering and settings.
 
+- Fixed: long water-path bridges, corners and shore joins stay connected in every camera rotation.
+- Fixed: the first real custom theme folder is discovered, and long theme lists scroll with reachable selection buttons.
+
 - Fixed: build-tab and Escape transitions retain the last complete course frame instead of briefly showing a different texture layer.
 - Fixed: the old golfer-card artwork no longer appears behind its native replacement, including HD textures.
 - Fixed: resent terrain textures replace their existing cache entry after a successful upload, avoiding duplicate allocations.

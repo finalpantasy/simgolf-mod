@@ -936,6 +936,29 @@ static int upd_click(Page *p, const FeSnap *snap, SDL_Texture *const *art, UiRec
   return got;
 }
 
+// Scroll through ordinary routed wheel input until the whole row is visible.
+static int upd_row_visible(const FeLayout *ly, int row) {
+  UiRect r = ly->upd_row[row], v = ly->upd_view;
+  return r.w > 0 && r.h > 0 && v.w > 0 && v.h > 0 &&
+         r.y >= v.y && r.y + r.h <= v.y + v.h;
+}
+
+static int upd_scroll_to_row(Page *p, const FeSnap *snap, SDL_Texture *const *art, int row, double t) {
+  FeAction acts[8];
+  int na = 0, steps = 0;
+  for (; steps < 24 && !upd_row_visible(ui_frontend_layout(), row); steps++) {
+    const FeLayout *ly = ui_frontend_layout();
+    UiRect v = ly->upd_view, r = ly->upd_row[row];
+    float x = v.x + v.w / 2, y = v.y + v.h / 2;
+    UiEvent move = {UI_EV_MOVE, x, y};
+    UiEvent wheel = {UI_EV_WHEEL, x, y, 0, r.y < v.y ? 1.0f : -1.0f};
+    ui_route_event(p->ui, &move);
+    ui_route_event(p->ui, &wheel);
+    fe_frame_draw(p, snap, art, acts, &na, t + steps * 100);
+  }
+  return steps;
+}
+
 static int page_updates(Page *p, const char *out, FeSnap *snap, SDL_Texture *const *art) {
   static UpdState u;
   char err[160] = "";
@@ -994,20 +1017,38 @@ static int page_updates(Page *p, const char *out, FeSnap *snap, SDL_Texture *con
   fails += !ok;
   for (int f = 0; f < 2; f++) fe_frame_draw(p, snap, art, acts, &na, 208500.0 + f * 100);
   Ly = ui_frontend_layout();
-  upd_click(p, snap, art, Ly->upd_row[3], 209000.0, &kind, &arg);
+  UiRect before = Ly->upd_row[3], view = Ly->upd_view;
+  int needs_scroll = !upd_row_visible(Ly, 3);
+  printf("updates geometry: row3 y=%.1f h=%.1f, viewport y=%.1f h=%.1f, needs scroll %d\n",
+         before.y, before.h, view.y, view.h, needs_scroll);
+  save_page(p, out, "frontend-updates-before-scroll");
+  if (before.y >= view.y + view.h) {
+    upd_click(p, snap, art, before, 208800.0, &kind, &arg);
+    ok = u.expanded == 2;
+    printf("%s updates click-through: off-screen row is clipped (expanded %d)\n", ok ? "ok  " : "FAIL", u.expanded);
+    fails += !ok;
+  }
+  int steps = upd_scroll_to_row(p, snap, art, 3, 209400.0);
+  Ly = ui_frontend_layout();
+  ok = upd_row_visible(Ly, 3) && (!needs_scroll || (steps > 0 && Ly->upd_row[3].y < before.y));
+  printf("%s updates wheel: row3 visible after %d step(s), y %.1f -> %.1f\n",
+         ok ? "ok  " : "FAIL", steps, before.y, Ly->upd_row[3].y);
+  fails += !ok;
+  save_page(p, out, "frontend-updates-scrolled");
+  upd_click(p, snap, art, Ly->upd_row[3], 213000.0, &kind, &arg);
   ok = u.expanded == 3;
   printf("%s updates click-through: a third row switches (expanded %d)\n", ok ? "ok  " : "FAIL", u.expanded);
   fails += !ok;
   // Esc (close_req) and the X both close the panel
   u.close_req = 1;
-  for (int f = 0; f < 2; f++) fe_frame_draw(p, snap, art, acts, &na, 209600.0 + f * 100);
+  for (int f = 0; f < 2; f++) fe_frame_draw(p, snap, art, acts, &na, 214000.0 + f * 100);
   ok = !u.open;
   printf("%s updates: Esc closes the panel (open %d)\n", ok ? "ok  " : "FAIL", u.open);
   fails += !ok;
   u.open = 1;
-  for (int f = 0; f < 2; f++) fe_frame_draw(p, snap, art, acts, &na, 210000.0 + f * 100);
+  for (int f = 0; f < 2; f++) fe_frame_draw(p, snap, art, acts, &na, 214500.0 + f * 100);
   Ly = ui_frontend_layout();
-  upd_click(p, snap, art, Ly->upd_close, 211000.0, &kind, &arg);
+  upd_click(p, snap, art, Ly->upd_close, 215000.0, &kind, &arg);
   ok = !u.open;
   printf("%s updates click-through: X closes the panel (open %d)\n", ok ? "ok  " : "FAIL", u.open);
   fails += !ok;
@@ -1286,6 +1327,7 @@ static void page_dialog(Page *p, const char *out) {
 // so a conflict, a dependency and a missing dependency show.
 static const char *g_mods_dir = "mods";
 static int g_only_mods;   // --only mods: just the Mods pages
+static int g_only_updates;   // --only updates: focused wheel and click checks
 
 static int page_mods(Page *p, const char *out) {
   const char *running[16];
@@ -1372,7 +1414,10 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--renderer")) renderer = argv[i + 1];
     else if (!strcmp(argv[i], "--faces")) g_old_faces = argv[i + 1];   // mood_<i>.bmp from SIMGOLF_FACES_DUMP
     else if (!strcmp(argv[i], "--mods")) g_mods_dir = argv[i + 1];
-    else if (!strcmp(argv[i], "--only")) g_only_mods = !strcmp(argv[i + 1], "mods");
+    else if (!strcmp(argv[i], "--only")) {
+      g_only_mods = !strcmp(argv[i + 1], "mods");
+      g_only_updates = !strcmp(argv[i + 1], "updates");
+    }
     else if (!strcmp(argv[i], "--art")) artdir = argv[i + 1];   // art_<slot>.bmp from SIMGOLF_UI_DUMP_ART
   }
   SDL_SetMainReady();
@@ -1452,7 +1497,12 @@ int main(int argc, char **argv) {
       p.art[i] = at;
     }
     printf("gallery %dx%d on %s, UI scale %.2f\n", w, h, info.name, p.scale);
-    if (!g_only_mods) {
+    if (g_only_updates) {
+      static FeSnap snap;
+      SDL_Texture *art[FE_ART_MAX] = {0};
+      fe_demo(&snap);
+      fails += page_updates(&p, out, &snap, art);
+    } else if (!g_only_mods) {
       page_hud(&p, out, HUD_JWE, "");
       page_hud(&p, out, HUD_REGULAR, "-regular");
       page_messages(&p, out);
@@ -1470,7 +1520,7 @@ int main(int argc, char **argv) {
       fails += page_dialogs(&p, out);
       fails += page_pages(&p, out);
     }
-    fails += page_mods(&p, out);
+    if (!g_only_updates) fails += page_mods(&p, out);
     ui_destroy(p.ui);
     for (int i = 0; i < HUD_ART_MAX; i++)
       if (p.art[i]) SDL_DestroyTexture(p.art[i]);

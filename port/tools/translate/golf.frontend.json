@@ -1,6 +1,9 @@
 {
   "comment": "task-32 (UI-6 front end): translator patches for the Frosted Mint start menu, difficulty pick and the other front-end screens. Merged into golf.json's patches (translate.py, <stem>.<topic>.json). Every hook is in port/src/port/frontend_game.c (native) and golf/frontend_hooks.c (browser build: no-ops). The original loops keep running; with ui.frontend=original the hooks do nothing.",
   "patches": {
+    "FUN_004724c0": [
+      ["a0 = &DAT_0080b194;", "a0 = (byte *)&DAT_0080b130;"]
+    ],
     "FUN_0040f5c0": [
       [
         "FUN_0045bf80(1,0);\n    FUN_00483bd0();\n    FUN_0045c030();\n    FUN_0047ab50(&DAT_00519a60,&iStack_106c,&iStack_1078);",
@@ -118,5 +121,8 @@
         "FUN_0045bf80(2,0);\n    fe_frame(2);"
       ]
     ]
+  },
+  "required_patch_counts": {
+    "FUN_004724c0": [["a0 = &DAT_0080b194;", 1]]
   }
 }

@@ -1,0 +1,16 @@
+{
+  "comment": "Bridge neighbor masks in FUN_0040f5c0 use a float-typed register as integer bits. Preserve the starting camera heading as bits too, so connected water paths select the proper decks, corners and shore ramps at every rotation. fixes.bridge_connections=0 retains the previous port behavior. Keep this patch local to the bridge loop because the same register also holds real floats elsewhere.",
+  "patches": {
+    "FUN_0040f5c0": [
+      [
+        "uStack_1238 = 4;\n                fVar30 = DAT_005685f4;",
+        "uStack_1238 = 4;\n                fVar30 = bridge_connections_heading((int)DAT_005685f4);"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040f5c0": [
+      ["uStack_1238 = 4;\n                fVar30 = DAT_005685f4;", 1]
+    ]
+  }
+}

@@ -245,12 +245,12 @@ const char *mods_ini_path(void) { return g_ini; }
 
 const char *mods_option_path(void) { return g_opt_path; }
 
-static void option_write(void) {
-  if (!g_opt_path[0]) return;
+static int option_write(void) {
+  if (!g_opt_path[0]) return 0;
   char tmp[MAX_PATH + 8];
-  if (snprintf(tmp, sizeof tmp, "%s.tmp", g_opt_path) >= (int)sizeof tmp) return;
+  if (snprintf(tmp, sizeof tmp, "%s.tmp", g_opt_path) >= (int)sizeof tmp) return 0;
   FILE *f = fopen(tmp, "w");
-  if (!f) return;
+  if (!f) return 0;
   fprintf(f, "; options.ini: your choices from the in-game Options page (delete this file to go back to the defaults)\n");
   char done[OPT_MAX] = {0};
   for (int i = 0; i < g_nopt; i++) {
@@ -269,8 +269,11 @@ static void option_write(void) {
   int ok = !ferror(f);
   if (fflush(f) != 0) ok = 0;
   if (fclose(f) != 0) ok = 0;
-  if (!ok || !MoveFileExA(tmp, g_opt_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+  if (!ok || !MoveFileExA(tmp, g_opt_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
     remove(tmp);  // Preserve the old settings file if persistence failed.
+    return 0;
+  }
+  return 1;
 }
 
 // The Options page sets a value: it takes effect now (the store); the file follows with mods_option_flush.
@@ -290,15 +293,19 @@ int mods_option_put(const char *key, const char *value) {
   return 1;
 }
 
-void mods_option_flush(void) {
-  if (!g_no_mods) option_write();
+int mods_option_flush(void) {
+  if (g_no_mods) return 0;
+  if (!option_write()) {
+    fprintf(stderr, "options: could not save %s; current values remain active for this run\n", g_opt_path);
+    return 0;
+  }
+  return 1;
 }
 
 // ... and kept in options.ini at once.
 int mods_option_set(const char *key, const char *value) {
   if (!mods_option_put(key, value)) return 0;
-  mods_option_flush();
-  return 1;
+  return mods_option_flush();
 }
 
 int mods_ini_save(void) {

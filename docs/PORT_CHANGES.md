@@ -500,4 +500,27 @@ preserve original UI controls. See
 
 Focused checks: native x86 failure contracts, 124 HUD assertions, 53 golfer
 assertions, inspected HD captures at both resolutions, original UI controls,
-and build-tab transition A/B captures. The mandatory full check is pending.
+and build-tab transition A/B captures. Release qualification is focused: the broad regression was interrupted with 35 of 91 stages passed and its gallery incomplete. There is no whole-suite PASS. Exact package and protected-player delivery checks are recorded separately before publication.
+
+## Water-path bridge connections
+
+`fixes.bridge_connections` defaults to 1. It restores the bridge renderer's
+integer-bit camera heading at the start of its neighbor-mask loop, so long
+water paths choose correctly rotated decks, corners, junctions and shore
+ramps. The same register holds real floats elsewhere, so the translator
+patch touches only that bridge initialization and requires exactly one
+matching anchor. Set the switch to 0 for the previous port's pictures.
+Path flags, placement prices, golfer routing and the save format are unchanged.
+
+`tests/native/bridge_connections.py` compiles a synthetic loop through the
+actual translator. The old loop fails 696 of 1,028 checks; the correction
+passes every rotation, path/water mask and legacy-switch contract. Missing
+or duplicate patch anchors fail translation. No generated or game data is
+included in the test source. The companion runtime scenario builds real
+paths in a disposable 100x100 sandbox and captures both switch settings.
+
+## Custom theme discovery and list scrolling
+
+The translated theme scan starts at the first real filesystem entry. Native and portable listings already omit dot entries. The existing 16-pack theme list clips and scrolls its rows while selection buttons remain fixed.
+
+The trail-motion check compares speed over each recorded presentation interval. It keeps the original sampling window, moving-frame count, still-frame check and percentile limits, and rejects malformed timestamps. Pure controls distinguish smooth motion at irregular cadence from held frames followed by jumps.

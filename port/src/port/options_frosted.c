@@ -336,8 +336,8 @@ static void set_value(const Row *r, const char *v) {
     fprintf(stderr, "options: key set = %s\n", v);
     return;
   }
-  mods_option_set(r->key, v);
-  fprintf(stderr, "options: %s = %s\n", r->key, v);
+  if (mods_option_set(r->key, v)) fprintf(stderr, "options: %s = %s\n", r->key, v);
+  else fprintf(stderr, "options: %s = %s (not saved)\n", r->key, v);
 }
 
 // 0 hd, 1 pixel_hd, 2 original: the next look after the current one

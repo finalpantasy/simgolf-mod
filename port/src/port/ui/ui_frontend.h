@@ -171,6 +171,8 @@ typedef struct FeLayout {
   UiRect row[FE_ROWS + FE_TAGS];
   int row_tag[FE_TAGS], world_selected, world_state;
   UiRect upd_btn, upd_close, upd_row[8], upd_now, upd_later;   // task-80: the Updates button, panel and notice
+  UiRect upd_view;       // read-only viewport geometry for input checks
+  UiRect theme_view;     // the scrolling content-pack list, excluding its fixed footer
 } FeLayout;
 const FeLayout *ui_frontend_layout(void);
 

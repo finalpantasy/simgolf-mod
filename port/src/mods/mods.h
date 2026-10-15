@@ -49,11 +49,13 @@ const char *mods_value_key(int i);
 const char *mods_ini_path(void);
 int mods_ini_save(void);
 // The Options page (card task-24): sets a value now and keeps it in options.ini (next to golf.exe, or
-// SIMGOLF_OPTIONS_FILE), which is read over mods.ini at the next start. 0 on a bad argument or a full table.
+// SIMGOLF_OPTIONS_FILE), which is read over mods.ini at the next start. Returns 0 if validation, table
+// capacity, or persistence fails. A persistence failure leaves the new value active for this run.
 int mods_option_set(const char *key, const char *value);
 // The same without writing the file (a slider being dragged); mods_option_flush writes it.
 int mods_option_put(const char *key, const char *value);
-void mods_option_flush(void);
+// Returns 0 when settings were not persisted, including when --no-mods suppresses the write.
+int mods_option_flush(void);
 const char *mods_option_path(void);                   // writes the mods.ini and live layers back
 
 // Registry of what mods touch at run time (data rows, hooks, assets): the

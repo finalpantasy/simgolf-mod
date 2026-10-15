@@ -410,6 +410,7 @@ static void draw_update_panel(Scene *s, UpdState *u) {
   ui_text_in(c, ui_rect(in.x, in.y + hh, in.w, cf.line + U(s, 4)), UI_TYPE_CAPTION, t->text_secondary,
              "You have SimGolf Remastered v" SIMGOLF_VERSION ". Click a release to see what is new.", 0);
   UiRect view = ui_rect(in.x, in.y + hh + cf.line + U(s, 22), in.w, in.h - hh - cf.line - U(s, 22));
+  g_layout.upd_view = view;
   const float ROW = 74, GAP = 8;
   float line_h = bf.line;
   static char wrapped[40][8][160];
@@ -945,6 +946,7 @@ static int draw_theme(Scene *s, const FeSnap *snap, FeAction *acts, int max) {
   float rowh = 76, head_h = 64, gap = 6;
   float ph = 36 + head_h + rows * (rowh + gap) + 36 + 48 + 26;
   if (ph < 420) ph = 420;
+  if (ph > 820) ph = 820;
   UiRect p = R(s, (1920 - PW) / 2, (1080 - ph) / 2 + 20, PW, ph);
   ui_panel(c, p, U(s, t->radius_panel), UI_PANEL_READABLE);
   float x0 = p.x + U(s, 36), w = p.w - U(s, 72);
@@ -956,7 +958,9 @@ static int draw_theme(Scene *s, const FeSnap *snap, FeAction *acts, int max) {
   (void)cf;
   ui_text_in(c, ui_rect(x0 + U(s, 18), y, U(s, NAMEW), U(s, head_h)), UI_TYPE_LABEL, t->text_secondary, "Theme pack", 0);
   y += U(s, head_h);
-  float hover_y = 0;
+  UiRect view = ui_rect(x0, y, w, U(s, ph - 36 - head_h - 36 - 48 - 26));
+  g_layout.theme_view = view;
+  y += ui_vscroll_begin(c, ui_id("fe.theme.scroll"), view, U(s, rows * (rowh + gap)), U(s, rowh + gap));
   for (int i = 0; i < T->n; i++) {
     UiRect rr = ui_rect(x0, y, w, U(s, rowh));
     uint32_t id = ui_idi(ui_id("fe.theme.row"), i);
@@ -986,7 +990,7 @@ static int draw_theme(Scene *s, const FeSnap *snap, FeAction *acts, int max) {
     if (ui_clicked(c, id)) push_act(acts, max, &n, FE_A_ROW, i);
     y += U(s, rowh + gap);
   }
-  (void)hover_y;
+  ui_vscroll_end(c);
   UiRect ok = ui_rect(p.x + p.w - U(s, 36) - U(s, 230), p.y + p.h - U(s, 26) - U(s, 48), U(s, 230), U(s, 48));
   g_layout.ok = ok;
   if (ui_button(c, ui_id("fe.theme.ok"), ok, "Use this theme", UI_ICON_CHEV, UI_BTN_PRIMARY, T->sel >= 0 ? 0 : UI_DISABLED))
