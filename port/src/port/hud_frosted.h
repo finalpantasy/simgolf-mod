@@ -102,6 +102,8 @@ typedef struct HudSnap {
   unsigned landmark_free; // 0x822c70: landmark designs that cost nothing
   char landmark_name[16][20];   // FUN_004074a0's short names, "Sundial"
   int clubhouse;          // placing the clubhouse (build tool 15, flag 0x800)
+  int home_site_valid;    // the game's current Home Site preview is valid
+  int home_site_value[4]; // dollars: lot value, site clear, site prep, profit
   // task-94: the People lists. Golfers: every golfer on the course (hole > 0), moods always, names while the
   // Golfers tab is open. Staff: every hired employee, in the order of golf's own table.
   int golfer_n;
@@ -140,6 +142,7 @@ typedef struct {
 int hudf_history_visible(void);               // drawn history panel; does not change the HUD
 int hudf_enabled(void);                       // ui.hud=frosted_mint and the native layer is up
 int hudf_original_rotate_enabled(void);       // ui.hud=original and its optional Rotate pill is enabled
+void hud_home_site_capture_value(int row, int dollars); // game thread: values from golf's placement calculation
 void hudf_publish(const HudSnap *s);
 int hudf_take_action(HudAction *a);           // next queued action, 1 if any
 void hudf_publish_art(int slot, const uint32_t *argb, int w, int h);   // NULL clears

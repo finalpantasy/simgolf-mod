@@ -18,6 +18,7 @@
 
 #include "port/hd_native.h"
 #include "port/reports_frosted.h"
+#include "port/reports_handoff_policy.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define SCREEN_STATE 0x569498
@@ -283,7 +284,10 @@ void rp_tick(void) {
   if (!g_pending) return;
   int k = g_pending;
   g_pending = 0;
-  if (!on) return;
+  if (!on || !rp_handoff_is_tab_target(k)) {
+    if (g_on) rp_done();
+    return;
+  }
   if (g_log) fprintf(stderr, "reports: open %d from a tab\n", k);
   if (is_overlay(k)) G32(SCREEN_STATE) = k;
   else if (k == RP_BEST) {
@@ -1000,6 +1004,10 @@ static void rp_frame_body(int present) {
   rpf_publish(&g_snap);
   RpAction a;
   while (rpf_take_action(&a)) {
+    if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {
+      int action = a.kind == RP_A_CLOSE ? RP_HANDOFF_ACTION_CLOSE : RP_HANDOFF_ACTION_TAB;
+      g_pending = rp_handoff_next_pending(g_pending, g_kind, action, a.arg);
+    }
     if (g_kind == RP_TOP_DESIGNERS && a.kind == RP_A_CLOSE) {
       g_top_local_close = 1;
       continue;
@@ -1015,7 +1023,6 @@ static void rp_frame_body(int present) {
     if (a.kind == RP_A_CLOSE && g_kind == RP_SKILLS) a = (RpAction){RP_A_CLICK, (g_sk.x0 + 0x15e) | (0x14e << 16)};   // its OK
     if (a.kind == RP_A_CLOSE && g_kind == RP_END_YEAR) a = (RpAction){RP_A_CLICK, 0x23c | (g_snap.ext[0] << 16)};
     if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {
-      if (a.kind == RP_A_TAB && a.arg != g_kind) g_pending = a.arg;
       if (!g_closing) {
         g_closing = 1;
         push_key(SDLK_ESCAPE, 1);
@@ -1096,7 +1103,8 @@ void rp_ov(int kind, int phase) {
   RpAction a;
   while (rpf_take_action(&a))
     if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {
-      if (a.kind == RP_A_TAB && a.arg != g_kind) g_pending = a.arg;
+      int action = a.kind == RP_A_CLOSE ? RP_HANDOFF_ACTION_CLOSE : RP_HANDOFF_ACTION_TAB;
+      g_pending = rp_handoff_next_pending(g_pending, g_kind, action, a.arg);
       push_key(SDLK_ESCAPE, 1);
       push_key(SDLK_ESCAPE, 0);
     }
@@ -1143,6 +1151,12 @@ int rp_end(int v) {
 }
 
 void rp_done(void) {
+  int target_on = rp_handoff_is_tab_target(g_pending) && rpf_enabled_kind(g_pending);
+  if (rp_handoff_preserve_panel(g_on, g_kind, g_pending, target_on)) {
+    if (g_log) fprintf(stderr, "reports: handoff %d -> %d\n", g_kind, g_pending);
+    return;
+  }
+  g_pending = 0;
   if (g_kind == RP_PAIRING && g_pair_cancel_state == 3 && g_log_on())
     fprintf(stderr, "reports: pairing cancel returned with no golfers selected\n");
   if (g_on) {

@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "port/dialogs_frosted.h"
+#include "port/hd_art_dialog_cutoff.h"
 #include "port/hd_native.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
@@ -90,6 +91,8 @@ static void inj_step(void) {
 // of several page buffers (the course and its UI layer, hud_game.c), so every page is kept.
 uint16_t *gdi_screen_dib(int i, int *w, int *h, int *pitch, int *is565);
 void hd_art_dlg_begin(void);      // hd_art.c (task-88)
+void hd_art_dlg_begin_pre(void);  // Save Name: also hide the caller's strip, recorded after dlg_pre
+void hd_art_dlg_pre(void);        // mark art before the Save Name caller draws its strip
 void hd_art_hide_dialog(void);
 enum { PAGES = 8 };
 static uint16_t *g_keep[PAGES];
@@ -137,6 +140,7 @@ static unsigned g_pre_t;   // dlg_pre kept the picture at this time
 void dlg_pre(void) {
   if (!dlgf_enabled()) return;
   keep_save();
+  hd_art_dlg_pre();
   g_pre_t = SDL_GetTicks() | 1;
 }
 
@@ -151,9 +155,11 @@ static void begin(int kind) {
   if (g_log && g_on) fprintf(stderr, "dialogs: open %s\n", kind == 1 ? "entry" : "menu");
   if (g_on) {
     hd_ui_show_golf_ui(0);   // golf's own UI layer (and the old HUD under it) stays hidden
-    hd_art_dlg_begin();
+    int pre_saved = hd_art_dialog_presnap_fresh(SDL_GetTicks(), g_pre_t, g_kept);
+    if (hd_art_dialog_use_presnap(kind, pre_saved)) hd_art_dlg_begin_pre();
+    else hd_art_dlg_begin();
     hud_clean_pages();
-    if (!(g_pre_t && SDL_GetTicks() - g_pre_t < 20000 && g_kept)) keep_save();
+    if (!pre_saved) keep_save();
     g_pre_t = 0;
   }
 }
@@ -488,6 +494,7 @@ int dlg_hire(int hover) {
   }
   inj_step();
   keep_restore();
+  hd_art_hide_dialog();   // the HD copy of the original hiring panel is replaced too
   return cancel;
 }
 

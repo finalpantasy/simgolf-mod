@@ -1,7 +1,51 @@
 {
- "comment": "task-115 (src/port/golf/place_hooks.c): the two places FUN_0040f5c0 turns the pointer into the tile a lot is placed at (the hover preview and the click). place_center shifts it so the footprint is centred on the pointer when ui.place_center=1.",
+ "comment": "task-115 (src/port/golf/place_hooks.c): the two places FUN_0040f5c0 turns the pointer into the tile a lot is placed at (the hover preview and the click). place_center shifts it so the footprint is centred on the pointer when ui.place_center=1. Required draw anchors use unique prefixes preserved by HD coordinate rewrites.",
  "patches": {
   "FUN_0040f5c0": [
+   [
+    "FUN_0040cef0(0x2a4,0x17c,0x78,0x70,1);",
+    "if (!hud_on()) FUN_0040cef0(0x2a4,0x17c,0x78,0x70,1);"
+   ],
+   [
+    "iVar23 = FUN_0042ef40(iVar23,DAT_00543d0c);\n        pcVar15 = (char *)crt_itoa(((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) * 100,(int)puVar43,",
+    "iVar23 = FUN_0042ef40(iVar23,DAT_00543d0c);\n#ifndef __EMSCRIPTEN__\n        extern void hud_home_site_capture_value(int row, int dollars);\n        hud_home_site_capture_value(0, (((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) * 100));\n#endif\n        pcVar15 = (char *)crt_itoa(((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) * 100,(int)puVar43,"
+   ],
+   [
+    "uVar13 = uStack_1228;\n        uVar24 = 0xffffffff;\n        pcVar15 = s_Site_clear__004c6178;",
+    "uVar13 = uStack_1228;\n#ifndef __EMSCRIPTEN__\n        hud_home_site_capture_value(1, (int)uStack_1228 * 100);\n#endif\n        uVar24 = 0xffffffff;\n        pcVar15 = s_Site_clear__004c6178;"
+   ],
+   [
+    "iVar23 = (int)DAT_004c2726;\n        for (uVar24 = uVar24 & 3; uVar24 != 0; uVar24 = uVar24 - 1) {",
+    "iVar23 = (int)DAT_004c2726;\n#ifndef __EMSCRIPTEN__\n        hud_home_site_capture_value(2, iVar23 * 100);\n#endif\n        for (uVar24 = uVar24 & 3; uVar24 != 0; uVar24 = uVar24 - 1) {"
+   ],
+   [
+    "iVar23 = ((((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) - (int)DAT_004c2726) - uVar13) * 100\n        ;\n        pcVar15 = s_Profit__004c615c;",
+    "iVar23 = ((((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) - (int)DAT_004c2726) - uVar13) * 100\n        ;\n#ifndef __EMSCRIPTEN__\n        hud_home_site_capture_value(3, iVar23);\n#endif\n        pcVar15 = s_Profit__004c615c;"
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x195",
+    "if (!hud_on()) FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x195"
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1a4",
+    "if (!hud_on()) FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1a4"
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1b3",
+    "if (!hud_on()) FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1b3"
+   ],
+   [
+    "FUN_00478b80(&DAT_00519cd4,0x2b0,0x1c2",
+    "if (!hud_on()) FUN_00478b80(&DAT_00519cd4,0x2b0,0x1c2"
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1c7",
+    "if (!hud_on()) FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1c7"
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,\n                     ((iVar23 < 1) - 1 & 0xffffa6e0) + 0x80007d08);",
+    "if (!hud_on()) FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,\n                     ((iVar23 < 1) - 1 & 0xffffa6e0) + 0x80007d08);"
+   ],
    [
     "FUN_00430020(iStack_11e8,iStack_11f8,&DAT_00543d08,&DAT_00543d0c,0);",
     "FUN_00430020(iStack_11e8,iStack_11f8,&DAT_00543d08,&DAT_00543d0c,0);\n    place_center(&DAT_00543d08,&DAT_00543d0c);"
@@ -13,6 +57,54 @@
    [
     "if (((int)DAT_004c2854 < 6) || (DAT_004c2854 == 0x10)) {\n      if (DAT_004c2854 == 4) {\n        DAT_004c2854 = 0xffffffff;\n      }\n    }\n    else {\n      DAT_004c2854 = 0xffffffff;\n    }",
     "DAT_004c2854 = place_tool_after_placement((int)DAT_004c2854);"
+   ]
+  ]
+ },
+ "required_patch_counts": {
+  "FUN_0040f5c0": [
+   [
+    "FUN_0040cef0(0x2a4,0x17c,0x78,0x70,1);",
+    1
+   ],
+   [
+    "iVar23 = FUN_0042ef40(iVar23,DAT_00543d0c);\n        pcVar15 = (char *)crt_itoa(((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) * 100,(int)puVar43,",
+    1
+   ],
+   [
+    "uVar13 = uStack_1228;\n        uVar24 = 0xffffffff;\n        pcVar15 = s_Site_clear__004c6178;",
+    1
+   ],
+   [
+    "iVar23 = (int)DAT_004c2726;\n        for (uVar24 = uVar24 & 3; uVar24 != 0; uVar24 = uVar24 - 1) {",
+    1
+   ],
+   [
+    "iVar23 = ((((int)(iVar23 + (iVar23 >> 0x1f & 3U)) >> 2) - (int)DAT_004c2726) - uVar13) * 100\n        ;\n        pcVar15 = s_Profit__004c615c;",
+    1
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x195",
+    1
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1a4",
+    1
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1b3",
+    1
+   ],
+   [
+    "FUN_00478b80(&DAT_00519cd4,0x2b0,0x1c2",
+    1
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,0x1c7",
+    1
+   ],
+   [
+    "FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,\n                     ((iVar23 < 1) - 1 & 0xffffa6e0) + 0x80007d08);",
+    1
    ]
   ]
  }

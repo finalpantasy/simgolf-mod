@@ -11,8 +11,10 @@
 #include "port/ui/ui_draw.h"
 
 static const char *const g_tab_label[] = {"Course", "Comments", "Histograph", "SGA", "Finances", "Roster", "Best scores"};
-static const int g_tab_kind[] = {RP_COURSE, RP_COMMENTS, RP_HISTO, RP_SGA, RP_FINANCE, RP_ROSTER, RP_BEST};
-enum { TABS = 7 };
+#define RP_TAB_KIND_VALUE(kind) kind,
+static const int g_tab_kind[] = {RP_REPORT_TAB_TARGETS(RP_TAB_KIND_VALUE)};
+#undef RP_TAB_KIND_VALUE
+enum { TABS = (int)(sizeof g_tab_kind / sizeof g_tab_kind[0]) };
 
 static const char *default_title(int kind) {
   switch (kind) {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.11 - 2026-10-15
+
+Cleaner reports, Home Site previews and dialogs.
+
+- Fixed: report tabs keep their modern panel visible while opening the next page.
+- Fixed: Home Site shows the original lot value, clearing cost, preparation cost and profit in the modern placement card.
+- Fixed: Hire and Save dialogs suppress old purple panels underneath the modern interface.
+- Fixed: rapid Your pro/Staff switching and repeated Practice clicks keep old controls out of the modern interface.
+
+Original energy, mood and weed balance is preserved. Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds, art preferences and other unresolved reports remain open. Original-interface behavior remains available.
+
 ## 0.1.10 - 2026-10-15
 
 Pro scorecards and steady placement.

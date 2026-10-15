@@ -2,6 +2,18 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.11",
+      "date": "2026-10-15",
+      "name": "Cleaner reports, Home Site previews and dialogs",
+      "summary": "Cleaner reports, Home Site previews and dialogs.",
+      "notes": [
+        "Fixed: report tabs keep their modern panel visible while opening the next page.",
+        "Fixed: Home Site shows the original lot value, clearing cost, preparation cost and profit in the modern placement card.",
+        "Fixed: Hire and Save dialogs suppress old purple panels underneath the modern interface.",
+        "Fixed: rapid Your pro/Staff switching and repeated Practice clicks keep old controls out of the modern interface. Original energy, mood and weed balance is preserved. Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds, art preferences and other unresolved reports remain open. Original-interface behavior remains available."
+      ]
+    },
+    {
       "version": "0.1.10",
       "date": "2026-10-15",
       "name": "Pro scorecards and steady placement",
@@ -9,8 +21,7 @@
       "notes": [
         "Fixed: Your pro can open the live scorecard while playing, including the current stroke count on the back nine.",
         "Fixed: modern shot choices stay visible and respond when Your pro is reopened while paused; pause stays active.",
-        "Fixed: landmarks and scenic bridges remain selected for repeated placement. Set ui.repeat_amenities=0 to restore single placement.",
-        "Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds, report transitions and other unresolved reports remain open. Original-interface behavior remains available."
+        "Fixed: landmarks and scenic bridges remain selected for repeated placement. Set ui.repeat_amenities=0 to restore single placement. Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds, report transitions and other unresolved reports remain open. Original-interface behavior remains available."
       ]
     },
     {

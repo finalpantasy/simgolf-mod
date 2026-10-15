@@ -369,12 +369,27 @@ static void draw(const HdUiFrame *f, void *user) {
   }
   ui_begin(g_ui, f->target, w, h, hud_scale(h), f->target, now);
   HudAction acts[16];
-  int history_before = g_hud.hist_open;
-  int n = ui_hud_draw(g_ui, &g_hud, &s, g_tex, acts, 16);
+  // Reports draw before the HUD layer. Hide only the transient message card while a report owns this
+  // frame (including a handoff gap); use copies so its open state and unread message return on close.
+  UiHud report_hud;
+  HudSnap report_snap;
+  UiHud *draw_hud = &g_hud;
+  HudSnap *draw_snap = &s;
+  if (rpf_visible() || rpf_gap()) {
+    report_hud = g_hud;
+    report_hud.msg_open = 0;
+    report_hud.hist_open = 0;
+    report_snap = s;
+    report_snap.news_on = 0;
+    draw_hud = &report_hud;
+    draw_snap = &report_snap;
+  }
+  int history_before = draw_hud->hist_open;
+  int n = ui_hud_draw(g_ui, draw_hud, draw_snap, g_tex, acts, 16);
   ui_end(g_ui);
   // X and row actions close after drawing the panel. Keep later layers clear
   // through that closing frame; the next frame restores their controls.
-  SDL_AtomicSet(&g_history_visible, !g_hud.hidden && g_hud.density == HUD_JWE && (history_before || g_hud.hist_open));
+  SDL_AtomicSet(&g_history_visible, !draw_hud->hidden && draw_hud->density == HUD_JWE && (history_before || draw_hud->hist_open));
   {   // one line when the tray tucks away or comes back, the build bar opens or folds, the HUD hides (tests read these)
     static int last_tucked = -1, last_bar = -1, last_hidden = -1;
     if (g_hud.tray_hidden != last_tucked) {

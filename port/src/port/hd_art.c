@@ -53,6 +53,7 @@
 #include "port/golf/art_hooks.h"
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
+#include "port/hd_art_dialog_cutoff.h"
 #include "port/hd_art_geom.h"
 #include "port/hd_art_pixels.h"
 #include "port/hd_native.h"
@@ -542,11 +543,21 @@ typedef struct {
 
 static List g_rec;                 // being recorded (game thread)
 static int g_rec_which = LC;
+static unsigned g_rec_generation; // changes whenever the recording list is reset and reused
+static int g_issue44_trace_enabled, g_issue44_trace_pending;
+static unsigned g_issue44_trace_seq;
 static uint16_t *g_val;            // the value each owner wrote
 static List g_closed[2];           // finished lists of this frame (game thread)
 static int g_closed_ok[2];
 
+static void issue44_cutoff_trace(const char *event) {
+  if (!g_issue44_trace_enabled || !g_issue44_trace_pending) return;
+  fprintf(stderr, "issue44-cutoff #%u %s generation=%u which=%d count=%d\n",
+          ++g_issue44_trace_seq, event, g_rec_generation, g_rec_which, g_rec.n);
+}
+
 static void list_reset(List *L, int w, int h) {
+  if (L == &g_rec) issue44_cutoff_trace("rec_reset_enter");
   if (L->w != w || L->h != h || !L->owner) {
     free(L->owner);
     L->owner = calloc((size_t)w * h, 2);
@@ -556,6 +567,10 @@ static void list_reset(List *L, int w, int h) {
     memset(L->owner, 0, (size_t)w * h * 2);
   }
   L->n = 0;
+  if (L == &g_rec) {
+    g_rec_generation++;
+    issue44_cutoff_trace("rec_reset_exit");
+  }
 }
 
 // Ends the list being recorded: a pixel stays an entry's only if it still
@@ -1644,8 +1659,10 @@ static volatile LONG g_pub_serial;
 
 void hd_art_course_done(const uint16_t *bits, int pitch) {
   if (!g_on) return;
+  issue44_cutoff_trace("course_done_enter");
   list_close(LC, bits, pitch);
   g_rec_which = LT;
+  issue44_cutoff_trace("course_done_exit");
 }
 
 // task-81: the Frosted Mint HUD hides golf's old HUD by putting back the
@@ -1687,10 +1704,43 @@ void hd_art_hide_rects(const int *xywh, int nrects) {
 // hi-res copy of the old panel frame shows beside the native dialog. After a present (the loop's own)
 // the list starts empty again, so everything in it is the dialog's.
 static int g_dlg_n = -1, g_dlg_which;
+static HdArtDialogPreCutoff g_dlg_pre;
+
+void hd_art_dlg_pre(void) {
+  hd_art_dialog_capture_pre(&g_dlg_pre, g_on, g_rec.n, g_rec_which, g_rec_generation);
+  g_issue44_trace_enabled = getenv("SIMGOLF_SAVE_CUTOFF_TRACE") != NULL;
+  g_issue44_trace_pending = g_issue44_trace_enabled;
+  g_issue44_trace_seq = 0;
+  if (g_issue44_trace_pending) {
+    fprintf(stderr, "issue44-cutoff #0 dlg_pre on=%d any=%d pack=%d index_ready=%d indexed=%d hash=%d dir=%s looks=",
+            g_on, g_any, g_pack, g_files && g_fhash && g_nfiles > 0, g_nfiles, g_fhash_n, g_dir);
+    for (int i = 0; i < NCAT; i++) fprintf(stderr, "%s%s=%s", i ? " " : "", k_cat[i], k_look[g_look[i]]);
+    fprintf(stderr, " generation=%u which=%d count=%d\n", g_rec_generation, g_rec_which, g_rec.n);
+  }
+}
+
+static void hd_art_dlg_begin_at(int use_pre) {
+  HdArtDialogCutoff current = {g_on ? g_rec.n : -1, g_rec_which};
+  if (g_issue44_trace_pending)
+    fprintf(stderr, "issue44-cutoff #%u begin_before use_pre=%d pending=%d pre_generation=%u pre_which=%d pre_count=%d current_generation=%u current_which=%d current_count=%d\n",
+            ++g_issue44_trace_seq, use_pre, g_dlg_pre.pending, g_dlg_pre.generation,
+            g_dlg_pre.mark.which, g_dlg_pre.mark.count, g_rec_generation,
+            current.which, current.count);
+  HdArtDialogCutoff selected = hd_art_dialog_begin_cutoff(&g_dlg_pre, use_pre, current, g_rec_generation);
+  if (g_issue44_trace_pending)
+    fprintf(stderr, "issue44-cutoff #%u begin_after selected_which=%d selected_count=%d\n",
+            ++g_issue44_trace_seq, selected.which, selected.count);
+  g_issue44_trace_pending = 0;
+  g_dlg_n = selected.count;
+  g_dlg_which = selected.which;
+}
 
 void hd_art_dlg_begin(void) {
-  g_dlg_n = g_on ? g_rec.n : -1;
-  g_dlg_which = g_rec_which;
+  hd_art_dlg_begin_at(0);
+}
+
+void hd_art_dlg_begin_pre(void) {
+  hd_art_dlg_begin_at(1);
 }
 
 void hd_art_hide_dialog(void) {
@@ -1713,10 +1763,12 @@ void hd_art_hide_from(int mark) {
 
 void hd_art_discard_pending(void) {
   if (!g_on) return;
+  issue44_cutoff_trace("discard_enter");
   list_reset(&g_rec, HD_FRAME_W, HD_FRAME_H);
   g_closed_ok[LC] = g_closed_ok[LT] = 0;
   g_rec_which = LC;
   g_hide_from = -1;
+  issue44_cutoff_trace("discard_exit");
 }
 
 static void publish_one(int which, int ok) {
@@ -1772,6 +1824,7 @@ int hd_art_pick(int x, int y, HdArtPick *o) {
 void hd_art_publish(int layered, const uint16_t *screen) {
   live_settings();   // also with the pack off: Pixel HD is a grid over whatever the course shows
   if (!g_on) return;
+  issue44_cutoff_trace("publish_enter");
   ensure_hooks();
   if (!g_val) g_val = calloc((size_t)HD_FRAME_W * HD_FRAME_H, 2);
   // what golf drew since the course (or, on a page, since the last present)
@@ -1783,6 +1836,7 @@ void hd_art_publish(int layered, const uint16_t *screen) {
   LeaveCriticalSection(&g_pub_lock);
   g_closed_ok[LC] = 0;
   g_rec_which = LC;
+  issue44_cutoff_trace("publish_exit");
   // periodic report
   static double last;
   double now = host_now_ms();

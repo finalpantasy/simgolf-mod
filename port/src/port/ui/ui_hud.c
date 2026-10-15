@@ -1980,9 +1980,55 @@ static int place_chip_flags(const HudSnap *s, int tool, int i) {
   return f;
 }
 
+static void home_site_panel(UiCtx *c, const UiHud *h, const HudSnap *s) {
+  if (!s->home_site_valid) return;
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  static const char *const labels[4] = {"Lot value", "Site clear", "Site prep", "Profit"};
+  const char *hint = "Click the course to place. Esc cancels.";
+  char amounts[4][32];
+  float label_w = 0, amount_w = 0;
+  for (int i = 0; i < 4; i++) {
+    ui_hud_money(amounts[i], sizeof amounts[i], s->home_site_value[i]);
+    float lw = ui_text_width(c, UI_TYPE_BODY, labels[i]);
+    float aw = ui_text_width(c, UI_TYPE_BODY, amounts[i]);
+    if (lw > label_w) label_w = lw;
+    if (aw > amount_w) amount_w = aw;
+  }
+  float pad = ui_s(c, 12), gap = ui_s(c, 8), row_gap = ui_s(c, 3);
+  float title_h = ui_font(c, UI_TYPE_HEADING).line;
+  float row_h = ui_font(c, UI_TYPE_BODY).line;
+  float hint_h = ui_font(c, UI_TYPE_CAPTION).line;
+  float inner = fmaxf(label_w + gap + amount_w,
+                      fmaxf(ui_text_width(c, UI_TYPE_HEADING, "Home site"),
+                            ui_text_width(c, UI_TYPE_CAPTION, hint)));
+  float w = inner + 2 * pad;
+  float hgt = 2 * pad + title_h + ui_s(c, 6) + 4 * row_h + 3 * row_gap + ui_s(c, 7) + hint_h;
+  float margin = h->density == HUD_JWE ? ui_s(c, 160) : ui_s(c, 250);
+  UiRect r = ui_rect_round(ui_anchor(scr, w, hgt, UI_BOTTOM, 0, margin));
+  ui_panel(c, r, ui_s(c, 20), 0);
+  float x = r.x + pad, y = r.y + pad;
+  ui_text_in(c, ui_rect(x, y, inner, title_h), UI_TYPE_HEADING, t->text_primary, "Home site", 0);
+  y += title_h + ui_s(c, 6);
+  for (int i = 0; i < 4; i++) {
+    UiRect lr = ui_rect(x, y, label_w, row_h);
+    UiRect vr = ui_rect(x + label_w + gap, y, amount_w, row_h);
+    UiColor value_color = i == 3 ? (s->home_site_value[i] < 0 ? t->danger : t->money) : t->text_primary;
+    ui_text_in(c, lr, UI_TYPE_BODY, t->text_secondary, labels[i], 0);
+    ui_text_in(c, vr, UI_TYPE_BODY, value_color, amounts[i], 1);
+    y += row_h + row_gap;
+  }
+  y += ui_s(c, 4);
+  ui_text_in(c, ui_rect(x, y, inner, hint_h), UI_TYPE_CAPTION, t->text_secondary, hint, 0);
+}
+
 static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, Acts *a, int building_tray_open) {
   int club = s->clubhouse, n = club ? 0 : s->design_n, tool = s->build_tool;
   int lot = !club && n <= 0 && tool >= 6 && tool <= 14 && building_rotates(tool);   // task-115: a lot that turns
+  if (!club && tool == 5) {
+    home_site_panel(c, h, s);
+    return;
+  }
   // The visible Buildings tray already names this lot and supplies Rotate (Tab).
   // Keep the independent card when that tray is tucked away, and keep all design cards.
   if (lot && building_tray_open) return;

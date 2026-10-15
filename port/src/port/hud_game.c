@@ -79,6 +79,8 @@ static int g_goal_on, g_goal_steps;
 static int g_staff_tab, g_staff_tab_wait;   // task-112: open the Staff tab once the People tray is up
 
 static HudSnap g_snap;
+static int g_home_site_pending[4];
+static unsigned g_home_site_pending_mask;
 static uint32_t g_serial, g_art_serial;
 static int g_art_theme = -1, g_art_frames;
 
@@ -816,6 +818,10 @@ static int staff_pending(void) {
 }
 
 static void read_state(HudSnap *s) {
+  s->home_site_valid = 0;
+  memset(s->home_site_value, 0, sizeof s->home_site_value);
+  memset(g_home_site_pending, 0, sizeof g_home_site_pending);
+  g_home_site_pending_mask = 0;
   int flags = G32(FLAGS);
   s->canvas_w = win_screen_w;
   s->canvas_h = win_screen_h;
@@ -900,6 +906,35 @@ static void read_state(HudSnap *s) {
   read_people(s);
 }
 
+// FUN_0040f5c0 draws the placement preview after hud_restore publishes this
+// frame's HUD snapshot. Capture the original calculations and publish them
+// together after the last value is available.
+void hud_home_site_capture_value(int row, int dollars) {
+  if (row == 0) {
+    memset(g_home_site_pending, 0, sizeof g_home_site_pending);
+    g_home_site_pending_mask = 0;
+  }
+  if (row < 0 || row >= 4 || !g_on || !g_snap.valid || g_snap.build_tool != 5) return;
+  g_home_site_pending[row] = dollars;
+  g_home_site_pending_mask |= 1u << row;
+  if (g_home_site_pending_mask != 0x0f) return;
+  memcpy(g_snap.home_site_value, g_home_site_pending, sizeof g_snap.home_site_value);
+  g_snap.home_site_valid = 1;
+  hudf_publish(&g_snap);
+  static int last[4], last_tile_x, last_tile_y, logged;
+  int tile_x = G32(0x543d08), tile_y = G32(0x543d0c);
+  if (!logged || memcmp(last, g_home_site_pending, sizeof last) ||
+      tile_x != last_tile_x || tile_y != last_tile_y) {
+    memcpy(last, g_home_site_pending, sizeof last);
+    last_tile_x = tile_x;
+    last_tile_y = tile_y;
+    logged = 1;
+    fprintf(stderr, "hud: home site values tile %d,%d lot %d clear %d prep %d profit %d\n",
+            last_tile_x, last_tile_y, last[0], last[1], last[2], last[3]);
+    fflush(stderr);
+  }
+}
+
 // ------------------------------------------------------------------ actions
 
 // (x, y): a point of the original 800x600 layout of the wheel and trays,
@@ -911,10 +946,9 @@ static void inject(int x, int y) {
   g_inj_x = x;
   g_inj_y = y;
   g_inj_frames = 0;
-  if (g_goal_on && (g_goal.goal == HUD_GOAL_COURSE || g_goal.goal == HUD_GOAL_EXTRAS ||
-                   g_goal.goal == HUD_GOAL_BUILDINGS || g_goal.goal == HUD_GOAL_LANDSCAPE || g_goal.goal == HUD_GOAL_CLOSE)) {
-    // The current fresh snapshot predates this click. Keep the token until a
-    // fresh course frame after the original handler has consumed it.
+  if (g_on) {
+    // People tabs and Practice can flush partial old controls too. Keep the
+    // complete course until a fresh frame after this HUD click is consumed.
     g_course_transition_until = host_now_ms() + 750;
     g_course_transition_consumed = 0;
   }
