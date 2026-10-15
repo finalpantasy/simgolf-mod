@@ -1,0 +1,37 @@
+{
+  "comment": "task-016: preserve the original pairing selection behavior while publishing golfer text and selection state to a native page. Extend the original click boundary only while the native selector is active; cancel by clearing selections through original clicks, then clicking outside the original rows.",
+  "patches": {
+    "FUN_00459850": [
+      ["local_290 = 0;", "rp_begin(35);\n  pro_pairing_note(1);\n  local_290 = 0;"],
+      ["FUN_00404b70(s_SELECT_THE_NEXT_PAIR_OF_GOLFERS_004d374c,0x152,0xe,0x80000000);",
+       "rp_pair_row(-1);\n    rp_tcp(0,s_SELECT_THE_NEXT_PAIR_OF_GOLFERS_004d374c,0x152,0xe,0x80000000);"],
+      ["FUN_004676e0(uVar11,0);", "FUN_004676e0(uVar11,0);\n        rp_pair_row(local_288);"],
+      ["FUN_00404b70(", "rp_tcp(0,"],
+      ["FUN_004049d0(", "rp_tcp(2,"],
+      ["DAT_00821164 + 0x1ca <= iStack_26c", "rp_pair_y_limit(DAT_00821164 + 0x1ca,local_288) <= iStack_26c"],
+      ["FUN_00480c80(&DAT_00519a60);",
+       "rp_pair_state(local_290,local_294,local_288,local_28c,local_280);\n    rp_frame_preflush();\n    FUN_00480c80(&DAT_00519a60);"],
+      ["FUN_00483d30();",
+       "rp_pair_state(local_290,local_294,local_288,local_28c,local_280);\n  rp_frame();\n  FUN_00483d30();"],
+      ["FUN_0045c030();",
+       "local_294 = rp_pair_cursor_override(local_294);\n    rp_pair_state(local_290,local_294,local_288,local_28c,local_280);\n    rp_frame();\n    FUN_0045c030();"],
+      ["return uVar4;", "rp_done();\n                pro_pairing_note(0);\n                return uVar4;"],
+      ["return iVar7;", "rp_done();\n            pro_pairing_note(0);\n            return iVar7;"]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00459850": [
+      ["local_290 = 0;", 1],
+      ["FUN_00404b70(s_SELECT_THE_NEXT_PAIR_OF_GOLFERS_004d374c,0x152,0xe,0x80000000);", 1],
+      ["FUN_004676e0(uVar11,0);", 1],
+      ["FUN_00404b70(", 5],
+      ["FUN_004049d0(", 1],
+      ["DAT_00821164 + 0x1ca <= iStack_26c", 1],
+      ["FUN_00480c80(&DAT_00519a60);", 1],
+      ["FUN_00483d30();", 1],
+      ["FUN_0045c030();", 1],
+      ["return uVar4;", 1],
+      ["return iVar7;", 1]
+    ]
+  }
+}

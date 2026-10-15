@@ -22,6 +22,13 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## What you get
 
+### New in 0.1.8
+- **Pro screens:** native clubhouse pairing, a cleaner Match Skills page and a native Top Ten Designers panel.
+- **Report transitions:** Hole Stats opens without old board artwork or world labels crossing its panel.
+- **Safer updates:** rejects empty programs, checks both launcher copies and preserves recovery files after an incomplete rollback.
+- Users on 0.1.4, 0.1.5 or 0.1.6 should run Setup.cmd manually once. Use the same path if your current executable is empty.
+- Qualification uses focused checks. The full 91-stage regression remains incomplete at 35/91; open AI/crowding reports remain under investigation.
+
 ### New in 0.1.7
 - **Updater repair:** updates can finish and relaunch after the game closes. Users on 0.1.5 or 0.1.6 should install this ZIP manually once.
 - **Cleaner shadows:** no dark rectangle beneath the practice flag or golfer highlights.

@@ -40,6 +40,8 @@ enum {
   RP_TRACTS = 32,    // year-end land purchase map (FUN_004587a0)
   RP_SKILLS = 33,    // task-102: the pro's skill points screen (FUN_0045f0f0)
   RP_END_YEAR = 34,  // the year summary board (FUN_0044cff0)
+  RP_TOP_DESIGNERS = 36, // Top Ten Designers (FUN_00473470)
+  RP_PAIRING = 35,   // choose two golfers for a clubhouse round (FUN_00459850)
 };
 
 enum { RP_AL_LEFT = 0, RP_AL_CENTRE = 1, RP_AL_RIGHT = 2 };
@@ -58,6 +60,7 @@ typedef struct {
   uint8_t align;    // RP_AL_*
   uint8_t big;      // text: drawn in golf's title font; RP_IT_CHIP: a flat highlight box of colour col
   uint8_t art;      // RP_IT_CHIP: 1 + the art slot (rpf_publish_art)
+  uint8_t group;    // RP_PAIRING text: the golfer card index, 0xff for the screen heading
   uint16_t col;     // golf's 565 colour (text, rect, line; a chip's colour read back from the page)
   char s[RP_TEXT];
 } RpItem;
@@ -96,7 +99,8 @@ void ui_pages_layout(RpLayout *out);   // the task-73 pages' controls (ui_pages.
 void ui_reports_bounds(const RpSnap *s, float *x0, float *y0, float *x1, float *y1);
 
 // reports_frosted.c (render thread side, thread safe)
-int rpf_gap(void);                            // test aid: a report is up in the game but the layer drew none this frame
+int rpf_gap(void);                            // test aid: the last layer draw expected a report but drew none
+int rpf_visible(void);                        // render-thread state: the report panel drew in this frame
 void rpf_early(void);                         // task-106: register the layer when the presenter starts
 int rpf_enabled(void);                        // ui.reports=frosted_mint, the layer is up and drawing
 int rpf_enabled_kind(int kind);               // rpf_enabled, and for the task-73 pages (kind >= RP_PROFILE) ui.dialogs too

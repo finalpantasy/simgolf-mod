@@ -698,6 +698,103 @@ static int draw_skills(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
   return na;
 }
 
+// ------------------------------------------------------------------ Top Ten Designers (FUN_00473470, issue-13)
+
+#define TD_W 1180.0f
+#define TD_H 800.0f
+
+static const RpItem *td_field(const RpSnap *s, int rank, int field) {
+  for (int i = 0; i < s->n; i++)
+    if (s->it[i].type == RP_IT_TEXT && s->it[i].y == rank && s->it[i].x == field) return &s->it[i];
+  return NULL;
+}
+
+static void td_read(const RpSnap *s, int rank, int field, char *dst, int cap) {
+  const RpItem *it = td_field(s, rank, field);
+  fix_text(dst, cap, it ? it->s : "");
+}
+
+static int draw_designers(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  int na = 0;
+  UiRect scr = ui_screen(c);
+  float margin = ui_s(c, t->edge_margin);
+  float k = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, TD_W), (scr.h - 2 * margin) / ui_s(c, TD_H)));
+  if (k < 1.0f) ui_push_scale(c, k);
+  UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, TD_W), ui_s(c, TD_H)));
+  scrim_and_panel(c, pr);
+  UiRect in = ui_inset_all(pr, ui_s(c, 28));
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = pr;
+
+  UiFont tf = ui_font(c, UI_TYPE_TITLE), lf = ui_font(c, UI_TYPE_LABEL);
+  float cb = ui_s(c, 40);
+  UiRect close_r = ui_rect(in.x + in.w - cb, in.y, cb, cb);
+  if (ui_icon_button(c, ui_id("td.close"), close_r, UI_ICON_X, 0, "Close (Esc)") && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  g_pf_layout.close_x = close_r.x + close_r.w / 2, g_pf_layout.close_y = close_r.y + close_r.h / 2;
+  char title[64];
+  fix_text(title, sizeof title, s->title[0] ? s->title : "Top Ten Designers");
+  ui_text_fit(c, ui_rect(in.x, in.y + (cb - tf.line) / 2, in.w - cb - ui_s(c, 12), tf.line), UI_TYPE_TITLE, t->text_primary, title, 0);
+  ui_text_in(c, ui_rect(in.x, in.y + cb + ui_s(c, 8), in.w - cb, lf.line), UI_TYPE_LABEL, t->accent_soft_text,
+             "COURSE DESIGN HALL OF FAME", 0);
+
+  const float gap = 12.0f;
+  const float widths[6] = {54.0f, 460.0f, 110.0f, 140.0f, 130.0f, 150.0f};
+  float x[6];
+  x[0] = in.x;
+  for (int i = 1; i < 6; i++) x[i] = x[i - 1] + ui_s(c, widths[i - 1] + gap);
+  float list_y = in.y + ui_s(c, 100);
+  float table_h = in.h - ui_s(c, 178);
+  float head_h = ui_s(c, 26);
+  float row_h = (table_h - head_h) / 10.0f;
+  const char *const heads[6] = {"", "DESIGNER / COURSE", "FUN", "SKILL", "CASH", "TOTAL SCORE"};
+  for (int i = 1; i < 6; i++)
+    ui_text_fit(c, ui_rect(x[i], list_y, ui_s(c, widths[i]), head_h), UI_TYPE_LABEL, t->text_tertiary, heads[i], i == 5 ? 1.0f : 0.0f);
+
+  int rows = s->ext[1] < 0 ? 0 : s->ext[1] > 10 ? 10 : s->ext[1];
+  for (int rank = 0; rank < rows; rank++) {
+    char name[RP_TEXT], course[RP_TEXT], fun[RP_TEXT], skill[RP_TEXT], cash[RP_TEXT], score[RP_TEXT], mult[RP_TEXT];
+    td_read(s, rank, 0, name, sizeof name);
+    td_read(s, rank, 1, course, sizeof course);
+    td_read(s, rank, 2, fun, sizeof fun);
+    td_read(s, rank, 3, skill, sizeof skill);
+    td_read(s, rank, 4, cash, sizeof cash);
+    td_read(s, rank, 5, score, sizeof score);
+    td_read(s, rank, 6, mult, sizeof mult);
+    float y = list_y + head_h + rank * row_h;
+    UiRect rr = ui_rect(in.x, y, in.w, row_h - ui_s(c, 3));
+    int current = rank == s->ext[0];
+    uid_rrect(d, rr, ui_s(c, t->radius_control), current ? uid_alpha(t->accent_soft, 0.72f) : uid_alpha(t->surface_inset, rank & 1 ? 0.22f : 0.42f));
+    uid_rrect_stroke(d, rr, ui_s(c, t->radius_control), ui_s(c, 1), current ? uid_alpha(t->accent, 0.8f) : uid_alpha(t->divider, 0.34f));
+
+    char number[8];
+    snprintf(number, sizeof number, "%d", rank + 1);
+    ui_text_fit(c, ui_rect(x[0], rr.y, ui_s(c, widths[0]), rr.h), UI_TYPE_HEADING, current ? t->accent_soft_text : t->text_secondary, number, 0.5f);
+    float left_pad = ui_s(c, 12);
+    UiRect details = ui_rect(x[1] + left_pad, rr.y + ui_s(c, 3), ui_s(c, widths[1]) - 2 * left_pad, rr.h - ui_s(c, 6));
+    UiFont hf = ui_font(c, UI_TYPE_HEADING), cf = ui_font(c, UI_TYPE_CAPTION);
+    ui_text_fit(c, ui_rect(details.x, details.y, details.w, hf.line), UI_TYPE_HEADING, current ? t->accent_soft_text : t->text_primary, name, 0);
+    ui_text_fit(c, ui_rect(details.x, details.y + hf.line, details.w, cf.line), UI_TYPE_CAPTION, t->text_secondary, course, 0);
+    ui_text_fit(c, ui_rect(x[2], rr.y, ui_s(c, widths[2]), rr.h), UI_TYPE_BODY, t->text_secondary, fun, 0.5f);
+    ui_text_fit(c, ui_rect(x[3], rr.y, ui_s(c, widths[3]), rr.h), UI_TYPE_BODY, t->text_secondary, skill, 0.5f);
+    ui_text_fit(c, ui_rect(x[4], rr.y, ui_s(c, widths[4]), rr.h), UI_TYPE_BODY, t->text_secondary, cash, 0.5f);
+    UiFont mf = ui_font(c, UI_TYPE_CAPTION);
+    ui_text_fit(c, ui_rect(x[5], rr.y + ui_s(c, 2), ui_s(c, widths[5]), hf.line), UI_TYPE_HEADING, current ? t->accent_soft_text : t->text_primary, score, 1.0f);
+    ui_text_fit(c, ui_rect(x[5], rr.y + hf.line, ui_s(c, widths[5]), mf.line), UI_TYPE_CAPTION, t->text_tertiary, mult, 1.0f);
+  }
+  if (!rows)
+    ui_text_in(c, ui_rect(in.x, list_y + head_h + ui_s(c, 28), in.w, ui_font(c, UI_TYPE_BODY).line), UI_TYPE_BODY, t->text_secondary,
+               "No course scores have been recorded yet.", 0);
+
+  float footer_y = in.y + in.h - ui_s(c, 34);
+  ui_text_fit(c, ui_rect(in.x, footer_y, in.w - cb, ui_s(c, 24)), UI_TYPE_CAPTION, t->text_tertiary,
+              "Final score combines Fun, Skill Rating, and Cash, weighted by course difficulty.", 0);
+  if (k < 1.0f) ui_pop_scale(c);
+  return na;
+}
+
 // ------------------------------------------------------------------ accomplishment board (FUN_0046e810, task-105)
 
 // The snapshot (reports_game.c rp_photo): one RP_IT_RECT per photo golf pinned up (x, y its place in golf's board, art the
@@ -927,6 +1024,128 @@ static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
   return na;
 }
 
+// ------------------------------------------------------------------ golfer pairing selector (FUN_00459850)
+
+#define PAIR_W 1000.0f
+
+static void pair_text(const RpSnap *s, int index, char *name, int name_cap, char *details, int details_cap) {
+  name[0] = 0;
+  details[0] = 0;
+  for (int i = 0; i < s->n; i++) {
+    const RpItem *it = &s->it[i];
+    if (it->type != RP_IT_TEXT || it->group != index || !it->s[0]) continue;
+    char text[RP_TEXT];
+    fix_text(text, sizeof text, it->s);
+    if (!name[0]) {
+      snprintf(name, (size_t)name_cap, "%s", text);
+    } else if (strlen(details) < (size_t)details_cap - 1) {
+      size_t used = strlen(details);
+      snprintf(details + used, (size_t)details_cap - used, "%s%s", used ? " | " : "", text);
+    }
+  }
+  if (!name[0]) snprintf(name, (size_t)name_cap, "Golfer %d", index + 1);
+}
+
+static int draw_pairing(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  int na = 0;
+  int count = s->ext[2] < 0 ? 0 : s->ext[2] > 16 ? 16 : s->ext[2];
+  int cursor = s->ext[1], picked = s->ext[3];
+  unsigned selected = (unsigned)s->ext[0] & 0xffffu;
+  char names[16][RP_TEXT], details[16][RP_TEXT * 6];
+  for (int i = 0; i < count; i++) pair_text(s, i, names[i], sizeof names[i], details[i], sizeof details[i]);
+
+  UiRect scr = ui_screen(c);
+  float margin = ui_s(c, t->edge_margin);
+  float design_h = 840.0f;
+  float k = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, PAIR_W), (scr.h - 2 * margin) / ui_s(c, design_h)));
+  if (k < 1.0f) ui_push_scale(c, k);
+  UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, PAIR_W), ui_s(c, design_h)));
+  scrim_and_panel(c, pr);
+  UiRect in = ui_inset_all(pr, ui_s(c, 28));
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = pr;
+
+  UiFont tf = ui_font(c, UI_TYPE_TITLE), hf = ui_font(c, UI_TYPE_HEADING), cf = ui_font(c, UI_TYPE_CAPTION);
+  const RpItem *head = NULL;
+  for (int i = 0; i < s->n; i++)
+    if (s->it[i].type == RP_IT_TEXT && s->it[i].group == 0xff && s->it[i].s[0]) { head = &s->it[i]; break; }
+  char title[RP_TEXT];
+  fix_text(title, sizeof title, head ? head->s : "Choose two golfers");
+  ui_text_fit(c, ui_rect(in.x, in.y + ui_s(c, 4), in.w - ui_s(c, 56), tf.line), UI_TYPE_TITLE, t->text_primary, title, 0);
+  UiRect close_r = ui_rect(in.x + in.w - ui_s(c, 40), in.y, ui_s(c, 40), ui_s(c, 40));
+  pf_ctl("close", close_r);
+  g_pf_layout.close_x = close_r.x + close_r.w / 2, g_pf_layout.close_y = close_r.y + close_r.h / 2;
+  int cancelling = s->ext[6] != 0;
+  if (ui_icon_button(c, ui_id("pair.close"), close_r, UI_ICON_X, cancelling ? UI_DISABLED : 0, "Cancel pairing") && !cancelling && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+
+  char status[96];
+  if (cancelling) snprintf(status, sizeof status, "Clearing selections and returning to the course.");
+  else if (picked >= 2) snprintf(status, sizeof status, "Two golfers selected. Start the round when ready.");
+  else snprintf(status, sizeof status, "Select %s more golfer%s to start the round.", picked == 1 ? "one" : "two", picked == 1 ? "" : "s");
+  float header_y = in.y + ui_s(c, 48);
+  ui_text_fit(c, ui_rect(in.x, header_y, in.w, hf.line), UI_TYPE_HEADING, t->text_secondary, status, 0);
+
+  float footer_y = in.y + in.h - ui_s(c, 48);
+  float view_y = header_y + hf.line + ui_s(c, 14);
+  UiRect view = ui_rect(in.x, view_y, in.w, footer_y - view_y - ui_s(c, 14));
+  float gap = ui_s(c, 14), card_w = (view.w - gap) / 2;
+  int max_lines = 1;
+  char lines[WRAP_LINES][WRAP_LEN];
+  for (int i = 0; i < count; i++) {
+    int nl = wrap(c, UI_TYPE_CAPTION, details[i], card_w - ui_s(c, 28), lines);
+    if (nl > max_lines) max_lines = nl;
+  }
+  float row_h = ui_s(c, 12 + 24 + 6) + max_lines * cf.line + ui_s(c, 12);
+  uint32_t scroll_id = ui_id("pair.scroll");
+  float *opened = ui_state(c, ui_id("pair.opened"));
+  if (*opened != s->ext[5]) {
+    *opened = (float)s->ext[5];
+    *ui_state(c, scroll_id) = 0;
+  }
+  float off = ui_vscroll_begin(c, scroll_id, view, ((count + 1) / 2) * row_h, row_h);
+  for (int i = 0; i < count; i++) {
+    int row = i / 2, col = i & 1;
+    UiRect card = ui_rect(in.x + col * (card_w + gap), view.y + off + row * row_h + ui_s(c, 3), card_w, row_h - ui_s(c, 6));
+    if (card.y + card.h <= view.y || card.y >= view.y + view.h) continue;
+    int is_selected = (selected & (1u << i)) != 0;
+    int disabled = cancelling || (picked >= 2 && !is_selected);
+    uint32_t id = ui_idi(ui_id("pair.golfer"), i);
+    ui_hit(c, card, ui_s(c, t->radius_tile), id, disabled ? UI_HIT_BLOCK : UI_HIT_BLOCK | UI_HIT_INTERACT);
+    float hov = ui_anim(c, id, !disabled && ui_is_hot(c, id) ? 1.0f : 0.0f, t->motion_hover);
+    uid_rrect(d, card, ui_s(c, t->radius_tile), uid_alpha(is_selected ? t->accent_soft : t->surface_inset, is_selected ? 0.92f : 0.5f + 0.35f * hov));
+    uid_rrect_stroke(d, card, ui_s(c, t->radius_tile), ui_s(c, cursor == i ? 2 : 1),
+                     uid_alpha(cursor == i ? t->accent : is_selected ? t->accent_soft_text : t->divider, cursor == i ? 0.9f : 0.65f));
+    float pad = ui_s(c, 12);
+    UiRect name_r = ui_rect(card.x + pad, card.y + ui_s(c, 5), card.w - 2 * pad, hf.line);
+    ui_text_fit(c, name_r, UI_TYPE_HEADING, disabled ? t->text_tertiary : t->text_primary, names[i], 0);
+    int nl = wrap(c, UI_TYPE_CAPTION, details[i], card.w - 2 * pad, lines);
+    float dy = name_r.y + name_r.h + ui_s(c, 5);
+    for (int j = 0; j < nl; j++, dy += cf.line)
+      ui_text_in(c, ui_rect(card.x + pad, dy, card.w - 2 * pad, cf.line), UI_TYPE_CAPTION, disabled ? t->text_tertiary : t->text_secondary, lines[j], 0);
+    char ctl[20];
+    snprintf(ctl, sizeof ctl, "golfer%d", i);
+    pf_ctl(ctl, card);
+    if (!disabled && ui_clicked(c, id) && na < max) {
+      int gx = 6 + (i & 1) * 0x14e + 0x70;
+      int gy = 0x32 + (i / 2) * 0x88 + 0x44;
+      acts[na++] = (RpAction){RP_A_CLICK, CLICK(gx, gy)};
+    }
+  }
+  ui_vscroll_end(c);
+
+  float bw = ui_s(c, 210), bh = ui_s(c, 48);
+  UiRect br = ui_rect(in.x + in.w - bw, footer_y, bw, bh);
+  pf_ctl("start", br);
+  int can_start = picked == 2;
+  if (ui_button(c, ui_id("pair.start"), br, "Start Round", UI_ICON_CHEV, UI_BTN_PRIMARY, can_start && !cancelling ? 0 : UI_DISABLED) && can_start && !cancelling && na < max)
+    acts[na++] = (RpAction){RP_A_KEY, SDLK_RETURN};
+  if (k < 1.0f) ui_pop_scale(c);
+  return na;
+}
+
 // ------------------------------------------------------------------ dispatch
 
 #include "ui_tracts.inc"
@@ -938,6 +1157,8 @@ int ui_pages_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *
     case RP_SKILLS: return draw_skills(c, s, acts, max);
     case RP_PHOTO: return draw_photo(c, s, art, acts, max);
     case RP_END_YEAR: return draw_year(c, s, acts, max);
+    case RP_TOP_DESIGNERS: return draw_designers(c, s, acts, max);
+    case RP_PAIRING: return draw_pairing(c, s, acts, max);
     default: return 0;
   }
 }

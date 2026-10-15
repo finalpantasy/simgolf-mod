@@ -1013,9 +1013,10 @@ static void wait_until(Rt *t, double when) {
 // Test aid only (card task-106): SIMGOLF_FRAMELOG=<file> writes one line per presented frame
 // (n, ms since start, course view, the front-end screen covering it or -1, game frame serial, dialog gap,
 // report gap: 1 when the game has a dialog / report up and our layer drew none); with
-// SIMGOLF_FRAMELOG_SHOTS=<prefix> the first 60 frames that nothing covers (or with a gap) are saved as <prefix><n>.bmp.
+// SIMGOLF_FRAMELOG_SHOTS=<prefix> saves up to 60 ordinary uncovered frames and
+// up to 60 actual dialog/report gap frames separately, plus explicitly requested frames.
 static void frame_log(Rt *t, int cw, int ch, double now) {
-  static int on = -1, n, shots;
+  static int on = -1, n, shots, gap_shots;
   static FILE *f;
   static double t0;
   static const char *prefix;
@@ -1043,14 +1044,19 @@ static void frame_log(Rt *t, int cw, int ch, double now) {
     q = strchr(q, ',');
     if (q) q++;
   }
-  int gap_shot = getenv("SIMGOLF_TEXTURE_TRACE") ? (t->course_view && !t->layered_now) : (dgap || rgap || (cover < 0 && !t->course_view));
-  if (prefix && *prefix && (want || (gap_shot && shots < 60))) {
+  int coverage_gap = dgap || rgap;
+  int gap_shot = getenv("SIMGOLF_TEXTURE_TRACE") ? (t->course_view && !t->layered_now) : (coverage_gap || (cover < 0 && !t->course_view));
+  int ordinary_shot = gap_shot && !coverage_gap;
+  if (prefix && *prefix && (want || (coverage_gap && gap_shots < 60) || (ordinary_shot && shots < 60))) {
     uint32_t *px = malloc((size_t)cw * ch * 4);
     char path[600];
     snprintf(path, sizeof path, "%s%d.bmp", prefix, n);
     if (px && !SDL_RenderReadPixels(t->r, NULL, SDL_PIXELFORMAT_ARGB8888, px, cw * 4)) {
       write_bmp(path, px, cw, ch);
-      shots++;
+      if (!want) {
+        if (coverage_gap) gap_shots++;
+        else if (ordinary_shot) shots++;
+      }
     }
     free(px);
   }

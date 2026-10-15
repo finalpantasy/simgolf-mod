@@ -16,6 +16,7 @@
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/hud_frosted.h"
+#include "port/reports_frosted.h"
 #include "port/runtime.h"
 
 #define QMAX 8
@@ -260,7 +261,9 @@ static void draw(const HdUiFrame *f, void *user) {
   UiCtx **pc = card_layer ? &g_ui_c : &g_ui_w;
   const GwNote *n = (const GwNote *)f->note;
   int have = n && f->note_size == (int)sizeof(GwNote) && n->magic == GW_NOTE_MAGIC;
-  int ok = g_want && !g_failed && f->course && have && (card_layer ? n->card.on : (n->n_tags || n->n_bubbles));
+  int report_covers_world = !card_layer && rpf_visible();
+  int ok = g_want && !g_failed && f->course && have && !report_covers_world &&
+           (card_layer ? n->card.on : (n->n_tags || n->n_bubbles));
   if (!ok) {
     if (card_layer) g_visible = 0;
     else g_world_up = 0;

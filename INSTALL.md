@@ -81,7 +81,7 @@ source, not both. The installer worker also supports
 `sgsetup install --game-dir "game folder" "1.02 golf.exe" "install folder"`.
 `sgsetup check-folder "game folder"` checks data without installing it.
 
-## Updating from 0.1.5 or 0.1.6
+## Updating from 0.1.4, 0.1.5 or 0.1.6
 
 Download the new release ZIP, unzip it fully, close the game and run Setup.cmd.
 Choose your existing Remastered install folder when asked where to install it.

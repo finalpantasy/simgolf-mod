@@ -25,7 +25,7 @@ static double g_snap_t = -1e9;
 static volatile int g_ended = 1;
 static RpAction g_q[QMAX];
 static int g_qn;
-static volatile int g_visible;
+static volatile int g_visible, g_frame_gap;
 static UiCtx *g_ui;
 static int g_registered, g_failed;
 static volatile int g_want, g_game_asked;
@@ -127,7 +127,8 @@ static int active(void) {
   return g_want && g_registered && !g_ended && host_now_ms() - g_snap_t < lim;
 }
 
-int rpf_gap(void) { return active() && !g_visible; }   // test aid (SIMGOLF_FRAMELOG): a report is up in the game, the layer drew none
+int rpf_gap(void) { return g_frame_gap; }   // test aid: gap latched with the report layer's draw for this frame
+int rpf_visible(void) { return g_visible; }
 
 static void load_tokens(UiTokens *t) {
   char base[1024];
@@ -162,8 +163,10 @@ static void draw(const HdUiFrame *f, void *user) {
   (void)user;
   g_drawn_t = f->now_ms;
   if (!g_game_asked) refresh_want();   // before the game thread's first rpf_enabled()
+  int report_active = active();
   if (g_failed || !g_want) {
     g_visible = 0;
+    g_frame_gap = report_active;
     if (g_ui) ui_skip_frame(g_ui);
     return;
   }
@@ -176,6 +179,8 @@ static void draw(const HdUiFrame *f, void *user) {
     g_ui = ui_create(r, &t, fonts); ui_debug_name(g_ui, "reports");
     if (!g_ui) {
       g_failed = 1;
+      g_visible = 0;
+      g_frame_gap = report_active;
       return;
     }
     fprintf(stderr, "ui: Frosted Mint reports layer on (fonts %s)\n", fonts);
@@ -188,19 +193,25 @@ static void draw(const HdUiFrame *f, void *user) {
   g_view_px = f->px > 0 ? f->px : 1;
   // the task-73 pages hide while a native dialog is up over them (a name strip, a menu): the dialogs layer was registered first
   // (at the title) and so draws under this one
-  int show = active() && w > 0 && !(g_snap.kind >= RP_PROFILE && dlgf_active());
+  int show = report_active && w > 0 && !(g_snap.kind >= RP_PROFILE && dlgf_active());
   g_visible = show;
+  g_frame_gap = report_active && !show;
   if (!show) {
     ui_skip_frame(g_ui);
     return;
   }
   RpSnap *s = malloc(sizeof *s);
-  if (!s) return;
+  if (!s) {
+    g_visible = 0;
+    g_frame_gap = report_active;
+    return;
+  }
   lock();
   memcpy(s, &g_snap, sizeof *s);
   unlock();
   if (s->magic != RP_MAGIC || s->kind == RP_NONE) {
     g_visible = 0;
+    g_frame_gap = report_active;
     ui_skip_frame(g_ui);
     free(s);
     return;
@@ -213,6 +224,7 @@ static void draw(const HdUiFrame *f, void *user) {
   ui_end(g_ui);
   static int log_layout = -1;
   static uint32_t logged_kind = ~0u, logged_hash;
+  static int32_t logged_pair_open = -1;
   if (log_layout < 0) log_layout = getenv("SIMGOLF_REPORTS_LOG") != NULL;
   if (log_layout) {
     RpLayout l;
@@ -225,8 +237,10 @@ static void draw(const HdUiFrame *f, void *user) {
     for (int i = 0; i < l.nctl && k < (int)sizeof buf - 40; i++) k += snprintf(buf + k, sizeof buf - k, " %s %d,%d", l.ctl_name[i], (int)l.ctl_x[i], (int)l.ctl_y[i]);
     uint32_t hsh = 2166136261u;
     for (const char *q = buf; *q; q++) hsh = (hsh ^ (uint8_t)*q) * 16777619u;
-    if (logged_kind != (uint32_t)s->kind || (s->kind >= RP_PROFILE && logged_hash != hsh)) {
+    if (logged_kind != (uint32_t)s->kind || (s->kind >= RP_PROFILE && logged_hash != hsh) ||
+        (s->kind == RP_PAIRING && logged_pair_open != s->ext[5])) {
       logged_kind = (uint32_t)s->kind, logged_hash = hsh;
+      if (s->kind == RP_PAIRING) logged_pair_open = s->ext[5];
       fputs(buf, stderr);
       fputc(10, stderr);
       fflush(stderr);

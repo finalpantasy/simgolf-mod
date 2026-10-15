@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.8 - 2026-10-15
+
+Clearer pro and report screens, with safer updates.
+
+- Changed: Top Ten Designers uses a native panel while preserving the original scores and original-mode board.
+- Fixed: clubhouse pairing shows each golfer once and keeps selection, Cancel and Start working through the original match logic.
+- Fixed: the Skills page opened before a Match clears old HUD badges before drawing.
+- Fixed: Hole Stats transitions keep the native panel and world labels consistent.
+- Fixed: the updater rejects empty or unreadable staged programs and verifies both installed launcher copies.
+- Fixed: failed stage cleanup stops preparation; incomplete rollback retains recovery files and does not restart a partially restored game.
+- Fixed: manual setup preserves existing mod profiles and custom mod files while installing missing defaults.
+
+Updating from 0.1.4, 0.1.5 or 0.1.6: download this ZIP and run Setup.cmd manually once, choosing your existing Remastered install folder. If your current game executable is empty, use the same manual install path.
+
+The game checks GitHub for update metadata automatically unless update checks are disabled. Download and installation happen only after you choose Update now. Game files and saves are not uploaded.
+
+Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding and other open reports remain under investigation. Updater checks do not establish power-loss or hard-kill durability.
+
 ## 0.1.7 - 2026-10-15
 
 Updater repairs, clean shadows and clearer original-interface controls.

@@ -44,10 +44,19 @@ static void logf_(const char *fmt, ...) {
   }
 }
 
-static int exists(const char *p) { return GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES; }
-static int is_dir(const char *p) {
+// Return 1 when present, 0 only for a definite not-found result, and -1 when
+// the path could not be inspected. Cleanup must not treat access or I/O errors
+// as proof that a recovery file is absent.
+static int path_attributes(const char *p, DWORD *attrs) {
+  SetLastError(ERROR_SUCCESS);
   DWORD a = GetFileAttributesA(p);
-  return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+  if (a != INVALID_FILE_ATTRIBUTES) {
+    if (attrs) *attrs = a;
+    return 1;
+  }
+  DWORD error = GetLastError();
+  if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return 0;
+  return -1;
 }
 
 static void mkdirs(const char *path) {
@@ -74,8 +83,21 @@ static void mkparent(const char *path) {
 }
 
 static int rm_tree(const char *path) {
-  if (!exists(path)) return 1;
-  if (!is_dir(path)) {
+  DWORD attrs = 0;
+  int state = path_attributes(path, &attrs);
+  if (state == 0) return 1;
+  if (state < 0) {
+    DWORD error = GetLastError();
+    logf_("cleanup: cannot inspect %s (error %lu); preserving it", path, (unsigned long)error);
+    return 0;
+  }
+  // A directory reparse point may lead outside the tree being removed. Unlink
+  // the link itself rather than enumerating its target.
+  if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
+    if (attrs & FILE_ATTRIBUTE_DIRECTORY) return RemoveDirectoryA(path) != 0;
+    return DeleteFileA(path) != 0;
+  }
+  if (!(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
     SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL);
     return DeleteFileA(path) != 0;
   }
@@ -97,7 +119,9 @@ static int rm_tree(const char *path) {
 }
 
 static int copy_tree(const char *from, const char *to) {
-  if (!is_dir(from)) {
+  DWORD attrs = 0;
+  if (path_attributes(from, &attrs) != 1) return 0;
+  if (!(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
     mkparent(to);
     return CopyFileA(from, to, FALSE) != 0;
   }
@@ -140,6 +164,7 @@ static int sha256_file(const char *path, char out[65]) {
     ok = 1;
     while ((n = fread(buf, 1, sizeof buf, f)) > 0)
       if (BCryptHashData(hash, buf, (ULONG)n, 0) != 0) ok = 0;
+    if (ferror(f)) ok = 0;
     if (ok && BCryptFinishHash(hash, digest, 32, 0) != 0) ok = 0;
   }
   if (hash) BCryptDestroyHash(hash);
@@ -148,6 +173,19 @@ static int sha256_file(const char *path, char out[65]) {
   if (ok)
     for (int i = 0; i < 32; i++) sprintf(out + i * 2, "%02x", digest[i]);
   return ok;
+}
+
+// A matching zero-byte copy is still unusable. Check the staged program before
+// moving any installed files, then bind both launcher copies to these bytes.
+static int program_sha256(const char *path, char out[65]) {
+  DWORD attrs = 0;
+  if (path_attributes(path, &attrs) != 1 || (attrs & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+  HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+  if (file == INVALID_HANDLE_VALUE) return 0;
+  LARGE_INTEGER size = {0};
+  int usable = GetFileSizeEx(file, &size) && size.QuadPart > 0;
+  CloseHandle(file);
+  return usable && sha256_file(path, out);
 }
 
 // the first 64 hex digits of a "hash  filename" file
@@ -187,7 +225,10 @@ static int do_prepare(const char *zip, const char *sha, const char *stage) {
     return 2;
   }
   logf_("prepare: checksum ok (%s)", got);
-  rm_tree(stage);
+  if (!rm_tree(stage)) {
+    logf_("prepare: cannot clear the previous stage; update not used");
+    return 3;
+  }
   mkdirs(stage);
   char sys[MAX_PATH], cmd[3 * MAX_PATH];
   GetSystemDirectoryA(sys, sizeof sys);
@@ -205,8 +246,20 @@ static int do_prepare(const char *zip, const char *sha, const char *stage) {
   }
   char exe[MAX_PATH];
   snprintf(exe, sizeof exe, "%s\\app\\golf.exe", stage);
-  if (code != 0 || !exists(exe)) {
-    logf_("prepare: cannot unpack (tar exit %lu, golf.exe %s)", (unsigned long)code, exists(exe) ? "there" : "missing");
+  int exe_state = path_attributes(exe, NULL);
+  if (exe_state < 0) {
+    DWORD error = GetLastError();
+    logf_("prepare: cannot inspect %s (error %lu); preserving the stage", exe, (unsigned long)error);
+    return 3;
+  }
+  if (code != 0 || exe_state == 0) {
+    logf_("prepare: cannot unpack (tar exit %lu, golf.exe %s)", (unsigned long)code, exe_state == 1 ? "there" : "missing");
+    rm_tree(stage);
+    return 3;
+  }
+  char program_hash[65];
+  if (!program_sha256(exe, program_hash)) {
+    logf_("prepare: golf.exe is empty or unreadable; update not used");
     rm_tree(stage);
     return 3;
   }
@@ -235,16 +288,40 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
   }
   char exe[MAX_PATH];
   snprintf(exe, sizeof exe, "%s\\golf.exe", stage);
-  if (!exists(exe)) {
-    logf_("apply: %s is missing, nothing changed", exe);
+  int exe_state = path_attributes(exe, NULL);
+  if (exe_state != 1) {
+    if (exe_state < 0) {
+      DWORD error = GetLastError();
+      logf_("apply: cannot inspect %s (error %lu), nothing changed", exe, (unsigned long)error);
+    } else {
+      logf_("apply: %s is missing, nothing changed", exe);
+    }
+    return 1;
+  }
+  char checked_program[65];
+  if (!program_sha256(exe, checked_program)) {
+    logf_("apply: staged golf.exe is empty or unreadable, nothing changed");
     return 1;
   }
   SYSTEMTIME st;
   GetLocalTime(&st);
   char backup[MAX_PATH];
-  snprintf(backup, sizeof backup, "%s\\backup-%04d%02d%02d-%02d%02d%02d", upd, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-  mkdirs(backup);
-  int moved[NITEMS] = {0}, copied[NITEMS] = {0}, failed = 0, nitem = 0;
+  int backup_ready = 0;
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    int len = snprintf(backup, sizeof backup, "%s\\backup-%04d%02d%02d-%02d%02d%02d-%03d", upd,
+                       st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, attempt);
+    if (len < 0 || len >= (int)sizeof backup) break;
+    if (CreateDirectoryA(backup, NULL)) {
+      backup_ready = 1;
+      break;
+    }
+    if (GetLastError() != ERROR_ALREADY_EXISTS) break;
+  }
+  if (!backup_ready) {
+    logf_("apply: cannot create a new backup folder, nothing changed");
+    return 1;
+  }
+  int moved[NITEMS] = {0}, copied[NITEMS] = {0}, failed = 0, rollback_failed = 0, nitem = 0;
   for (int i = 0; i < NITEMS && !failed; i++) {
     char rel[MAX_PATH], src[MAX_PATH], dst[MAX_PATH], bak[MAX_PATH];
     snprintf(rel, sizeof rel, "%s", ITEMS[i]);
@@ -255,14 +332,28 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
     snprintf(src, sizeof src, "%s\\%s", stage, !strcmp(rel, PLAYER_EXE) ? "golf.exe" : rel);
     snprintf(dst, sizeof dst, "%s\\%s", app, rel);
     snprintf(bak, sizeof bak, "%s\\%s", backup, rel);
-    if (!exists(src)) continue;   // an older release without this item: leave the player's as is
+    int src_state = path_attributes(src, NULL);
+    if (src_state == 0) continue;   // an older release without this item: leave the player's as is
+    if (src_state < 0) {
+      DWORD error = GetLastError();
+      logf_("apply: cannot inspect staged %s (error %lu)", rel, (unsigned long)error);
+      failed = 1;
+      break;
+    }
     nitem++;
     if (fail_after > 0 && nitem == fail_after) {
       logf_("apply: test failure at item %d (%s)", nitem, rel);
       failed = 1;
       break;
     }
-    if (exists(dst)) {
+    int dst_state = path_attributes(dst, NULL);
+    if (dst_state < 0) {
+      DWORD error = GetLastError();
+      logf_("apply: cannot inspect destination %s (error %lu)", rel, (unsigned long)error);
+      failed = 1;
+      break;
+    }
+    if (dst_state == 1) {
       mkparent(bak);
       if (!MoveFileExA(dst, bak, 0)) {
         logf_("apply: cannot move %s aside (error %lu)", rel, (unsigned long)GetLastError());
@@ -280,18 +371,15 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
     copied[i] = 1;
   }
   if (!failed) {
-    char a[MAX_PATH], b[MAX_PATH];
-    snprintf(a, sizeof a, "%s\\golf.exe", app);
-    HANDLE h1 = CreateFileA(a, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL), h2 = CreateFileA(exe, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    LARGE_INTEGER s1 = {0}, s2 = {1};
-    if (h1 != INVALID_HANDLE_VALUE) GetFileSizeEx(h1, &s1);
-    if (h2 != INVALID_HANDLE_VALUE) GetFileSizeEx(h2, &s2);
-    if (h1 != INVALID_HANDLE_VALUE) CloseHandle(h1);
-    if (h2 != INVALID_HANDLE_VALUE) CloseHandle(h2);
-    (void)b;
-    if (s1.QuadPart != s2.QuadPart) {
-      logf_("apply: the new golf.exe does not match the release");
-      failed = 1;
+    const char *programs[] = {"golf.exe", PLAYER_EXE};
+    for (int i = 0; i < 2; i++) {
+      char installed[MAX_PATH], digest[65];
+      snprintf(installed, sizeof installed, "%s\\%s", app, programs[i]);
+      if (!program_sha256(installed, digest) || strcmp(digest, checked_program)) {
+        logf_("apply: %s does not match the checked program, rolling back", programs[i]);
+        failed = 1;
+        break;
+      }
     }
   }
   if (failed) {
@@ -305,8 +393,14 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
       if (rl && rel[rl - 1] == '\\') rel[rl - 1] = 0;
       snprintf(dst, sizeof dst, "%s\\%s", app, rel);
       snprintf(bak, sizeof bak, "%s\\%s", backup, rel);
-      if (copied[i]) rm_tree(dst);
-      if (moved[i] && !MoveFileExA(bak, dst, 0)) logf_("apply: ROLLBACK of %s failed, the old copy is in %s", rel, bak);
+      if (copied[i] && !rm_tree(dst)) {
+        rollback_failed = 1;
+        logf_("apply: ROLLBACK removal of %s failed, the remaining copy is at %s", rel, dst);
+      }
+      if (moved[i] && !MoveFileExA(bak, dst, 0)) {
+        rollback_failed = 1;
+        logf_("apply: ROLLBACK of %s failed, the old copy is in %s", rel, bak);
+      }
     }
     FILE *f;
     char res[MAX_PATH];
@@ -315,9 +409,21 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
       fprintf(f, "failed\r\n");
       fclose(f);
     }
-    rm_tree(backup);
+    if (rollback_failed)
+      logf_("apply: rollback incomplete; keep %s for recovery; the game will not restart", backup);
+    else
+      rm_tree(backup);
   } else {
     logf_("apply: ok, %d items replaced; the old program files are in %s", nitem, backup);
+    // Only a successful install marks a backup as safe for later pruning.
+    // Unmarked folders may be the only copy left after a failed rollback.
+    char complete[MAX_PATH + 32];
+    snprintf(complete, sizeof complete, "%s\\.update-complete", backup);
+    FILE *marker = fopen(complete, "wb");
+    if (marker) {
+      fputs("ok\r\n", marker);
+      fclose(marker);
+    }
     char res[MAX_PATH];
     FILE *f;
     snprintf(res, sizeof res, "%s\\last_update.txt", upd);
@@ -325,7 +431,7 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
       fprintf(f, "ok\r\n");
       fclose(f);
     }
-    // keep only the newest backup
+    // Prune older completed backups; retain all unverified recovery folders.
     char pat[MAX_PATH + 16];
     snprintf(pat, sizeof pat, "%s\\backup-*", upd);
     WIN32_FIND_DATAA fd;
@@ -334,7 +440,18 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
       do {
         char p[MAX_PATH];
         snprintf(p, sizeof p, "%s\\%s", upd, fd.cFileName);
-        if (_stricmp(p, backup) < 0) rm_tree(p);
+        char prior_complete[MAX_PATH + 32];
+        snprintf(prior_complete, sizeof prior_complete, "%s\\.update-complete", p);
+        if (_stricmp(p, backup) < 0) {
+          int marker_state = path_attributes(prior_complete, NULL);
+          if (marker_state == 1) {
+            if (!rm_tree(p)) logf_("apply: could not fully prune completed backup %s", p);
+          } else if (marker_state < 0) {
+            DWORD error = GetLastError();
+            logf_("apply: cannot inspect backup marker %s (error %lu); preserving recovery data", prior_complete,
+                  (unsigned long)error);
+          }
+        }
       } while (FindNextFileA(h, &fd));
       FindClose(h);
     }
@@ -347,7 +464,7 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
       if (q && !strncmp(q + 1, "stage-", 6)) rm_tree(st);   // the stage-<version> folder this updater was given
     }
   }
-  if (restart) {
+  if (restart && !rollback_failed) {
     char g[MAX_PATH + 16];
     snprintf(g, sizeof g, "\"%s\\%s\"", app, PLAYER_EXE);
     STARTUPINFOA si = {sizeof si};

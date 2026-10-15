@@ -6,11 +6,6 @@
       ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);", "shot_readout_text(1,(char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);"],
       ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);", "shot_readout_text(2,(char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);"],
       ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);", "shot_readout_text(3,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);" ]
-    ],
-    "FUN_00459850": [
-      ["local_290 = 0;", "pro_pairing_note(1);\n  local_290 = 0;"],
-      ["return uVar4;", "pro_pairing_note(0);\n                return uVar4;"],
-      ["return iVar7;", "pro_pairing_note(0);\n            return iVar7;"]
     ]
   }
 }

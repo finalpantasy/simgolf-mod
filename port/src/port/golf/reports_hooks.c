@@ -9,6 +9,7 @@
 void rp_tick(void) {}
 void rp_begin(int kind) { (void)kind; }
 void rp_frame(void) {}
+void rp_frame_preflush(void) {}
 void rp_done(void) {}
 void rp_quad(void *w, unsigned a, unsigned b, unsigned c, unsigned d) { FUN_00476310(w, a, b, c, d); }
 void rp_t650(void *w, int font, char *s, int x, int y, int len) { FUN_00476650(w, font, s, x, y, len); }
@@ -28,7 +29,7 @@ void rp_rect(void *page, int x, int y, int w, int h, unsigned col) { FUN_00480b0
 int rp_chip(void *sprite, int target, int x, int y, int clip) { return FUN_00473e60(sprite, target, x, y, clip); }
 int rp_ds(void *w, char *s, int x, int y, char *len) { return FUN_00478140(w, s, x, y, len); }
 void rp_ov(int kind, int phase) { (void)kind, (void)phase; }
-int rp_tcp(int fn, char *s, int x, int y, unsigned col) { return fn == 2 ? FUN_004049d0(s, x, y, col) : FUN_00404ad0(s, x, y, col); }
+int rp_tcp(int fn, char *s, int x, int y, unsigned col) { return rp_tc(fn, s, x, y, col); }
 void rp_sub(int open) { (void)open; }
 void rp_edit(void) {}
 // task-73: the land purchase map
@@ -52,5 +53,12 @@ void rp_photo_blit(void *source, int target, int x, int y, int id) {
 int rp_photo_limit(int vertical) { return vertical ? 440 : 600; }
 void rp_board_wait(int n) { FUN_0045bf80(n, 0); }
 void rp_year_continue(int y) { (void)y; }
+int rp_top_designers(void) { return 0; }
+void rp_pair_row(int index) { (void)index; }
+void rp_pair_state(unsigned selected, int cursor, int count, int picked, int style) {
+  (void)selected, (void)cursor, (void)count, (void)picked, (void)style;
+}
+int rp_pair_cursor_override(int cursor) { return cursor; }
+int rp_pair_y_limit(int original_limit, int count) { (void)count; return original_limit; }
 
 #endif

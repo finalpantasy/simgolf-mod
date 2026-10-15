@@ -1198,7 +1198,40 @@ static void rp_demo_text(RpSnap *s, int x, int y, int align, int col, const char
   snprintf(it->s, sizeof it->s, "%s", text);
 }
 
+static void rp_demo_group_text(RpSnap *s, int group, const char *text) {
+  rp_demo_text(s, 0, 0, RP_AL_LEFT, 0, text);
+  if (s->n) s->it[s->n - 1].group = (uint8_t)group;
+}
+
 static void pages_demo(RpSnap *s, int kind) {
+  if (kind == RP_TOP_DESIGNERS) {   // issue-13: preserve the legacy score components and difficulty-weighted total
+    static const struct { const char *designer, *course; int fun, skill_x100, cash, multiplier; } rows[10] = {
+      {"B. L. Dye", "Harbour Lights GC", 949, 877, 7450, 4}, {"H. X. Dye", "Pine Valley", 835, 722, 6440, 3},
+      {"L. F. Dye", "Dolphin Coast", 790, 639, 6030, 3}, {"O. G. Dye", "Cypress Point", 628, 580, 5380, 3},
+      {"L. E. Dye", "Red Rock Golf Club", 533, 505, 4020, 2}, {"I. J. Dye", "Lakeside", 434, 405, 3750, 2},
+      {"Y. K. Dye", "Meadow Run", 319, 345, 2850, 2}, {"Z. N. Dye", "Tidewater", 214, 265, 2000, 1},
+      {"K. E. Dye", "Hilltop Links", 197, 111, 910, 1}, {"Gary Golf", "Starter Course", 136, 119, 180, 1},
+    };
+    memset(s, 0, sizeof *s);
+    s->magic = RP_MAGIC, s->kind = kind, s->ext[0] = 0, s->ext[1] = 10;
+    snprintf(s->title, sizeof s->title, "Top Ten Designers");
+    for (int i = 0; i < 10; i++) {
+      char value[RP_TEXT];
+      rp_demo_text(s, 0, i, RP_AL_LEFT, 0, rows[i].designer);
+      rp_demo_text(s, 1, i, RP_AL_LEFT, 0, rows[i].course);
+      snprintf(value, sizeof value, "%d", rows[i].fun);
+      rp_demo_text(s, 2, i, RP_AL_LEFT, 0, value);
+      snprintf(value, sizeof value, "%d.%02d", rows[i].skill_x100 / 100, rows[i].skill_x100 % 100);
+      rp_demo_text(s, 3, i, RP_AL_LEFT, 0, value);
+      snprintf(value, sizeof value, "%d", rows[i].cash / 10);
+      rp_demo_text(s, 4, i, RP_AL_LEFT, 0, value);
+      snprintf(value, sizeof value, "%d", (rows[i].cash / 10 + rows[i].skill_x100 + rows[i].fun) * rows[i].multiplier);
+      rp_demo_text(s, 5, i, RP_AL_LEFT, 0, value);
+      snprintf(value, sizeof value, "x%d", rows[i].multiplier);
+      rp_demo_text(s, 6, i, RP_AL_LEFT, 0, value);
+    }
+    return;
+  }
   if (kind == RP_PHOTO) {   // task-105: the accomplishment board, two photos, the newest just won with points to follow
     memset(s, 0, sizeof *s);
     s->magic = RP_MAGIC, s->kind = kind;
@@ -1230,6 +1263,29 @@ static void pages_demo(RpSnap *s, int kind) {
     rp_demo_text(s, 0x236, 0x9b, RP_AL_RIGHT, 0, "4 stars");
     rp_demo_text(s, 0x12d, 0xaf, RP_AL_LEFT, 0, "Membership grew by 18 percent this year.");
     rp_demo_text(s, 0x12d, 0xc3, RP_AL_LEFT, 0, "Three golfers earned a place on the honor roll.");
+    return;
+  }
+  if (kind == RP_PAIRING) {
+    static const struct { const char *name, *bio, *status, *age; } golfers[8] = {
+        {"Mack Putter", "(Surfer)", "Single", "27 years old"},
+        {"Tina Fairway", "(Bookworm)", "Married", "32 years old"},
+        {"Owen Driver", "(Jock)", "Single", "24 years old"},
+        {"Nina Green", "(Artist)", "Widowed", "46 years old"},
+        {"Cal Birdie", "(Prankster)", "Divorced", "38 years old"},
+        {"Lena Links", "(Nature Lover)", "Married", "41 years old"},
+        {"Ray Bunker", "(Workaholic)", "Single", "29 years old"},
+        {"Mia Eagle", "(Socialite)", "Married", "35 years old"},
+    };
+    memset(s, 0, sizeof *s);
+    s->magic = RP_MAGIC, s->kind = kind;
+    s->ext[0] = (1u << 1) | (1u << 2), s->ext[1] = 2, s->ext[2] = 8, s->ext[3] = 2, s->ext[4] = 1, s->ext[5] = 1;
+    rp_demo_group_text(s, 0xff, "SELECT THE NEXT PAIR OF GOLFERS");
+    for (int i = 0; i < 8; i++) {
+      rp_demo_group_text(s, i, golfers[i].name);
+      rp_demo_group_text(s, i, golfers[i].bio);
+      rp_demo_group_text(s, i, golfers[i].age);
+      rp_demo_group_text(s, i, golfers[i].status);
+    }
     return;
   }
   if (kind == RP_SKILLS) {   // task-102: the pro's ten skill points, three spent
@@ -1307,10 +1363,10 @@ static void pages_demo(RpSnap *s, int kind) {
 int ui_pages_raw_data(void);
 
 static int page_pages(Page *p, const char *out) {
-  static const struct { int kind; const char *name; } pages[6] = {{RP_PROFILE, "pages-profile"}, {RP_TRACTS, "pages-tracts"}, {-RP_PROFILE, "pages-pro-create"}, {RP_SKILLS, "pages-skills"}, {RP_PHOTO, "pages-board"}, {RP_END_YEAR, "pages-year"}};
+  static const struct { int kind; const char *name; } pages[8] = {{RP_PROFILE, "pages-profile"}, {RP_TRACTS, "pages-tracts"}, {-RP_PROFILE, "pages-pro-create"}, {RP_SKILLS, "pages-skills"}, {RP_PHOTO, "pages-board"}, {RP_END_YEAR, "pages-year"}, {RP_TOP_DESIGNERS, "pages-top-designers"}, {RP_PAIRING, "pages-pairing"}};
   static RpSnap snap;
   RpAction acts[8];
-  for (int pi = 0; pi < 6; pi++) {
+  for (int pi = 0; pi < 8; pi++) {
     pages_demo(&snap, pages[pi].kind);
     for (int f = 0; f < 4; f++) {
       begin_page(p, 90000.0 + pi * 5000 + f * 400);
@@ -1347,6 +1403,7 @@ static void page_dialog(Page *p, const char *out) {
 static const char *g_mods_dir = "mods";
 static int g_only_mods;   // --only mods: just the Mods pages
 static int g_only_updates;   // --only updates: focused wheel and click checks
+static int g_only_pages;     // --only pages: focused modal-page rendering
 
 static int page_mods(Page *p, const char *out) {
   const char *running[16];
@@ -1436,6 +1493,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--only")) {
       g_only_mods = !strcmp(argv[i + 1], "mods");
       g_only_updates = !strcmp(argv[i + 1], "updates");
+      g_only_pages = !strcmp(argv[i + 1], "pages");
     }
     else if (!strcmp(argv[i], "--art")) artdir = argv[i + 1];   // art_<slot>.bmp from SIMGOLF_UI_DUMP_ART
   }
@@ -1516,7 +1574,9 @@ int main(int argc, char **argv) {
       p.art[i] = at;
     }
     printf("gallery %dx%d on %s, UI scale %.2f\n", w, h, info.name, p.scale);
-    if (g_only_updates) {
+    if (g_only_pages) {
+      fails += page_pages(&p, out);
+    } else if (g_only_updates) {
       static FeSnap snap;
       SDL_Texture *art[FE_ART_MAX] = {0};
       fe_demo(&snap);
@@ -1539,7 +1599,7 @@ int main(int argc, char **argv) {
       fails += page_dialogs(&p, out);
       fails += page_pages(&p, out);
     }
-    if (!g_only_updates) fails += page_mods(&p, out);
+    if (!g_only_updates && !g_only_pages) fails += page_mods(&p, out);
     ui_destroy(p.ui);
     for (int i = 0; i < HUD_ART_MAX; i++)
       if (p.art[i]) SDL_DestroyTexture(p.art[i]);

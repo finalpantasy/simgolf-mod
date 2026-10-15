@@ -33,13 +33,16 @@ int FUN_00404b70(char *s, int x, int y, uint32_t col);
 int FUN_00404bc0(char *s, int x, int y, uint32_t col);
 int FUN_004049d0(char *s, int x, int y, uint32_t col);
 int FUN_00404ad0(char *s, int x, int y, uint32_t col);
+uint32_t FUN_004657e0(int x, int y);   // original scaled left-click entry
 void FUN_00480c80(void *page);   // flush the page's changes to the screen
 void hd_art_dlg_begin(void);       // hd_art.c (task-88): golf's sprites drawn from here on are its old screen
 void hd_art_hide_dialog(void);     // and are not drawn as the art pack's hi-res copies
+void hud_clean_pages(void);
 int FUN_00455a30(void);          // best scores (modal)
 
 static int g_on;          // this report: the native panel replaces the original
 static int g_kind;
+static int g_top_local_close, g_top_close_key;
 static int g_log = -1;
 static int g_closing;     // a close was asked: the key is on its way
 static int g_pending;     // a tab asked for this report once the current one has closed
@@ -48,6 +51,14 @@ static RpSnap g_snap;
 static uint16_t g_col;    // colour set by the last FUN_00476310 on the page widget
 static int g_dirty;       // the report drew since the last frame: its picture must be taken off the screen
 static int g_ph_n;       // task-105: the photos golf pinned up on the accomplishment board
+static int g_pair_row = -1;
+static int g_pair_cancel_state;
+static unsigned g_pair_cancel_expected;
+static int g_pair_last_selected = -1;
+static int g_pair_last_count = -1;
+static int g_pair_last_cursor = -999;
+static int g_pair_cursor_stable;
+static int g_pair_inj_row = -1;
 
 // ------------------------------------------------------------------ the picture from before the report
 
@@ -127,13 +138,16 @@ static void inj_start(int arg, int btn) {
   g_inj_btn = btn;
   g_inj_x = arg & 0xffff;
   g_inj_y = (arg >> 16) & 0xffff;
+  g_pair_inj_row = g_kind == RP_PAIRING && g_inj_x >= 6 && g_inj_y >= 0x32
+    ? ((g_inj_y - 0x32) / 0x88) * 2 + (g_inj_x - 6) / 0x14e : -1;
   g_inj_stage = g_inj_wait = 0;
   if (g_log_on()) fprintf(stderr, "reports: click at the original's %d,%d\n", g_inj_x, g_inj_y);
 }
 
-// One step per frame: move, press, release. The task-73 pages' loops turn only about ten times a second (golf waits
-// 2 x 50 ms in each turn, FUN_0045bf80(5,0)), so for them each step goes in the very next turn: golf reads the pointer
-// at the top of a turn, so the move goes in one turn, press and release in the next (task-102: it took 9 turns, near a second).
+// Pairing reads its original pending-click state and requires the cursor row to
+// match the previous loop. Route that click through golf's original event entry
+// after the hovered row is stable. Other task-73 pages keep their measured SDL
+// click sequence.
 static void inj_step(void) {
   if (!g_inj) return;
   if (g_inj_wait > 0) {
@@ -141,22 +155,55 @@ static void inj_step(void) {
     return;
   }
   int page = g_kind >= RP_PROFILE;
-  if (g_log_on() && page) fprintf(stderr, "reports: click step %d at %u ms\n", g_inj_stage, (unsigned)SDL_GetTicks());
+  int pairing = g_kind == RP_PAIRING;
+  if (g_log_on() && page) fprintf(stderr, "reports: click step %d at %u ms cursor %d mask 0x%04x\n",
+    g_inj_stage, (unsigned)SDL_GetTicks(), g_snap.ext[1], (unsigned)g_snap.ext[0] & 0xffffu);
   switch (g_inj_stage) {
-    case 0: sdl_motion(g_inj_x, g_inj_y); g_inj_wait = !page; break;
+    case 0:
+      sdl_motion(g_inj_x, g_inj_y);
+      g_inj_wait = !page;
+      break;
     case 1:
-      sdl_button(g_inj_x, g_inj_y, 1);
-      g_inj_wait = page ? 0 : 2;
-      if (page) {   // golf takes the click once the button is up: both in the same turn (measured: one turn earlier)
+      if (pairing) {
+        int close_click = g_pair_inj_row == -2;
+        int cursor_ready = close_click
+          ? g_pair_last_cursor == -1
+          : g_pair_inj_row >= 0 && g_pair_last_cursor == g_pair_inj_row;
+        if (!cursor_ready || !g_pair_cursor_stable) {
+          if (g_log_on()) fprintf(stderr, "reports: pairing click waits for stable %s (cursor %d stable %d)\n",
+            close_click ? "outside cursor" : "target row", g_pair_last_cursor, g_pair_cursor_stable);
+          return;
+        }
+        FUN_004657e0(g_inj_x, g_inj_y);
+        if (g_log_on()) {
+          if (close_click) fprintf(stderr, "reports: pairing click uses original close input at %d,%d\n", g_inj_x, g_inj_y);
+          else fprintf(stderr, "reports: pairing click uses original input row %d at %d,%d\n",
+            g_pair_inj_row, g_inj_x, g_inj_y);
+        }
+      } else {
+        sdl_button(g_inj_x, g_inj_y, 1);
+        g_inj_wait = page ? 0 : 2;
+      }
+      if (page && !pairing) {   // golf takes these clicks once the button is up in the same turn
         sdl_button(g_inj_x, g_inj_y, 0);
         g_inj_stage++;
       }
       break;
-    case 2: sdl_button(g_inj_x, g_inj_y, 0); g_inj_wait = !page; break;
+    case 2:
+      if (!pairing) sdl_button(g_inj_x, g_inj_y, 0);
+      g_inj_wait = !page;
+      break;
     case 3:   // task-73 pages: park golf's pointer where it hovers over nothing (no tooltip in the kept pictures)
       // The tract loop still reads hover after pumping the click. Keep its
       // original control position until return; 690,160 is a buyable tract.
-      if (page && g_kind != RP_TRACTS && !g_iqn) sdl_motion(690, 160);
+      if (page && !g_iqn) {
+        if (pairing) {
+          // Keep the cursor on the last row until the selector has accepted the
+          // outside click; it ignores input when the cursor changes in the same turn.
+          if (!g_pair_cancel_state) sdl_motion(790, 590);
+        }
+        else if (g_kind != RP_TRACTS) sdl_motion(690, 160);
+      }
       g_inj_wait = !page;
       break;
     default:
@@ -171,6 +218,54 @@ static void inj_step(void) {
       return;
   }
   g_inj_stage++;
+}
+
+static int pair_click_arg(int index) {
+  int x = 6 + (index & 1) * 0x14e + 0x70;
+  int y = 0x32 + (index / 2) * 0x88 + 0x44;
+  return x | (y << 16);
+}
+
+static void pair_cancel_step(void) {
+  if (!g_pair_cancel_state) return;
+  if (g_kind != RP_PAIRING) {
+    g_pair_cancel_state = 0;
+    return;
+  }
+  if (g_inj || g_iqn) return;
+
+  unsigned selected = (unsigned)g_snap.ext[0] & 0xffffu;
+  if (g_pair_cancel_state == 2) {
+    if (selected != g_pair_cancel_expected) {
+      if (g_log_on()) fprintf(stderr, "reports: pairing cancel stopped; selection did not clear (0x%04x)\n", selected);
+      g_pair_cancel_state = 0;
+      return;
+    }
+    g_pair_cancel_state = 1;
+  }
+
+  if (selected == 0) {
+    if (g_pair_cancel_state != 3) {
+      // Escape can be lost while the original selector is processing SDL key state.
+      // Its own click path exits on a stable click outside all golfer rows.
+      g_pair_cancel_state = 3;
+      inj_start(0 | (0x76 << 16), SDL_BUTTON_LEFT);
+      g_pair_inj_row = -2;
+      if (g_log_on()) fprintf(stderr, "reports: pairing cancel clears selections then clicks outside the original rows\n");
+    }
+    return;
+  }
+
+  int index = 0;
+  while (index < 16 && !(selected & (1u << index))) index++;
+  if (index >= 16) {
+    g_pair_cancel_state = 0;
+    return;
+  }
+  g_pair_cancel_expected = selected & ~(1u << index);
+  g_pair_cancel_state = 2;
+  inj_start(pair_click_arg(index), SDL_BUTTON_LEFT);
+  if (g_log_on()) fprintf(stderr, "reports: pairing cancel clears golfer %d through the original selector\n", index + 1);
 }
 
 // ------------------------------------------------------------------ hooks
@@ -217,18 +312,26 @@ void rp_begin(int kind) {
   if (g_log < 0) g_log = getenv("SIMGOLF_REPORTS_LOG") != NULL;
   g_on = rpf_enabled_kind(kind);
   g_kind = kind;
+  g_top_local_close = g_top_close_key = 0;
   g_closing = 0;
   g_inj = 0;
   g_iqn = 0;
+  g_pair_cancel_state = 0;
   g_col = 0;
   g_dirty = 1;
   memset(&g_snap, 0, offsetof(RpSnap, it));
   g_snap.magic = RP_MAGIC;
   g_snap.kind = kind;
   if (kind == RP_PHOTO) g_snap.ext[5] = g_serial + 1;   // a new board resets the renderer's history selection
-  if (kind == RP_END_YEAR) g_snap.ext[5] = g_serial + 1;
+  if (kind == RP_END_YEAR || kind == RP_PAIRING) g_snap.ext[5] = g_serial + 1;
   g_npic = 0;
   g_ph_n = 0;
+  g_pair_row = -1;
+  g_pair_last_selected = -1;
+  g_pair_last_count = -1;
+  g_pair_last_cursor = -999;
+  g_pair_cursor_stable = 0;
+  g_pair_inj_row = -1;
   memset(g_pic, 0, sizeof g_pic);
   if (kind == RP_PROFILE) pic_add(358, 31, 76, 184);   // the portrait in golf's page, clear of the buttons around it
   if (kind == RP_PROFILE) pic_add(298, 205, 48, 48);    // task-102c: the little golfers on their disc (shirt, pants, skin)
@@ -236,6 +339,7 @@ void rp_begin(int kind) {
   if (g_log) fprintf(stderr, "reports: open %d native %d\n", kind, g_on), fflush(stderr);
   if (g_on) {
     hd_ui_show_golf_ui(0);
+    hud_clean_pages();
     hd_art_dlg_begin();   // task-102c: the art pack's hi-res copies of golf's own screen are hidden too (below)
     keep_save();
   }
@@ -276,6 +380,7 @@ static RpItem *record(const char *s, int len, int x, int y, int align, int big) 
   }
   RpItem *it = slot(RP_IT_TEXT, x, y);
   if (!it) return NULL;
+  it->group = g_kind == RP_PAIRING && g_pair_row >= 0 ? (uint8_t)g_pair_row : 0xff;
   it->align = (uint8_t)align;
   it->big = (uint8_t)big;
   it->col = g_col;
@@ -447,15 +552,18 @@ void rp_t750(void *w, int font, char *s, int x, int y, char *len) {
 }
 
 // golf's plain text calls (centred: FUN_00404b70 and FUN_00404bc0; left: FUN_004049d0 and FUN_00404ad0)
-int rp_tc(int fn, char *s, int x, int y, uint32_t col) {
-  RpItem *it = record(s, -1, x, y, fn < 2 ? RP_AL_CENTRE : RP_AL_LEFT, 0);
-  if (it) it->col = (uint16_t)col;
+static int rp_tc_original(int fn, char *s, int x, int y, uint32_t col) {
   switch (fn) {
     case 0: return FUN_00404b70(s, x, y, col);
     case 1: return FUN_00404bc0(s, x, y, col);
     case 2: return FUN_004049d0(s, x, y, col);
     default: return FUN_00404ad0(s, x, y, col);
   }
+}
+int rp_tc(int fn, char *s, int x, int y, uint32_t col) {
+  RpItem *it = record(s, -1, x, y, fn < 2 ? RP_AL_CENTRE : RP_AL_LEFT, 0);
+  if (it) it->col = (uint16_t)col;
+  return rp_tc_original(fn, s, x, y, col);
 }
 
 // ------------------------------------------------------------------ task-73 pages: a rectangle of golf's page kept as a picture
@@ -534,6 +642,9 @@ static void capture_pics(void) {
   }
 }
 
+int rp_is_on(void) { return g_on; }
+int rp_game_active(void) { return g_kind != RP_NONE; }
+
 void rp_year_continue(int y) {
   if (!g_on || g_kind != RP_END_YEAR) return;
   y += 0x16;   // the game's 0x226..0x251 button hit box is 44 pixels high
@@ -542,14 +653,71 @@ void rp_year_continue(int y) {
   g_snap.ext[0] = y;
 }
 
-int rp_is_on(void) { return g_on; }
-int rp_game_active(void) { return g_kind != RP_NONE; }
+void rp_pair_row(int index) {
+  g_pair_row = g_kind == RP_PAIRING && index >= 0 && index < 16 ? index : -1;
+  if (!g_on || g_pair_row < 0) return;
+  // The original redraw shifts selected and hovered rows by a pixel, and may
+  // move trait lines when their count changes. Replace this row's previous
+  // text before recording its new layout instead of retaining both versions.
+  int kept = 0;
+  for (int i = 0; i < g_snap.n; i++) {
+    if (g_snap.it[i].type == RP_IT_TEXT && g_snap.it[i].group == g_pair_row) continue;
+    if (kept != i) g_snap.it[kept] = g_snap.it[i];
+    kept++;
+  }
+  g_snap.n = kept;
+  g_dirty = 1;
+}
+
+void rp_pair_state(unsigned selected, int cursor, int count, int picked, int style) {
+  if (g_kind != RP_PAIRING) return;
+  if (count < 0) count = 0;
+  if (count > 16) count = 16;
+  if (g_pair_last_cursor != cursor) g_pair_cursor_stable = 0;
+  else g_pair_cursor_stable = 1;
+  if (g_log_on() && g_pair_last_count != count) {
+    fprintf(stderr, "reports: pairing candidate count %d\n", count);
+    g_pair_last_count = count;
+  }
+  if (g_log_on() && g_pair_last_selected != (int)(selected & 0xffffu)) {
+    fprintf(stderr, "reports: pairing selection mask 0x%04x\n", (unsigned)(selected & 0xffffu));
+    g_pair_last_selected = (int)(selected & 0xffffu);
+  }
+  if (g_log_on() && g_pair_last_cursor != cursor) {
+    fprintf(stderr, "reports: pairing cursor row %d\n", cursor);
+  }
+  g_pair_last_cursor = cursor;
+  if (!g_on) return;
+  g_snap.ext[0] = (int32_t)(selected & 0xffffu);
+  g_snap.ext[1] = cursor;
+  g_snap.ext[2] = count;
+  g_snap.ext[3] = picked;
+  g_snap.ext[4] = style;
+  g_snap.ext[6] = g_pair_cancel_state != 0;
+}
+
+int rp_pair_cursor_override(int cursor) {
+  if (!g_on || g_kind != RP_PAIRING || !g_inj) return cursor;
+  if (g_pair_inj_row == -2) return -1;
+  if (g_pair_inj_row >= 0 && g_pair_inj_row < 16 && g_pair_inj_row < g_snap.ext[2])
+    return g_pair_inj_row;
+  return cursor;
+}
+
+int rp_pair_y_limit(int original_limit, int count) {
+  if (!g_on || g_kind != RP_PAIRING) return original_limit;
+  if (count < 0) count = 0;
+  if (count > 16) count = 16;
+  int rows = (count + 1) / 2;
+  int native_limit = 0x32 + rows * 0x88;
+  return native_limit > original_limit ? native_limit : original_limit;
+}
 
 // golf's text calls inside functions that other screens use too (FUN_0045b0d0 wraps the bio and Gary's hints): recorded only for
 // the task-73 pages.
 int rp_tcp(int fn, char *s, int x, int y, uint32_t col) {
   if (g_on && g_kind >= RP_PROFILE) return rp_tc(fn, s, x, y, col);
-  return fn == 2 ? FUN_004049d0(s, x, y, col) : FUN_00404ad0(s, x, y, col);
+  return rp_tc_original(fn, s, x, y, col);
 }
 
 // The golfer profile's nested screens. The face picker (FUN_00438390) is a modal loop of its own on the page, drawn over
@@ -771,14 +939,17 @@ void rp_photo_blit(void *source, int target, int x, int y, int id) {
 // golf's waits on the board (600 ms before it takes a click, then 300 ms a turn): with the native page only the first
 void rp_board_wait(int n) { FUN_0045bf80(g_on && g_kind == RP_PHOTO && n < 0x3c ? 0 : n, 0); }
 
-static void rp_frame_body(void);
-void rp_frame(void) {
+static void rp_frame_body(int present);
+static void rp_frame_run(int present) {
   double t0 = SDL_GetPerformanceCounter() * 1000.0 / SDL_GetPerformanceFrequency();
-  rp_frame_body();
+  rp_frame_body(present);
   if (g_on && g_kind >= RP_PROFILE) frame_stats(t0, SDL_GetPerformanceCounter() * 1000.0 / SDL_GetPerformanceFrequency());
 }
 
-static void rp_frame_body(void) {
+void rp_frame(void) { rp_frame_run(1); }
+void rp_frame_preflush(void) { rp_frame_run(0); }  // the game's original flush presents this frame
+
+static void rp_frame_body(int present) {
   if (!g_on || g_sub) return;
   if (g_kind == RP_PROFILE) {
     g_snap.ext[0] = g_in_edit;   // the bio editor is open
@@ -829,11 +1000,20 @@ static void rp_frame_body(void) {
   rpf_publish(&g_snap);
   RpAction a;
   while (rpf_take_action(&a)) {
+    if (g_kind == RP_TOP_DESIGNERS && a.kind == RP_A_CLOSE) {
+      g_top_local_close = 1;
+      continue;
+    }
+    if (g_pair_cancel_state) continue;
+    if (a.kind == RP_A_CLOSE && g_kind == RP_PAIRING) {
+      g_pair_cancel_state = 1;
+      continue;
+    }
     // the land map has no Esc of its own: its leave control is the check button (golf's right click also leaves)
     if (a.kind == RP_A_CLOSE && g_kind == RP_TRACTS) a = (RpAction){RP_A_CLICK, 688 | (560 << 16)};
-    if (a.kind == RP_A_CLOSE && g_kind == RP_END_YEAR) a = (RpAction){RP_A_CLICK, 0x23c | (g_snap.ext[0] << 16)};
     if (a.kind == RP_A_CLOSE && g_kind == RP_PHOTO) a = (RpAction){RP_A_CLICK, 400 | (300 << 16)};   // golf waits for a click
     if (a.kind == RP_A_CLOSE && g_kind == RP_SKILLS) a = (RpAction){RP_A_CLICK, (g_sk.x0 + 0x15e) | (0x14e << 16)};   // its OK
+    if (a.kind == RP_A_CLOSE && g_kind == RP_END_YEAR) a = (RpAction){RP_A_CLICK, 0x23c | (g_snap.ext[0] << 16)};
     if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {
       if (a.kind == RP_A_TAB && a.arg != g_kind) g_pending = a.arg;
       if (!g_closing) {
@@ -855,6 +1035,7 @@ static void rp_frame_body(void) {
     }
   }
   inj_step();
+  pair_cancel_step();
   capture_art();
   // The land map and accomplishment board draw once, then keep_restore puts the course back. Capture their photo
   // only on that draw, otherwise later frames overwrite it with the restored course. The profile still updates live.
@@ -869,7 +1050,7 @@ static void rp_frame_body(void) {
   // only when golf drew: a waiting report presents no frames. Not on the profile and skill pages: their loops flush right
   // after rp_frame, and every present waits for the 30 a second cap (gdi.c win_present), so two a turn halved their pace
   // (task-102, measured: 15 turns a second with two, the click took three turns)
-  if (g_dirty && g_kind != RP_PROFILE && g_kind != RP_SKILLS && g_kind != RP_PHOTO) FUN_00480c80((void *)0x519a60);
+  if (present && g_dirty && g_kind != RP_PROFILE && g_kind != RP_SKILLS && g_kind != RP_PHOTO) FUN_00480c80((void *)0x519a60);
   g_dirty = 0;
 }
 
@@ -962,6 +1143,8 @@ int rp_end(int v) {
 }
 
 void rp_done(void) {
+  if (g_kind == RP_PAIRING && g_pair_cancel_state == 3 && g_log_on())
+    fprintf(stderr, "reports: pairing cancel returned with no golfers selected\n");
   if (g_on) {
     if (g_log) fprintf(stderr, "reports: closed %d (%d texts)\n", g_kind, g_snap.n);
     if (g_log > 0 && getenv("SIMGOLF_REPORTS_DUMP"))
@@ -976,6 +1159,100 @@ void rp_done(void) {
   }
   g_on = 0;
   g_kind = 0;
+  g_top_local_close = g_top_close_key = 0;
   g_inj = 0;
   g_iqn = 0;
+  g_pair_row = -1;
+  g_pair_cancel_state = 0;
+}
+
+// The old board reads these fixed-size save fields. Keep the two 64-byte names bounded even if a damaged save
+// has no terminator, and only format values the legacy board itself displays.
+static void td_copy_field(char *dst, int cap, const volatile uint8_t *src, int width) {
+  int n = 0;
+  while (n < cap - 1 && n < width) {
+    unsigned char c = src[n];
+    if (!c) break;
+    dst[n++] = c >= 32 && c != 127 ? (char)c : ' ';
+  }
+  while (n > 0 && dst[n - 1] == ' ') n--;
+  dst[n] = 0;
+}
+
+static void td_text(int rank, int field, const char *s) {
+  RpItem *it = slot(RP_IT_TEXT, field, rank);
+  if (!it) return;
+  copy_str(it->s, sizeof it->s, s, -1);
+}
+
+static void td_snapshot(void) {
+  const uintptr_t records = 0x541ce0;
+  int rows = 0;
+  g_snap.ext[0] = G32(0x8392a8);   // the row addScore just inserted or found
+  g_snap.ext[1] = 0;
+  copy_str(g_snap.title, sizeof g_snap.title, "Top Ten Designers", -1);
+  for (int rank = 0; rank < 10; rank++) {
+    uintptr_t address = records + (uintptr_t)rank * 0x9c;
+    volatile const uint8_t *r = (volatile const uint8_t *)address;
+    if (!r[0]) continue;
+    char designer[RP_TEXT], course[RP_TEXT], text[RP_TEXT];
+    td_copy_field(designer, sizeof designer, r, 64);
+    td_copy_field(course, sizeof course, r + 0x40, 64);
+    int32_t fun = *(volatile int32_t *)(address + 0x80);
+    int32_t skill_x100 = *(volatile int32_t *)(address + 0x84);
+    int32_t cash = *(volatile int32_t *)(address + 0x88);
+    int multiplier = *(volatile int16_t *)(address + 0x96) + 1;
+    int64_t score = ((int64_t)(cash / 10) + skill_x100 + fun) * multiplier;
+    int64_t skill_abs = skill_x100 < 0 ? -(int64_t)skill_x100 : (int64_t)skill_x100;
+    td_text(rank, 0, designer);
+    td_text(rank, 1, course);
+    snprintf(text, sizeof text, "%d", fun);
+    td_text(rank, 2, text);
+    snprintf(text, sizeof text, "%s%lld.%02lld", skill_x100 < 0 ? "-" : "", (long long)(skill_abs / 100), (long long)(skill_abs % 100));
+    td_text(rank, 3, text);
+    snprintf(text, sizeof text, "%d", cash / 10);
+    td_text(rank, 4, text);
+    snprintf(text, sizeof text, "%lld", (long long)score);
+    td_text(rank, 5, text);
+    snprintf(text, sizeof text, "x%d", multiplier);
+    td_text(rank, 6, text);
+    rows++;
+    if (g_log > 0)
+      fprintf(stderr, "reports: designer row %d name=\"%s\" course=\"%s\" fun=%d skill=%d cash=%d multiplier=%d score=%lld\n",
+              rank + 1, designer, course, fun, skill_x100, cash, multiplier, (long long)score);
+  }
+  g_snap.ext[1] = rows;
+  if (g_log > 0) fprintf(stderr, "reports: designer board has %d rows, current row %d\n", rows, g_snap.ext[0]);
+}
+
+int FUN_0045c030(void);
+int FUN_0045ae70(void);
+int FUN_0045ae30(void);
+void FUN_00483d30(void);
+
+// FUN_004732d0 runs in the original Top Ten Designers routine before this hook. When the page is enabled, keep a
+// native modal loop here so its Close and Escape actions end this page locally instead of sending Escape into golf.
+int rp_top_designers(void) {
+  if (g_log < 0) g_log = getenv("SIMGOLF_REPORTS_LOG") != NULL;
+  if (!rpf_enabled_kind(RP_TOP_DESIGNERS)) {
+    if (g_log > 0) fprintf(stderr, "reports: Top Ten Designers uses the original board\n");
+    return 0;
+  }
+  rp_begin(RP_TOP_DESIGNERS);
+  td_snapshot();
+  while (!g_top_local_close) {
+    g_dirty = 1;
+    rp_frame();
+    if (g_top_local_close) break;
+    FUN_0045bf80(1, 0);
+    FUN_0045c030();
+    if (FUN_0045ae70() && FUN_0045ae30() == 0x1b) {
+      FUN_00483d30();
+      g_top_close_key = 1;
+      g_top_local_close = 1;
+    }
+  }
+  if (g_log > 0) fprintf(stderr, "reports: Top Ten Designers closed locally by %s\n", g_top_close_key ? "Escape" : "Close");
+  rp_done();
+  return 1;
 }

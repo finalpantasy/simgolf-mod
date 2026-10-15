@@ -391,6 +391,7 @@ uint32_t water_queue(int x, int y, uint32_t depth, int w, int h, uint32_t sprite
 void rp_tick(void);             // once per main-loop frame
 void rp_begin(int kind);        // the main loop opens report kind (reports_frosted.h RP_*)
 void rp_frame(void);            // per iteration of the report's loop, before it presents
+void rp_frame_preflush(void);   // publish the native panel, leaving the following original flush to present once
 void rp_done(void);             // the report returned
 void rp_quad(void *w, unsigned a, unsigned b, unsigned c, unsigned d);       // FUN_00476310
 void rp_t650(void *w, int font, char *s, int x, int y, int len);             // FUN_00476650
@@ -423,6 +424,11 @@ void rp_photo_blit(void *source, int target, int x, int y, int id); // task-105:
 int rp_photo_limit(int vertical); // task-105: the actual source surface extent less the photo size; original when disabled
 void rp_board_wait(int n);      // task-105: the board's waits (FUN_0045bf80(n,0)); the turns' waits go while the native page is up
 void rp_year_continue(int y);   // the End of Year page original Continue hit centre
+int rp_top_designers(void);     // native Top Ten Designers after the original score insertion
+void rp_pair_row(int index);    // task-020: text recorded next belongs to this golfer card
+void rp_pair_state(unsigned selected, int cursor, int count, int picked, int style);
+int rp_pair_cursor_override(int cursor);
+int rp_pair_y_limit(int original_limit, int count);
 void rp_pace(void);             // a task-73 page's wait between turns (golf's 50 ms, none while the native page is up)
 
 // task-32 (src/port/golf/frontend_hooks.c, frontend_game.c): the Frosted Mint
