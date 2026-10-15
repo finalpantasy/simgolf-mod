@@ -17,6 +17,7 @@
 #include "port/reports_frosted.h"
 #include "port/golfers_frosted.h"
 #include "port/hd_native.h"
+#include "port/hd_art.h"
 #include "port/options_frosted.h"
 #include "port/host.h"
 #include "port/runtime.h"
@@ -385,7 +386,33 @@ static void draw(const HdUiFrame *f, void *user) {
     draw_snap = &report_snap;
   }
   int history_before = draw_hud->hist_open;
-  int n = ui_hud_draw(g_ui, draw_hud, draw_snap, g_tex, acts, 16);
+  SDL_Texture *pictures[HUD_ART_MAX];
+  memcpy(pictures, g_tex, sizeof pictures);
+  // The original amenity strip contains cropped interface symbols. Use the
+  // complete object designs for the five modern Extras picture buttons.
+  if (mods_get_int("fixes.extras_pictures", 1)) {
+    static const int amenity[] = {1, 2, 4, 6, 7};
+    static const int design[] = {HUD_ART_BENCH, HUD_ART_FLOWER, HUD_ART_LANDMARK, HUD_ART_TREE, HUD_ART_BRIDGE};
+    for (int i = 0; i < 5; i++) {
+      SDL_Texture *pic = g_tex[design[i]];
+      if (draw_snap->amenities_on && !draw_hud->tray_hidden && mods_get_int("fixes.hd_design_previews", 1)) {
+        SDL_Texture *hd = hd_art_preview_texture(design[i], r);
+        if (hd) pic = hd;
+      }
+      pictures[HUD_ART_AMENITY + amenity[i]] = pic;
+    }
+  }
+  if (mods_get_int("fixes.hd_design_previews", 1) && draw_snap->design_n > 0) {
+    int tool = draw_snap->build_tool;
+    int slot = tool == 1 ? HUD_ART_BENCH : tool == 2 ? HUD_ART_FLOWER :
+               tool == 4 ? HUD_ART_LANDMARK : tool == 16 ? HUD_ART_TREE :
+               tool == 19 ? HUD_ART_BRIDGE : -1;
+    for (int i = 0; slot >= 0 && i < draw_snap->design_n && i < 16 && slot + i < HUD_ART_MAX; i++) {
+      SDL_Texture *hd = hd_art_preview_texture(slot + i, r);
+      if (hd) pictures[slot + i] = hd;
+    }
+  }
+  int n = ui_hud_draw(g_ui, draw_hud, draw_snap, pictures, acts, 16);
   ui_end(g_ui);
   // X and row actions close after drawing the panel. Keep later layers clear
   // through that closing frame; the next frame restores their controls.

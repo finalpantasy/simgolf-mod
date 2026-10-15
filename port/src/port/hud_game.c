@@ -12,8 +12,10 @@
 
 #include "port/dialogs_frosted.h"
 #include "port/hud_frosted.h"
+#include "port/hd_art.h"
 #include "port/host.h"
 #include "mods/mdata.h"
+#include "mods/mods.h"
 #include "port/grid.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
@@ -45,8 +47,6 @@ int FUN_0040bfa0(int x, int y);                                                 
 uint32_t FUN_004074a0(int design, int full);                                                // landmark name, appended to text_buf
 uint32_t FUN_004676e0(uint32_t slot, int what);                                            // golfer name -> text_buf
 uint32_t FUN_00467600(int rec);                                                            // employee name (or its default) -> text_buf
-const char *mods_get(const char *key);
-unsigned mods_serial(void);
 
 
 int pv_building_of_text(const char *text);   // paths_game.c (task-53)
@@ -184,11 +184,15 @@ static void hide_art(void) { hd_art_hide_rects(&g_rects[0].x, g_nrects); }
 // kind: 0 FUN_00473cb0 (plain), 1 FUN_00473f60 (with its alpha sprite mask), 2 FUN_00473e60,
 // 3 FUN_004628d0 (sprite is an object sprite set; g_obj_* say how)
 static int g_obj_scale = 100, g_obj_rot, g_obj_frame;
-static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *oh) {
+static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *oh, int preview_slot) {
   int w, h, pitch, is565;
   uint16_t *bb = g_target >= 0 ? gdi_screen_dib(g_target, &w, &h, &pitch, &is565) : NULL;
   const int BX = 4, BY = win_screen_h - 210, BW = 196, BH = 200;   // inside the bottom rectangle hud_restore puts back
-  if (!bb || BX + BW > w || BY + BH > h) return NULL;
+  if (preview_slot >= 0) hd_art_preview_begin(preview_slot);
+  if (!bb || BX + BW > w || BY + BH > h) {
+    if (preview_slot >= 0) { hd_art_preview_pause(); hd_art_preview_commit(preview_slot, 0, 0, 0, 0); }
+    return NULL;
+  }
   static uint16_t shot[2][196 * 200];
   for (int pass = 0; pass < 2; pass++) {
     uint16_t fillc = pass ? (is565 ? 0xffff : 0x7fff) : 0;
@@ -204,6 +208,7 @@ static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *o
     else if (kind == 2) FUN_00473e60(sprite, G32(0x4c1570), dx, dy, 0);
     else FUN_00473cb0(sprite, G32(0x4c1570), dx, dy, 1, 1, 1, 0);
   drawn:
+    if (pass == 0 && preview_slot >= 0) hd_art_preview_pause();
     for (int y = 0; y < BH; y++)
       for (int x = 0; x < BW; x++) shot[pass][y * BW + x] = bb[(ptrdiff_t)(BY + y) * pitch + BX + x];
   }
@@ -216,9 +221,16 @@ static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *o
         if (y < y0) y0 = y;
         if (y > y1) y1 = y;
       }
-  if (x1 < x0) return NULL;
+  if (x1 < x0) {
+    if (preview_slot >= 0) hd_art_preview_commit(preview_slot, 0, 0, 0, 0);
+    return NULL;
+  }
   int cw = x1 - x0 + 1, ch = y1 - y0 + 1;
   uint32_t *out = malloc((size_t)cw * ch * 4);
+  if (!out) {
+    if (preview_slot >= 0) hd_art_preview_commit(preview_slot, 0, 0, 0, 0);
+    return NULL;
+  }
   for (int y = 0; y < ch; y++)
     for (int x = 0; x < cw; x++) {
       uint16_t b = shot[0][(y0 + y) * BW + x0 + x], wv = shot[1][(y0 + y) * BW + x0 + x];
@@ -244,12 +256,13 @@ static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *o
     }
   *ow = cw;
   *oh = ch;
+  if (preview_slot >= 0) hd_art_preview_commit(preview_slot, BX + x0, BY + y0, cw, ch);
   return out;
 }
 
 static void publish_sprite(int slot, void *sprite, int kind, void *mask) {
   int w = 0, h = 0;
-  uint32_t *px = snap_sprite(sprite, kind, mask, &w, &h);
+  uint32_t *px = snap_sprite(sprite, kind, mask, &w, &h, -1);
   hudf_publish_art(slot, px, w, h);
   free(px);
 }
@@ -274,7 +287,12 @@ static void snap_designs(void) {
       g_obj_rot = k[f].rot;
       g_obj_frame = i + base;
       int w = 0, h = 0;
-      uint32_t *px = set ? snap_sprite(set, 3, NULL, &w, &h) : NULL;
+      int preview_slot = mods_get_int("fixes.hd_design_previews", 1) ? k[f].slot + i : -1;
+      uint32_t *px = set ? snap_sprite(set, 3, NULL, &w, &h, preview_slot) : NULL;
+      if (!set && preview_slot >= 0) {
+        hd_art_preview_begin(preview_slot); hd_art_preview_pause();
+        hd_art_preview_commit(preview_slot, 0, 0, 0, 0);
+      }
       hudf_publish_art(k[f].slot + i, px, w, h);
       free(px);
       off += k[f].step;
@@ -1183,7 +1201,14 @@ void hud_restore(void) {
       break;
     }
   int theme = G32(0x5a34e0);
-  if (g_target >= 0 && (theme != g_art_theme || ++g_art_frames > 600)) {
+  static unsigned preview_revision;
+  static int preview_setting = -1;
+  unsigned revision = hd_art_preview_revision();
+  int previews = mods_get_int("fixes.hd_design_previews", 1);
+  if (g_target >= 0 && (theme != g_art_theme || revision != preview_revision ||
+                       previews != preview_setting || ++g_art_frames > 600)) {
+    preview_revision = revision;
+    preview_setting = previews;
     g_art_theme = theme;
     g_art_frames = 0;
     snap_art();

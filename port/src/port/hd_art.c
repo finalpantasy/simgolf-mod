@@ -541,6 +541,11 @@ typedef struct {
   int w, h;
 } List;
 
+static void preview_init(void);
+static void preview_look_changed(void);
+static void preview_reject(void);
+static void preview_record(const Entry *, const uint16_t *, const uint16_t *);
+
 static List g_rec;                 // being recorded (game thread)
 static int g_rec_which = LC;
 static unsigned g_rec_generation; // changes whenever the recording list is reset and reused
@@ -1273,6 +1278,7 @@ static void snap_end(Snap *s, Entry *e, const uint16_t *pal, const uint16_t *lev
       }
     }
   }
+  preview_record(e, pal, lev);   // previews also need white/black parts that leave the scratch fill unchanged
   if (!owned) return;
   L->e[L->n++] = *e;
   g_stat.rec++;
@@ -1292,12 +1298,13 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
                           const uint8_t *remap, uint32_t lut, Snap *s) {
   Tag *t = tag_slot(sprite, 0);
   if (!t || t->pixels != U32(sprite + 0x14) || t->w != I32(sprite + 0x30) || t->h != I32(sprite + 0x34)) {
+    preview_reject();
     g_stat.untagged[slot]++;
     return;
   }
   ArtFile *a = &g_files[t->file];
   int look = look_of(t->file);
-  if (look == L_ORIGINAL) return;
+  if (look == L_ORIGINAL) { preview_reject(); return; }
   int sx = SCALE_X, sy = SCALE_Y, den = SCALE_DEN ? SCALE_DEN : 1;
   double fx = fabs((double)sx / den), fy = fabs((double)sy / den);
   Entry e = {0};
@@ -1310,8 +1317,8 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
   int have_pal = pal_for(sprite, pal_over, pal, remap);
   uint32_t ph = have_pal ? hash_bytes(pal, 512, 2166136261u) | 1 : 0;
   if (t->view < 0) {   // a still: the sprite is a rectangle of the PCX
-    if (remap || (have_pal && t->pal_hash && ph != t->pal_hash)) return;   // recoloured: the upscale has no 8-bit twin
-    if (slot != 17 && slot != 23 && slot != 21 && slot != 20 && slot != 27 && slot != 30) return;
+    if (remap || (have_pal && t->pal_hash && ph != t->pal_hash)) { preview_reject(); return; }   // recoloured: the upscale has no 8-bit twin
+    if (slot != 17 && slot != 23 && slot != 21 && slot != 20 && slot != 27 && slot != 30) { preview_reject(); return; }
     e.sx = t->lx, e.sy = t->ly, e.sw = t->w, e.sh = t->h;
     e.x = (float)(s->ox + x);
     e.y = (float)(s->oy + y);
@@ -1368,7 +1375,7 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     }
     if (slot == 21 || slot == 20) {   // soft-edged UI art: its mask is a tagged still too
       Tag *m = tag_slot(mask, 0);
-      if (!m || m->view >= 0 || m->lx != t->lx || m->ly != t->ly) return;
+      if (!m || m->view >= 0 || m->lx != t->lx || m->ly != t->ly) { preview_reject(); return; }
       e.variant = V_MASKED;
       e.pal_hash = (uint32_t)m->file;
     }
@@ -1393,7 +1400,7 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
       e.pal_hash = shadow_levels(lut_for, lev, 4);
       memcpy(pal, lev, sizeof pal);
     } else {
-      if (e.variant != V_RGBA && !have_pal) return;
+      if (e.variant != V_RGBA && !have_pal) { preview_reject(); return; }
       e.pal_hash = e.variant != V_RGBA ? ph : 0;
     }
     if (t->shadow && a->shadow >= 0) {
@@ -1561,6 +1568,7 @@ static void live_settings(void) {
   if (g_pixel_env >= 0) g_pixel = g_pixel_env;
   update_any();
   if (memcmp(before, g_look, sizeof before)) {
+    preview_look_changed();
     fprintf(stderr, "art: looks now");
     for (int i = 0; i < NCAT; i++) fprintf(stderr, " %s=%s", k_cat[i], k_look[g_look[i]]);
     fprintf(stderr, " pixel=%d textures=%s\n", g_pixel, hd_art_textures_name());
@@ -2066,6 +2074,8 @@ static void shadow_rect(const Entry *e, const SDL_FRect *d, SDL_FRect *out) {
   *out = (SDL_FRect){o[0], o[1], o[2], o[3]};
 }
 
+#include "port/hd_art_preview.inc"
+
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
   if (!g_on || !g_cur_ok[which]) return;
   double t0 = host_now_ms();
@@ -2180,6 +2190,7 @@ void hd_art_init(int presenter_on) {
   InitializeCriticalSection(&g_lock);
   InitializeCriticalSection(&g_pub_lock);
   InitializeCriticalSection(&g_sheet_lock);
+  preview_init();
   g_wake = CreateEventA(NULL, FALSE, FALSE, NULL);
   art_hooks.flic_open = on_flic_open;
   art_hooks.cut = on_cut;

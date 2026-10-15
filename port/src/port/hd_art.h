@@ -69,4 +69,15 @@ void hdt_resend(void);   // hd_terrain_native.c: the terrain look changed
 // Any thread: a PNG file as malloc'd straight-alpha ARGB8888 pixels (task-80 start menu logo), or NULL.
 uint32_t *hd_art_load_png(const char *path, int *w, int *h);
 
+// Native HUD design pictures. Capture the actual tagged object draw on the
+// game thread, then request its cached HD image on the render thread. A NULL
+// texture keeps the existing complete original picture while loading or when
+// any part cannot be reproduced. Returned textures are owned by hd_art.
+#define HD_ART_PREVIEW_MAX 128
+unsigned hd_art_preview_revision(void);
+void hd_art_preview_begin(int slot);
+void hd_art_preview_pause(void);
+void hd_art_preview_commit(int slot, int x, int y, int w, int h);
+SDL_Texture *hd_art_preview_texture(int slot, SDL_Renderer *r);
+
 #endif  // SIMGOLF_PORT_HD_ART_H
