@@ -1,0 +1,19 @@
+{
+  "comment": "Issue30: the active-shot skill labels are drawn after hud_restore, outside the bottom panel view. Skip only this text when the modern HUD owns the screen. Keep original skill bit updates, shot calculations, original HUD and browser drawing.",
+  "patches": {
+    "FUN_0040f5c0": [
+      [
+        "FUN_004049d0((char *)&DAT_0051a068,(int)puStack_1224,uStack_1240,\n                         (-(uint)bVar9 & 0x3def) + 0x80004210);",
+        "if (!hud_on()) FUN_004049d0((char *)&DAT_0051a068,(int)puStack_1224,uStack_1240,\n                         (-(uint)bVar9 & 0x3def) + 0x80004210);"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040f5c0": [
+      [
+        "FUN_004049d0((char *)&DAT_0051a068,(int)puStack_1224,uStack_1240,\n                         (-(uint)bVar9 & 0x3def) + 0x80004210);",
+        1
+      ]
+    ]
+  }
+}

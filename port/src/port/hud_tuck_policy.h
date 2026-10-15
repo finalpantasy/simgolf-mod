@@ -1,11 +1,12 @@
-// Whether a game-world mouse-down should leave the Frosted Mint construction
-// tray open. Input runs on the game thread, so this is evaluated from the last
-// published HUD snapshot (under hud_frosted.c's snapshot mutex).
+// Whether a game-world mouse-down should leave the Frosted Mint tray open.
+// Input runs on the game thread, so this is evaluated from the last published
+// HUD snapshot (under hud_frosted.c's snapshot mutex).
 //
 // The game's own placement rules are not changed. Only the renderer-side
-// automatic tuck is suppressed while a tool is armed. This also covers the
-// click that completes a green or places its flag, before the game has applied
-// the new state. Explicit Escape and close actions remain unaffected.
+// automatic tuck is suppressed while a construction tool is armed or the
+// player's pro is waiting for a shot choice. The latter keeps the only controls
+// for choosing Fade, Draw, backspin, and Low punch visible through the shot.
+// Explicit Escape and close actions remain unaffected.
 #pragma once
 #include "port/hud_frosted.h"
 
@@ -19,7 +20,11 @@ static inline int hudf_keep_tray_on_world_click(const HudSnap *s) {
     // Buildings and Landscape likewise share a dock.
     return s->elevation_on ? (s->elev_edit || s->elevation_tool >= 0) : s->build_tool >= 0;
   }
-  // Do not interfere with People, reports, normal course interactions or
-  // the shot selector. Those require independent dismissal-state analysis.
+  if (s->dock_mode == 3) {
+    // Only this page exposes shot choices, and pro_shots is set only while the
+    // pro is waiting for a decision. Other People pages keep normal dismissal.
+    return s->pro_shots > 0;
+  }
+  // Do not interfere with reports or normal course interactions.
   return 0;
 }

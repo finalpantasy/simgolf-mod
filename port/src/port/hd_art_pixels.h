@@ -33,6 +33,25 @@ static inline int hd_art_still_shadow_max_index(int slot, const char *norm) {
   return 0;
 }
 
+// Course target marker at this crop uses a slot-30 LUT plane that adds four
+// RGB555 levels to each channel. The art presenter represents these indexed
+// planes as black alpha, which cannot reproduce that additive transform.
+static inline int hd_art_lut_plane_is_additive(uint16_t black, uint16_t mid, uint16_t white) {
+  for (int shift = 0; shift <= 10; shift += 5) {
+    int b = (black >> shift) & 31;
+    int m = (mid >> shift) & 31;
+    int w = (white >> shift) & 31;
+    if (b <= 0 || m != 15 + b || w != 31) return 0;
+  }
+  return 1;
+}
+
+static inline int hd_art_course_target_cue_original(int slot, const char *norm, int sx, int sy, int sw, int sh,
+                                                     int has_additive_plane) {
+  return has_additive_plane && slot == 30 && norm && strstr(norm, "course1.pcx") && sx == 549 && sy == 215 &&
+         sw == 43 && sh == 21;
+}
+
 static inline void hd_art_shadow_indexed_pixel(uint8_t *rgba, uint8_t index, const uint16_t *levels, int max_index) {
   // These original draw slots skip 0xff even if an upscale supplied its own
   // opaque/partial alpha for that palette background. Keep the source mask.

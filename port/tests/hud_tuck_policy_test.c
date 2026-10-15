@@ -57,7 +57,15 @@ int main(void) {
   s.dock_mode = 3;
   s.terrain_tool = 5;
   check("People page unaffected by stale tool", &s, 0);
+  s.pro_shots = 1;
+  check("waiting pro with all shot choices keeps controls visible", &s, 1);
+  s.pro_shots = 2;
+  check("waiting pro with straight and Low Punch only keeps controls visible", &s, 1);
+  s.dock_mode = 2;
+  check("other People page ignores stale shot-choice state", &s, 0);
+
   s.dock_mode = 0;
+  s.pro_shots = 0;
   s.terrain_tool = 5;
   s.visible = 0;
   check("hidden HUD does not retain tray", &s, 0);
@@ -69,6 +77,6 @@ int main(void) {
     fprintf(stderr, "%d HUD placement-policy tests failed\n", failed);
     return 1;
   }
-  puts("PASS: all 15 HUD placement-policy cases");
+  puts("PASS: all 18 HUD tuck-policy cases");
   return 0;
 }

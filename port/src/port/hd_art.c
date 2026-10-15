@@ -1195,6 +1195,18 @@ static uint32_t shadow_levels(uint32_t lut, uint16_t *pal, int planes) {
   return h;
 }
 
+static int lut_has_additive_plane(uint32_t lut, int planes) {
+  if (!lut || planes < 1) return 0;
+  if (planes > 7) planes = 7;
+  for (int p = 0; p < planes; p++) {
+    uint32_t base = lut + ((uint32_t)p << 16);
+    if (!mem_ok(base, 0x10000)) continue;
+    const uint16_t *plane = (const uint16_t *)(uintptr_t)base;
+    if (hd_art_lut_plane_is_additive(plane[0], plane[0x3def], plane[0x7fff])) return 1;
+  }
+  return 0;
+}
+
 // The canvas rectangle a draw at (x, y) of a w x h source may touch, copied
 // before the draw so the pixels it changes can be found after it.
 typedef struct {
@@ -1297,6 +1309,15 @@ static void record_sprite(int slot, uint32_t sprite, uint32_t mask, uint32_t dst
     // ordinary course art, not only shade masks.
     int course_shadow = mods_get_int("fixes.course_shadow", 1);
     int still_effect = hd_art_still_effect(slot, a->norm, course_shadow);
+    if (still_effect == HD_ART_STILL_INDEXED_SHADOW &&
+        hd_art_course_target_cue_original(slot, a->norm, e.sx, e.sy, e.sw, e.sh, 1) && lut_has_additive_plane(lut, 7)) {
+      static int logged_cue_fallback;
+      if (getenv("SIMGOLF_ART_SLOT_LOG") && !logged_cue_fallback++) {
+        fprintf(stderr, "art: course target cue keeps original draw; slot 30 LUT has additive plane\n");
+        fflush(stderr);
+      }
+      return;  // this active cue blinks in golf's original draw; do not flatten its light plane to black alpha
+    }
     // task-119 (tester F30): holemark.pcx is a colored plaque with 0xf8..0xfb shadow ink.
     // Keep the upscaled plaque pixels and turn only those original indexed inks into black alpha.
     if (still_effect == HD_ART_STILL_OPTIONAL_INDEXED_SHADOW) {

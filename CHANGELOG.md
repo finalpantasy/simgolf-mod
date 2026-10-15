@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 - 2026-10-15
+
+Practice screens and shot choices stay clear.
+
+- Fixed: Practice no longer draws legacy skill text beneath the modern course interface.
+- Fixed: the modern pro shot-choice tray stays open through a shot, keeping the next shot's choices available. Escape and explicit dismissal remain available.
+- Fixed: the active target hole keeps its original blinking highlight with HD artwork, preserving its brightening effect.
+
+Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds and other unresolved reports remain open. Original-interface behavior remains available.
+
 ## 0.1.8 - 2026-10-15
 
 Clearer pro and report screens, with safer updates.
