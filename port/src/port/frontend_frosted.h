@@ -29,6 +29,7 @@ void fef_early(void);                                   // task-106: register th
 void fef_release_cover(void);                           // task-106: the card goes once golf has presented a few new frames (the closing credits)
 int fef_enabled(void);                                  // ui.frontend=frosted_mint and the native layer is up
 void fef_publish(const FeSnap *s);                      // the screen the original is showing now
+void fef_loading_progress(float pct);                  // fine progress, no art work or game calls
 int fef_take_action(FeAction *a);                       // next click on the native screen, 1 if any
 void fef_publish_art(int key, const uint32_t *argb, int w, int h);   // FE_ART_* key; NULL clears
 void fef_set_injecting(int on);                         // the game thread is feeding the original a click

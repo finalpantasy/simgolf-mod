@@ -2,6 +2,40 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.14",
+      "date": "2026-10-15",
+      "name": "Faster startup and course creation, with smooth loading progress",
+      "summary": "Faster startup and course creation, with smooth loading progress.",
+      "notes": [
+        "Removed avoidable pauses and repeated work while loading game assets.",
+        "Reduced new-course loading time by 34 percent in repeated warm 4K tests, from a median 2.0 to 1.3 seconds compared with the preceding fast-loading candidate.",
+        "Reused terrain calculations within each rebuild and decoded initial ground images in parallel, preserving course generation, random state and full image quality.",
+        "Loading bars now move smoothly between real progress updates without adding a minimum wait.",
+        "Original loading paths remain available through the performance switches. Controlled cold-cache timings are not available. Generated maps and simulation state, save/reload and serial-versus-parallel image results were checked. No original game files are included."
+      ]
+    },
+    {
+      "version": "0.1.13",
+      "date": "2026-10-15",
+      "name": "Original landmark benefits are visible again",
+      "summary": "Original landmark benefits are visible again.",
+      "notes": [
+        "Fixed: the modern landmark chooser shows the original benefit alongside the name and price, and in hover tips for available and locked designs.",
+        "Original prices, unlock requirements and landmark effects are preserved. The previous modern text remains available with fixes.landmark_perks=0. Original energy, mood and weed balance is preserved. Qualification uses focused checks and hidden game runs; the full 91-stage regression remains incomplete at 35/91."
+      ]
+    },
+    {
+      "version": "0.1.12",
+      "date": "2026-10-15",
+      "name": "Sharper object pictures in the build interface",
+      "summary": "Sharper object pictures in the build interface.",
+      "notes": [
+        "Fixed: bench, landmark, flower-bed, scenic-tree and scenic-bridge choosers use the existing HD art pack when available.",
+        "Fixed: Course > Extras uses complete object pictures for the five design buttons.",
+        "Original art and interface choices remain available. Original dark golfer labels are retained by design. Original energy, mood and weed balance is preserved. No new artwork or original game data is bundled."
+      ]
+    },
+    {
       "version": "0.1.11",
       "date": "2026-10-15",
       "name": "Cleaner reports, Home Site previews and dialogs",

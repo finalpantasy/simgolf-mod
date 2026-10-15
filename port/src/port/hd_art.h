@@ -65,6 +65,15 @@ void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k);
 // (rgba w x h, rows as the terrain renderer keeps them) in the terrain look:
 // a malloc'd 4x replacement (*ow x *oh), or NULL to keep the original.
 uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh);
+typedef struct HdTerrainJob {
+  const char *src;
+  const uint8_t *rgba;
+  int w, h;
+  uint8_t *up;
+  int uw, uh;
+} HdTerrainJob;
+// Native new-course preparation. Inputs stay immutable until all jobs join.
+void hd_art_terrain_jobs(HdTerrainJob *jobs, int count);
 void hdt_resend(void);   // hd_terrain_native.c: the terrain look changed
 // Any thread: a PNG file as malloc'd straight-alpha ARGB8888 pixels (task-80 start menu logo), or NULL.
 uint32_t *hd_art_load_png(const char *path, int *w, int *h);

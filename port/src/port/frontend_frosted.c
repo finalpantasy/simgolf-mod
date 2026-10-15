@@ -21,6 +21,7 @@
 #include "port/options_frosted.h"
 #include "port/runtime.h"
 #include "port/update_check.h"
+#include "port/ui/loading_progress.h"
 
 #ifndef SIMGOLF_VERSION
 #define SIMGOLF_VERSION "dev"
@@ -97,6 +98,17 @@ void fef_publish(const FeSnap *s) {
   lock();
   g_snap = *s;
   g_snap_t = host_now_ms();
+  unlock();
+}
+
+void fef_loading_progress(float pct) {
+  if (!mods_get_int("ui.smooth_loading", 1)) return;
+  if (pct > 99) pct = 99;
+  lock();
+  if (g_snap.screen == FE_LOADING && g_snap.loading.pct >= 0 && pct > g_snap.loading.pct) {
+    g_snap.loading.pct = pct;
+    g_snap_t = host_now_ms();
+  }
   unlock();
 }
 
@@ -292,6 +304,18 @@ static void draw(const HdUiFrame *f, void *user) {
     }
   }
   int loading = show && pending && now - press > 350;
+  float progress_target = s->loading.pct;
+  static LoadingProgress progress;
+  if (show && s->screen == FE_LOADING && mods_get_int("ui.smooth_loading", 1)) {
+    s->loading.pct = loading_progress_step(&progress, s->loading.epoch, s->loading.pct, now);
+  } else progress.active = 0;
+  // Opt-in motion/timing evidence, no screenshots or waits in normal play.
+  static int trace = -1;
+  if (trace < 0) trace = getenv("SIMGOLF_LOADING_TRACE") != NULL;
+  if (trace) fprintf(stderr, "loading-frame %.3f %d %u %.3f %.3f %d\n", now,
+                     show ? s->screen : -1, s->loading.epoch,
+                     progress.active ? (float)progress.value : s->loading.pct,
+                     progress_target, f->course);
   g_visible = show;
   if (!show) {
     ui_skip_frame(g_ui);

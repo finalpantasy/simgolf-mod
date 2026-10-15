@@ -1,0 +1,21 @@
+{
+  "comment": "Native course creation: calculate only the requested read-only corner, instead of all four, and reuse immutable heights only within one rebuild. No RNG or terrain-rule changes. Original path outside creation or when disabled.",
+  "patches": {
+    "FUN_00470a60": [
+      ["  int iVar1;", "  port_course_begin(*(volatile int *)0x834170 == 0, 0x00470a60);\n  int iVar1;"],
+      ["return uVar14;", "port_course_end(0x00470a60);\n  return uVar14;"]
+    ],
+    "FUN_0042f7a0": [
+      ["  uint uVar1;", "  port_course_begin(*(volatile int *)0x834170 == 0, 0x0042f7a0);\n  uint uVar1;"],
+      ["return DAT_0059e7b8;", "port_course_end(0x0042f7a0);\n  return DAT_0059e7b8;"]
+    ],
+    "FUN_0040bfe0": [
+      ["      iVar2 = param_2 - 1;", "      if (port_course_fast()) {\n        switch (param_3 & 7) {\n          case 1: return port_course_height(param_1 + 1, param_2 - 1);\n          case 3: return port_course_height(param_1 + 1, param_2);\n          case 5: return port_course_height(param_1, param_2);\n          case 7: return port_course_height(param_1, param_2 - 1);\n        }\n      }\n      iVar2 = param_2 - 1;"]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00470a60": [["  int iVar1;", 1], ["return uVar14;", 2]],
+    "FUN_0042f7a0": [["  uint uVar1;", 1], ["return DAT_0059e7b8;", 1]],
+    "FUN_0040bfe0": [["      iVar2 = param_2 - 1;", 1]]
+  }
+}

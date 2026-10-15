@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.14 - 2026-10-15
+
+Faster startup and course creation, with smooth loading progress.
+
+- Removed avoidable pauses and repeated work while loading game assets.
+- Reduced new-course loading time by 34 percent in repeated warm 4K tests, from a median 2.0 to 1.3 seconds compared with the preceding fast-loading candidate.
+- Reused terrain calculations within each rebuild and decoded initial ground images in parallel, preserving course generation, random state and full image quality.
+- Loading bars now move smoothly between real progress updates without adding a minimum wait.
+- Original loading paths remain available through the performance switches.
+
+Controlled cold-cache timings are not available. Generated maps and simulation state, save/reload and serial-versus-parallel image results were checked. No original game files are included.
+
 ## 0.1.13 - 2026-10-15
 
 Original landmark benefits are visible again.

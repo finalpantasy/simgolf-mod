@@ -45,6 +45,7 @@ void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) { (void)count
 void fe_theme_vars(int n, const unsigned char *mask, int sel) { (void)n, (void)mask, (void)sel; }
 void fe_loading_pic(void *sprite) { (void)sprite; }
 void fe_loading(int pct, const char *quote) { (void)pct, (void)quote; }
+void fe_loading_progress(int assets) { (void)assets; }
 void fe_suspend(void) {}
 void fe_world_end(void) {}
 int fe_theme_key_ready(void) { return FUN_0045ae70(); }

@@ -1,0 +1,75 @@
+{
+  "comment": "TASK-58: scope native loading optimizations to asset loaders. Keep all asset work, RNG, progress draws and original waits when disabled.",
+  "patches": {
+    "FUN_00442180": [
+      [
+        "  char cVar1;",
+        "  port_loading_begin();\n  char cVar1;"
+      ],
+      [
+        "return uVar6;",
+        "port_loading_end();\n  return uVar6;"
+      ]
+    ],
+    "FUN_0043dbe0": [
+      [
+        "  char cVar1;",
+        "  port_loading_begin();\n  char cVar1;"
+      ],
+      [
+        "return uVar3;",
+        "port_loading_end();\n  return uVar3;"
+      ]
+    ],
+    "FUN_0043d740": [
+      [
+        "  uint *puVar1;",
+        "  port_loading_begin();\n  uint *puVar1;"
+      ],
+      [
+        "FUN_0045bf80(10,0);",
+        "if (!port_loading_fast()) FUN_0045bf80(10,0);"
+      ],
+      [
+        "return param_1;",
+        "fe_loading_progress(DAT_00820ecc);\n  port_loading_end();\n  return param_1;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00442180": [
+      [
+        "  char cVar1;",
+        1
+      ],
+      [
+        "return uVar6;",
+        1
+      ]
+    ],
+    "FUN_0043dbe0": [
+      [
+        "  char cVar1;",
+        1
+      ],
+      [
+        "return uVar3;",
+        1
+      ]
+    ],
+    "FUN_0043d740": [
+      [
+        "  uint *puVar1;",
+        1
+      ],
+      [
+        "FUN_0045bf80(10,0);",
+        1
+      ],
+      [
+        "return param_1;",
+        1
+      ]
+    ]
+  }
+}

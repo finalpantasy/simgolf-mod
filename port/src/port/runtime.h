@@ -46,6 +46,17 @@ int port_load_image(const char *path, uint32_t base, uint32_t limit);
 void crt_io_failed(uint32_t fd);
 // Milliseconds, sub-millisecond resolution (emscripten_get_now in the browser).
 double port_now_ms(void);
+// Asset-loader scope only. Browser and performance.fast_loading=0 retain waits.
+void port_loading_begin(void);
+void port_loading_end(void);
+int port_loading_fast(void);
+// Procedural course generation and height rebuild, before gameplay starts.
+void port_course_begin(int creating, uint32_t fn);
+void port_course_end(uint32_t fn);
+int port_course_fast(void);
+int port_course_textures_fast(void);
+void port_course_textures_done(void);
+uint32_t port_course_height_cached(int x, int y, uint32_t (*height)(int, int));
 // SIMGOLF_SEED for golf's random numbers, else clock (runtime.c, task-38)
 uint32_t port_seed(uint32_t clock);
 // The browser build's absolute FS paths for files packaged with the port

@@ -502,7 +502,7 @@ nu PeekMessageA(nu lpmsg, nu hwnd, nu lo, nu hi, nu remove) {
   }
   // Nothing to do: the game polls PeekMessage and the clock between frames,
   // so sleep a little instead of spinning (and let the browser run).
-  if (now - g_last_yield > 1) win_yield(1);
+  if (now - g_last_yield > 1) win_yield(port_loading_fast() ? 0 : 1);
   return 0;
 }
 

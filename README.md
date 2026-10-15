@@ -36,6 +36,11 @@ it on your PC and nothing from it ever leaves your computer.
 - **A shaded HD golf ball** with golfer-specific colours and a fading flight trail. Ball size, colours and trail are adjustable.
 - **Rendering improvements:** water on slopes, waterfall spray, scenery visibility at distant zoom levels and HD shadows.
 
+### Faster loading
+
+- **Faster startup and new courses:** fewer loading pauses and repeated terrain calculations, with a smooth progress bar.
+- **Original results preserved:** the same course generation and full-quality artwork, with original loading paths available through the performance settings.
+
 ### Smoother controls
 
 - **Smooth camera movement** with mouse-wheel zoom toward the pointer, WASD panning and middle-mouse dragging.

@@ -113,7 +113,8 @@ typedef struct FeTheme {
 
 // task-69: the loading screen (golf's FUN_00406250: picture, a designer's quote, a progress bar)
 typedef struct FeLoading {
-  int32_t pct;           // 0..100 loaded, -1 golf shows no bar
+  float pct;            // asset progress, -1 golf shows no bar
+  uint32_t epoch;        // a new load resets presentation interpolation
   char title[64];        // the property screen's "We're off to X!" line (new game), empty on a load
   char quote[256];       // golf's quote line, empty when it shows none
 } FeLoading;

@@ -2,6 +2,7 @@
 // addresses and maps original code addresses to callable wrappers.
 
 #include "port/runtime.h"
+#include "port/grid.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -12,7 +13,79 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef __EMSCRIPTEN__
+#include "mods/mods.h"
+#endif
+
+static unsigned g_loading_depth;
+static int g_loading_fast;
+
+void port_loading_begin(void) {
+  if (g_loading_depth++ == 0) {
+#ifndef __EMSCRIPTEN__
+    g_loading_fast = mods_get_int("performance.fast_loading", 1) != 0;
+#endif
+  }
+}
+
+void port_loading_end(void) {
+  if (g_loading_depth) g_loading_depth--;
+}
+
+int port_loading_fast(void) { return g_loading_depth && g_loading_fast; }
+
 void *ExceptionList;
+
+// Course creation only. Read the switch once at the outer generation scope.
+static unsigned g_course_depth;
+static int g_course_fast;
+static int g_course_textures;
+static unsigned g_height_depth;
+static uint32_t g_height_epoch;
+static uint32_t g_height_stamp[GRID_MAX_SIDE * GRID_MAX_SIDE];
+static uint32_t g_height_value[GRID_MAX_SIDE * GRID_MAX_SIDE];
+void port_course_begin(int creating, uint32_t fn) {
+  if (g_course_depth++ == 0) {
+    g_course_fast = 0;
+#ifndef __EMSCRIPTEN__
+    g_course_fast = creating && mods_get_int("performance.fast_course_loading", 1) != 0;
+#endif
+  }
+  // During one heightfield rebuild, procedural height inputs do not change.
+  // Discard the cache at every rebuild boundary, including nested rebuilds.
+  if (fn == 0x0042f7a0 && g_course_fast) {
+    if (++g_height_epoch == 0) { memset(g_height_stamp, 0, sizeof g_height_stamp); g_height_epoch = 1; }
+    g_height_depth = g_course_depth;
+  }
+#ifndef __EMSCRIPTEN__
+  if (getenv("SIMGOLF_COURSE_TRACE")) fprintf(stderr, "course-phase %.3f %08x begin %u\n", host_now_ms(), fn, g_course_depth);
+#else
+  (void)creating; (void)fn;
+#endif
+}
+void port_course_end(uint32_t fn) {
+  if (fn == 0x0042f7a0 && g_height_depth == g_course_depth) g_height_depth = 0;
+  if (fn == 0x00470a60 && g_course_depth == 1) g_course_textures = g_course_fast;
+#ifndef __EMSCRIPTEN__
+  if (getenv("SIMGOLF_COURSE_TRACE")) fprintf(stderr, "course-phase %.3f %08x end %u\n", host_now_ms(), fn, g_course_depth);
+#else
+  (void)fn;
+#endif
+  if (g_course_depth) g_course_depth--;
+}
+int port_course_fast(void) { return g_course_depth && g_course_fast; }
+int port_course_textures_fast(void) { return g_course_textures; }
+void port_course_textures_done(void) { g_course_textures = 0; }
+uint32_t port_course_height_cached(int x, int y, uint32_t (*height)(int, int)) {
+  if (!g_height_depth || (unsigned)x >= GRID_MAX_SIDE || (unsigned)y >= GRID_MAX_SIDE) return height(x, y);
+  unsigned i = (unsigned)x * GRID_MAX_SIDE + (unsigned)y;
+  if (g_height_stamp[i] != g_height_epoch) {
+    g_height_value[i] = height(x, y);
+    g_height_stamp[i] = g_height_epoch;
+  }
+  return g_height_value[i];
+}
+
 uint32_t port_trace_buf[1024];
 uint32_t port_trace_pos;
 uint32_t port_watch_addr[3];   // ghidra_prelude.h PORT_TRACE

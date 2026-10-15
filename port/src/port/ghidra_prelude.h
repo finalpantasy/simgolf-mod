@@ -12,6 +12,13 @@
 #include "port/staff.h"
 #include "port/shot_readout.h"
 #include "port/grid.h"   // MAP_W, MAP_H, GRID(i): tools/translate/grid.py
+void port_loading_begin(void);
+void port_loading_end(void);
+int port_loading_fast(void);
+void port_course_begin(int creating, uint32_t fn);
+void port_course_end(uint32_t fn);
+int port_course_fast(void);
+uint32_t port_course_height(int x, int y);
 
 #ifdef _MSC_VER
 // Native Windows build (simgolf mod): the MSVC headers already typedef
@@ -453,6 +460,7 @@ void fe_list_vars(int count, int *scroll, int sel, int p1, int p2);
 void fe_theme_vars(int n, const unsigned char *mask, int sel);   // the theme packs: rows, content bits per row, golf's current row
 void fe_loading_pic(void *sprite);   // task-69: golf's loading picture (FUN_00406250) was just drawn
 void fe_loading(int pct, const char *quote);   // task-69: the loading screen's quote is about to be drawn; pct -1 = no bar
+void fe_loading_progress(int assets);   // completed FLCs; no artwork reload, random numbers or waits
 void fe_suspend(void);          // a dialog of the original is about to run its own loop: show it, not the native screen
 
 // task-27 (src/port/golf/dialogs_hooks.c, dialogs_game.c): the Frosted Mint dialogs. Translator

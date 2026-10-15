@@ -59,6 +59,7 @@
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
+#include "port/parallel_jobs.h"
 #include "port/water_native.h"
 
 // ------------------------------------------------------------------ settings
@@ -1238,6 +1239,12 @@ typedef struct {
 static int snap_begin(Snap *s, uint32_t dst, int x, int y, double fw, double fh) {
   int bw, bh;
   memset(s, 0, sizeof *s);
+  // The FLC decoder draws into its private 480x480 scratch surface. These
+  // draws cannot affect the window, so no back-buffer snapshot is needed.
+  // Confirm it is distinct from the live back surface before taking the path.
+  uint32_t back = U32(0x4c1570u);
+  if (port_loading_fast() && dst && dst == U32(SCRATCH + 4) && back >= 0x10000 && dst != U32(back + 4))
+    return 0;
   if (!g_rec.owner || !mem_ok(dst, 0x4d0) || !hd_ui_back_buffer(&s->base, &s->pitch, &bw, &bh) || bw != g_rec.w || bh != g_rec.h)
     return 0;
   uint32_t dbits = U32(dst + 0x4c0);
@@ -1648,14 +1655,46 @@ uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int 
   if (alpha && !up_alpha)
     for (int y = 0; y < H; y++)
       for (int x = 0; x < W; x++) up[((size_t)y * W + x) * 4 + 3] = rgba[((size_t)(y / ky) * w + x / kx) * 4 + 3];
-  g_terr.n++;
+  EnterCriticalSection(&g_lock);
+  int count = ++g_terr.n;
   g_terr.ms += host_now_ms() - t0;
-  if (g_log >= 2 || g_terr.n % 50 == 1)
-    fprintf(stderr, "art: terrain %d textures upscaled, %.1f ms each (%s %dx%d%s)\n", g_terr.n, g_terr.ms / g_terr.n, g_files[f].src, W, H,
+  double average = g_terr.ms / count;
+  LeaveCriticalSection(&g_lock);
+  if (g_log >= 2 || count % 50 == 1)
+    fprintf(stderr, "art: terrain %d textures upscaled, %.1f ms each (%s %dx%d%s)\n", count, average, g_files[f].src, W, H,
             flip < same ? ", flipped" : "");
   *ow = W;
   *oh = H;
   return up;
+}
+
+static void terrain_job(void *user, int i) {
+  HdTerrainJob *j = (HdTerrainJob *)user + i;
+  j->up = hd_art_terrain(j->src, j->rgba, j->w, j->h, &j->uw, &j->uh);
+}
+static void terrain_job_finish(void) {
+  if (g_wic) { IWICImagingFactory_Release(g_wic); g_wic = NULL; CoUninitialize(); }
+}
+void hd_art_terrain_jobs(HdTerrainJob *jobs, int count) {
+  double start = host_now_ms();
+  int workers = sg_run_jobs(count, terrain_job, terrain_job_finish, jobs);
+  if (getenv("SIMGOLF_TERRAIN_VERIFY")) {
+    for (int i = 0; i < count; i++) {
+      HdTerrainJob *j = jobs + i;
+      int w = 0, h = 0;
+      uint8_t *reference = hd_art_terrain(j->src, j->rgba, j->w, j->h, &w, &h);
+      if ((reference != NULL) != (j->up != NULL) ||
+          (reference && (w != j->uw || h != j->uh || memcmp(reference, j->up, (size_t)w * h * 4)))) {
+        fprintf(stderr, "terrain-loading: pixel comparison FAILED for %s\n", j->src);
+        free(reference);
+        port_abort("parallel terrain texture differs from serial decode");
+      }
+      free(reference);
+    }
+    fprintf(stderr, "terrain-loading: %d serial/parallel pixel comparisons PASS\n", count);
+  }
+  if (getenv("SIMGOLF_COURSE_TRACE"))
+    fprintf(stderr, "terrain-loading: %d textures, %d worker threads, %.3f ms\n", count, workers, host_now_ms() - start);
 }
 
 // ------------------------------------------------------------------ hand-over

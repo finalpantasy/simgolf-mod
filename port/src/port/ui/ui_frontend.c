@@ -1077,7 +1077,7 @@ static int draw_loading(Scene *s, const FeSnap *snap, SDL_Texture *const *art) {
     }
   }
   char pct[32];
-  if (L->pct >= 0) snprintf(pct, sizeof pct, "Loading %d%%", L->pct);
+  if (L->pct >= 0) snprintf(pct, sizeof pct, "Loading %d%%", (int)L->pct);
   else snprintf(pct, sizeof pct, L->title[0] ? "One moment please" : "Loading");
   ui_text_in(c, R(s, (1920 - PW) / 2, y + 34, PW, 24), UI_TYPE_CAPTION, t->text_secondary, pct, 0.5f);
   return 0;

@@ -35,6 +35,7 @@
 #include "port/dialogs_frosted.h"
 #include "port/frontend_frosted.h"
 #include "port/hd_art.h"
+#include "port/host.h"
 #include "port/runtime.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
@@ -273,6 +274,7 @@ static void inj_step(void) {
 
 // Modal screens can return on DOWN before another heartbeat releases it.
 void fe_world_end(void) {
+  if (getenv("SIMGOLF_COURSE_TRACE")) fprintf(stderr, "course-build %.3f\n", host_now_ms());
   if (g_inj && g_inj_click && g_inj_stage == 2) sdl_button(g_inj_x, g_inj_y, 0);
   g_inj = 0;
   fef_set_injecting(0);
@@ -995,6 +997,7 @@ void fe_loading_pic(void *sprite) {
 
 void fe_loading(int pct, const char *quote) {
   if (!fef_loading_enabled()) return;
+  if (pct <= 0 || g_snap.screen != FE_LOADING) g_snap.loading.epoch++;
   if (pct <= 0) g_load_pic_ok = 0;
   if (!g_load_pic_ok && g_load_sprite) {
     int w = 0, h = 0;
@@ -1025,6 +1028,10 @@ void fe_loading(int pct, const char *quote) {
   if (g_log) fprintf(stderr, "frontend: loading pct %d art %d \"%.40s\"\n", pct, g_load_pic_ok, quote);
   // test aid only: SIMGOLF_LOADING_HOLD_MS keeps each call on screen so a screenshot can catch it
   load_test_aid();
+}
+
+void fe_loading_progress(int assets) {
+  if (fef_loading_enabled()) fef_loading_progress(assets / 4.0f);
 }
 
 void fe_context(int title_choice) {

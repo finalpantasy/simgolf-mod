@@ -27,6 +27,7 @@
 
 #include "port/hd_art.h"
 #include "port/hd_native.h"
+#include "port/runtime.h"
 #include "mods/mods.h"
 #include "port/water_native.h"
 
@@ -143,6 +144,42 @@ static int sent(uint32_t serial) {
 #define GROW(p, cap, n, sz) \
   do { if ((n) > (cap)) { (cap) = (n) + (n) / 2; (p) = realloc((p), (size_t)(cap) * (sz)); } } while (0)
 
+// Decode the first new course's independent ground images before taking the
+// hand-over lock. SDL textures are still created only on the render thread.
+static NewTex *prepare_course_textures(int nb, const int32_t *b, int *count) {
+  NewTex *ready = calloc((size_t)nb, sizeof *ready);
+  HdTerrainJob *jobs = calloc((size_t)nb, sizeof *jobs);
+  if (!ready || !jobs) { free(ready); free(jobs); return NULL; }
+  int n = 0;
+  for (int i = 0; i < nb; i++) {
+    if (!(b[i * 5 + 4] & kTextured) || sent((uint32_t)b[i * 5 + 3])) continue;
+    int32_t size[2];
+    HdTerrainJob *j = jobs + n;
+    j->rgba = terrain_hd_texture(b[i * 5 + 2], size);
+    j->src = terrain_hd_texture_src(b[i * 5 + 2]);
+    j->w = size[0]; j->h = size[1];
+    ready[n].serial = (uint32_t)b[i * 5 + 3];
+    ready[n].water = (b[i * 5 + 4] & kWater) != 0;
+    n++;
+  }
+  hd_art_terrain_jobs(jobs, n);
+  for (int i = 0; i < n; i++) {
+    HdTerrainJob *j = jobs + i;
+    ready[i].w = j->up ? j->uw : j->w;
+    ready[i].h = j->up ? j->uh : j->h;
+    ready[i].rgba = j->up;
+    if (!j->up) {
+      size_t bytes = (size_t)j->w * j->h * 4;
+      ready[i].rgba = malloc(bytes);
+      if (!ready[i].rgba) port_abort("terrain texture allocation failed");
+      memcpy(ready[i].rgba, j->rgba, bytes);
+    }
+  }
+  free(jobs);
+  *count = n;
+  return ready;
+}
+
 int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   Surf c;
   if (!terrain_cache(&c) || c.w != HD_FRAME_W || c.h != HD_FRAME_H) return 0;
@@ -162,6 +199,8 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   int nverts = nb ? b[(nb - 1) * 5] + b[(nb - 1) * 5 + 1] : 0;
   int32_t t[2];
   terrain_hd_target(t);
+  int nready = 0;
+  NewTex *ready = port_course_textures_fast() && nb > 0 ? prepare_course_textures(nb, b, &nready) : NULL;
   EnterCriticalSection(&g_tlock);
   Scene *s = &g_pending;
   GROW(s->verts, s->cap_verts, nverts * 8, sizeof(float));
@@ -197,7 +236,14 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   s->nbatches = nb;
   s->tw = t[0];
   s->th = t[1];
-  for (int i = 0; i < nb; i++) {
+  if (ready) {
+    if (nready) {
+      GROW(s->tex, s->cap_tex, s->ntex + nready, sizeof(NewTex));
+      memcpy(s->tex + s->ntex, ready, (size_t)nready * sizeof(NewTex));
+      s->ntex += nready;
+    }
+    free(ready);
+  } else for (int i = 0; i < nb; i++) {
     if (!(b[i * 5 + 4] & kTextured) || sent((uint32_t)b[i * 5 + 3])) continue;
     int32_t size[2];
     const uint8_t *rgba = terrain_hd_texture(b[i * 5 + 2], size);
@@ -222,6 +268,7 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   s->frame = frame;
   s->serial++;
   LeaveCriticalSection(&g_tlock);
+  port_course_textures_done();
   return 1;
 }
 
