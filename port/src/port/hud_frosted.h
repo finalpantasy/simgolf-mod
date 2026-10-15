@@ -123,7 +123,8 @@ enum { HUD_ACT_CLICK = 1, HUD_ACT_KEY = 2, HUD_ACT_VKEY = 3, HUD_ACT_GOAL = 4,
 enum { HUD_STAFF_SELECT = 1, HUD_STAFF_FIRE = 2, HUD_STAFF_MOVE = 3, HUD_STAFF_RENAME = 4, HUD_STAFF_SCROLL = 5 };
 enum { HUD_PRO_SKILLS = 1,   // the skill dialog: the first setup (10 points, 3 more per accomplishment) or the skills with OK
        HUD_PRO_PROFILE = 2,  // the pro's profile page (name, look, bio)
-       HUD_PRO_CREATE = 3 }; // profile, then the skill setup (the start of a new career)
+       HUD_PRO_CREATE = 3,   // profile, then the skill setup (the start of a new career)
+       HUD_PRO_SCORECARD = 4 }; // the active pro's original live golfer card and round scores
 enum {   // goals: reached over a few frames, one original click per frame
   HUD_GOAL_COURSE = 1, HUD_GOAL_EXTRAS, HUD_GOAL_BUILDINGS, HUD_GOAL_LANDSCAPE, HUD_GOAL_PEOPLE, HUD_GOAL_CLOSE
 };

@@ -2,6 +2,18 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.10",
+      "date": "2026-10-15",
+      "name": "Pro scorecards and steady placement",
+      "summary": "Pro scorecards and steady placement.",
+      "notes": [
+        "Fixed: Your pro can open the live scorecard while playing, including the current stroke count on the back nine.",
+        "Fixed: modern shot choices stay visible and respond when Your pro is reopened while paused; pause stays active.",
+        "Fixed: landmarks and scenic bridges remain selected for repeated placement. Set ui.repeat_amenities=0 to restore single placement.",
+        "Qualification uses focused checks and hidden game runs. The full 91-stage regression remains incomplete at 35/91. AI/crowding, timing, energy, weeds, report transitions and other unresolved reports remain open. Original-interface behavior remains available."
+      ]
+    },
+    {
       "version": "0.1.9",
       "date": "2026-10-15",
       "name": "Practice screens and shot choices stay clear",

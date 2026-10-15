@@ -575,7 +575,8 @@ static void read_pro(HudSnap *s, int flags) {
   s->pro_match = !s->pro_out && (flags & 0x2000) && holes >= 2 && G32(0x4c2e14) != -1 && !busy;
   s->pro_tourney = !s->pro_out && (flags & 0x400000) && !busy;
   s->pro_shots = 0;
-  if (s->pro_out && slot >= 0 && slot < 152 && s->dock_mode == 3 && G32(0x579584 + slot * 0x100) == -1) {
+  if (s->pro_out && slot >= 0 && slot < 152 && (s->dock_mode == 3 || s->dock_mode == 4) &&
+      G32(0x579584 + slot * 0x100) == -1) {
     int t = FUN_0040bfa0(G32(0x57958c + slot * 0x100), G32(0x579590 + slot * 0x100));
     s->pro_shots = t >= 0 && t < 64 && G8(0x578372 + t * 0x30) >= 1 ? 1 : 2;   // a bad lie: straight and low punch only
   }
@@ -1052,7 +1053,22 @@ static void run_actions(void) {
         g_show_log = 4;
       }
       break;
-    case HUD_ACT_PRO: pro_action(a.x); break;
+    case HUD_ACT_PRO:
+      if (a.x == HUD_PRO_SCORECARD) {
+        // The aim loop clears card selection while the player dock is open.
+        // Reuse the normal close-dock/select sequence with the live pro slot.
+        int slot = G32(PRO_SLOT);
+        if (golfer_ok(slot)) {
+          g_show_golfer = slot;
+          g_show_wait = 0;
+          g_goal = (HudAction){HUD_ACT_GOAL, -1, -1, HUD_GOAL_CLOSE, 0};
+          g_goal_on = 1;
+          g_goal_steps = 0;
+        }
+      } else {
+        pro_action(a.x);
+      }
+      break;
     case HUD_ACT_DESIGN:   // the strip's pick: what FUN_00434ac0's default case stores for the next map click
       if (a.x == G32(0x4c2854)) {
         G32(0x5a9f50) = G32(0x5a9f60) = G32(0x56a514) = a.y;

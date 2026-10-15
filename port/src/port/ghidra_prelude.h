@@ -377,6 +377,7 @@ void aim_start(int x, int y);   // task-115: the shot aim arrow hooks (golf/aim_
 void aim_dot(int x, int y, int col, int w, int a);
 void aim_seg(int x0, int y0, int x1, int y1, int col, int w, int a);
 void place_center(int *tx, int *ty);   // task-115: lot placement centred on the pointer (golf/place_hooks.c)
+int place_tool_after_placement(int tool);   // keep repeatable amenities armed after a successful placement
 int hole_line_shift(int tee);   // task-119: the sideways offset of a tee's route line (golf/hole_line_hooks.c)
 
 // task-78 (port/water_native.c): realistic water. 1 while the presenter draws the water,

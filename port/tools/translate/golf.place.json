@@ -9,6 +9,10 @@
    [
     "FUN_00430020(DAT_00822d60,DAT_00822d64,&iStack_1234,&iStack_122c,0);",
     "FUN_00430020(DAT_00822d60,DAT_00822d64,&iStack_1234,&iStack_122c,0);\n  place_center(&iStack_1234,&iStack_122c);"
+   ],
+   [
+    "if (((int)DAT_004c2854 < 6) || (DAT_004c2854 == 0x10)) {\n      if (DAT_004c2854 == 4) {\n        DAT_004c2854 = 0xffffffff;\n      }\n    }\n    else {\n      DAT_004c2854 = 0xffffffff;\n    }",
+    "DAT_004c2854 = place_tool_after_placement((int)DAT_004c2854);"
    ]
   ]
  }

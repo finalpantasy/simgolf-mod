@@ -404,7 +404,7 @@ static int mini_tile(UiCtx *c, uint32_t id, UiRect r, const Tile *t, int flags, 
   if (t->labelled && g_s && (g_s->employee_overlay || g_s->dock_mode == 2) && (!strcmp(t->name, "Fire") || !strcmp(t->name, "Move") || !strcmp(t->name, "Rename") || !strcmp(t->name, "Hire")))
     people_log(t->name, r);
   else if (t->labelled && (!strcmp(t->name, "Skills") || !strcmp(t->name, "Edit pro") || !strcmp(t->name, "Profile") ||
-                            !strcmp(t->name, "Practice") || !strcmp(t->name, "Straight") ||
+                            !strcmp(t->name, "Practice") || !strcmp(t->name, "Scorecard") || !strcmp(t->name, "Straight") ||
                             !strcmp(t->name, "Fade") || !strcmp(t->name, "Draw") ||
                             !strcmp(t->name, "High backspin") || !strcmp(t->name, "Low punch")))
     people_log(t->name, r);
@@ -1468,6 +1468,13 @@ static int pro_tiles(const HudSnap *s, Tile *t) {
   t[n].tip = s->pro_ready ? "Your pro's ten skills; accomplishments add three points each"
                           : "Spend your pro's first skill points";
   t[n++].act = (HudAction){HUD_ACT_PRO, HUD_PRO_SKILLS, 0, 0, 0};
+  if (s->pro_out) {
+    t[n].name = "Scorecard";
+    t[n].price = "this round";
+    t[n].icon = UI_ICON_CHART;
+    t[n].tip = "Your pro's live hole scores and round total";
+    t[n++].act = (HudAction){HUD_ACT_PRO, HUD_PRO_SCORECARD, 0, 0, 0};
+  }
   if (s->pro_shots) {   // the pro waits on the course: the shot for the next stroke
     static const struct { const char *name; int x, v, fancy; } shot[5] = {
         {"Straight", 414, 0, 0}, {"Fade", 493, -1, 1}, {"Draw", 572, 1, 1}, {"High backspin", 651, 3, 1}, {"Low punch", 730, 4, 0}};

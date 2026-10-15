@@ -592,7 +592,10 @@ static void fill_card(int slot, GwCard *g) {
         else {
           int hole = (r->x - 0x10a) / 0x12;
           if (hole >= 0 && hole < GW_HOLES) {
-            if ((r->col & 0x7fff) == 0x4210) g->cur_hole = (int16_t)(hole + 1);
+            if ((r->col & 0x7fff) == 0x4210) {
+              g->cur_hole = (int16_t)(hole + 1);
+              g->score[hole] = (int16_t)atoi(r->s);   // the grey number is the live stroke count, not only a hole marker
+            }
             else {
               g->score[hole] = (int16_t)atoi(r->s);
               g->tone[hole] = (int8_t)tone_of(r->col);

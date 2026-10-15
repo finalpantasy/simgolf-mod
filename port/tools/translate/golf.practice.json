@@ -1,6 +1,12 @@
 {
-  "comment": "Issue30: the active-shot skill labels are drawn after hud_restore, outside the bottom panel view. Skip only this text when the modern HUD owns the screen. Keep original skill bit updates, shot calculations, original HUD and browser drawing.",
+  "comment": "Issue30: the active-shot skill labels are drawn after hud_restore, outside the bottom panel view. Skip only this text when the modern HUD owns the screen. Keep original skill bit updates, shot calculations, original HUD and browser drawing. Issue32: keep the five original practice shot hitboxes available when the paused pro page is reopened in mode 4 only while the Frosted Mint HUD is active; preserve mode 3, original-HUD mode-4 fallback, hitbox bounds, and selection behavior.",
   "patches": {
+    "FUN_00435f00": [
+      [
+        "if (DAT_00567afc == 3) {",
+        "if ((DAT_00567afc == 3) || ((DAT_00567afc == 4) && hud_on())) {"
+      ]
+    ],
     "FUN_0040f5c0": [
       [
         "FUN_004049d0((char *)&DAT_0051a068,(int)puStack_1224,uStack_1240,\n                         (-(uint)bVar9 & 0x3def) + 0x80004210);",
@@ -9,6 +15,12 @@
     ]
   },
   "required_patch_counts": {
+    "FUN_00435f00": [
+      [
+        "if (DAT_00567afc == 3) {",
+        1
+      ]
+    ],
     "FUN_0040f5c0": [
       [
         "FUN_004049d0((char *)&DAT_0051a068,(int)puStack_1224,uStack_1240,\n                         (-(uint)bVar9 & 0x3def) + 0x80004210);",

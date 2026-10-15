@@ -20,9 +20,9 @@ static inline int hudf_keep_tray_on_world_click(const HudSnap *s) {
     // Buildings and Landscape likewise share a dock.
     return s->elevation_on ? (s->elev_edit || s->elevation_tool >= 0) : s->build_tool >= 0;
   }
-  if (s->dock_mode == 3) {
-    // Only this page exposes shot choices, and pro_shots is set only while the
-    // pro is waiting for a decision. Other People pages keep normal dismissal.
+  if (s->dock_mode == 3 || s->dock_mode == 4) {
+    // The pro page is dock mode 3 normally and mode 4 after paused reopen.
+    // pro_shots is set only while the pro is waiting for a decision.
     return s->pro_shots > 0;
   }
   // Do not interfere with reports or normal course interactions.

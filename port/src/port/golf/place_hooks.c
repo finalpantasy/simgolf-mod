@@ -7,11 +7,22 @@
 // Patches: tools/translate/golf.place.json (FUN_0040f5c0, the two FUN_00430020 calls that pick the tile).
 #include "golf_protos.h"
 #include "port/runtime.h"
+#include "port/golf/place_repeat.h"
 
 #define G8(a) (*(volatile int8_t *)(uintptr_t)(a))
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 
 void terrain_set_line_offset_fix(int on);
+
+int place_tool_after_placement(int tool) {
+#ifdef __EMSCRIPTEN__
+  return place_tool_after(tool, 1);
+#else
+  const char *mods_get(const char *key);
+  const char *v = mods_get("ui.repeat_amenities");
+  return place_tool_after(tool, !v || v[0] != '0');
+#endif
+}
 
 #ifdef __EMSCRIPTEN__
 
