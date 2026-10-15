@@ -352,7 +352,10 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
     snprintf(g, sizeof g, "\"%s\\%s\"", app, PLAYER_EXE);
     STARTUPINFOA si = {sizeof si};
     PROCESS_INFORMATION pi;
-    if (CreateProcessA(NULL, g, NULL, NULL, FALSE, 0, NULL, app, &si, &pi)) {
+    if (!SetEnvironmentVariableA("SIMGOLF_RELAUNCHED", NULL)) {
+      DWORD error = GetLastError();
+      logf_("apply: could not clear relaunch marker (error %lu)", (unsigned long)error);
+    } else if (CreateProcessA(NULL, g, NULL, NULL, FALSE, 0, NULL, app, &si, &pi)) {
       CloseHandle(pi.hThread);
       CloseHandle(pi.hProcess);
       logf_("apply: game started again");

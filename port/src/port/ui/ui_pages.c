@@ -857,7 +857,29 @@ static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
 
   UiRect content = ui_rect(in.x, in.y + ui_s(c, 78), in.w, in.h - ui_s(c, 142));
   uid_rrect(d, content, ui_s(c, t->radius_card), uid_alpha(t->surface_inset, 0.28f));
-  const float x0 = 0x12d, xspan = 0x12c, yspan = 600.0f;
+  const float x0 = 0x12d, xspan = 0x12c;
+  // Original highlight rows are only 15 pixels apart. Size their spacing from
+  // the current fonts rather than compressing the entire 600-pixel screen.
+  UiFont body = ui_font(c, UI_TYPE_BODY), heading = ui_font(c, UI_TYPE_HEADING);
+  float yscale = fmaxf((body.line + ui_s(c, 4)) / 15.0f,
+                      (heading.line + ui_s(c, 4)) / 18.0f);
+  int ymin = 0x5d, ymax = ymin;
+  for (int i = 0; i < s->n; i++) {
+    const RpItem *it = &s->it[i];
+    if (it->type == RP_IT_TEXT && it->s[0] && !it->big) {
+      if (it->y < ymin) ymin = it->y;
+      if (it->y > ymax) ymax = it->y;
+    }
+  }
+  UiRect view = ui_inset_all(content, ui_s(c, 16));
+  float content_h = (ymax - ymin) * yscale + fmaxf(body.line, heading.line);
+  uint32_t scroll_id = ui_id("yr.scroll");
+  float *opened = ui_state(c, ui_id("yr.opened"));
+  if (*opened != (float)s->ext[5]) {
+    *opened = (float)s->ext[5];
+    *ui_state(c, scroll_id) = 0;
+  }
+  float off = ui_vscroll_begin(c, scroll_id, view, content_h, body.line * 3);
   for (int i = 0; i < s->n; i++) {
     const RpItem *it = &s->it[i];
     if (it->type != RP_IT_TEXT || !it->s[0] || it->big) continue;   // s->title already carries golf's title-font text
@@ -866,8 +888,8 @@ static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
     float nx = ((float)it->x - x0) / xspan;
     if (nx < 0.0f) nx = 0.0f;
     if (nx > 1.0f) nx = 1.0f;
-    float x = content.x + nx * content.w;
-    float y = content.y + ((float)it->y / yspan) * content.h;
+    float x = view.x + nx * view.w;
+    float y = view.y + (it->y - ymin) * yscale + off;
     float w;
     float align;
     if (it->align == RP_AL_RIGHT) {
@@ -879,7 +901,7 @@ static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
       x -= w * 0.5f;
       align = 0.5f;
     } else {
-      w = content.x + content.w - x;
+      w = view.x + view.w - x;
       align = 0.0f;
     }
     int header = it->y == 0x5d || it->y == 200;
@@ -890,6 +912,11 @@ static int draw_year(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
       color = t->text_secondary;
     ui_text_fit(c, ui_rect(x, y, w, f.line), style, color, text, align);
   }
+
+  ui_vscroll_end(c);
+  if (content_h > view.h)
+    ui_text_in(c, ui_rect(in.x, in.y + in.h - ui_s(c, 48), in.w - ui_s(c, 200), ui_s(c, 48)),
+               UI_TYPE_LABEL, t->text_secondary, "Scroll for more highlights", 0);
 
   float bh = ui_s(c, 48), bw = ui_s(c, 180);
   UiRect br = ui_rect(in.x + in.w - bw, in.y + in.h - bh, bw, bh);
