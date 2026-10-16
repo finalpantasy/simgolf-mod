@@ -1,7 +1,8 @@
 # Mod data layer
 
-The game's numbers and tables as data that mods change without code (card
-task-19). Builds on the mod platform core (docs/modding/CORE.md): a mod is a
+[Modding guide](README.md) / Data reference
+
+Change supported game tables without writing code. A mod is a
 folder with a `mod.toml`; its data changes live next to it in
 `data/<table>.json`.
 
@@ -13,6 +14,10 @@ Tables: `data/tables/*.json`. Tests: `tests/mods/test_data.c`,
 
 ## Quick start
 
+For complete manifest, installation and verification steps, use
+[Your first mod](FIRST_MOD.md). This reference assumes an installed helper;
+see [Testing](TESTING.md) for how to build it and set its path.
+
 A mod that makes the Snack Bar cheaper:
 
 ```
@@ -22,7 +27,6 @@ mods/cheap_snack_bar/data/buildings.json
 
 ```json
 {
-  "$schema": "../../../data/tables/buildings.json",
   "set": {"snack_bar.cost": 50},
   "add": {"snack_bar.income": 1}
 }
@@ -30,11 +34,12 @@ mods/cheap_snack_bar/data/buildings.json
 
 ```
 python tools/modctl/modctl.py enable cheap_snack_bar
-build/native/modctl_core.exe data check --tables data/tables --image build/native/image/golf.bin --mods-dir mods --text
+build/modctl-only/modctl_core.exe data check --tables data/tables --image build/native/image/golf.bin --mods-dir mods --text
 ```
 
-The check prints exactly what the game will do (the same code), every
-problem with its file and line, and every value that changes:
+The check uses the same data implementation as the game and reports
+validation problems and changed values. Match the image, tables, profile
+and player switches to the test install. Example output:
 
 ```
 data: 10 tables, 111 game rows from data/tables
@@ -70,7 +75,7 @@ bridge's `mods_status` shows them with the mod report.
   `MDATA(table, row, field, literal)` (or `MDATA_AT` with a row index such as
   the difficulty), which returns the mod's value when a mod changed that
   field and the original literal otherwise.
-- **Zero mods is the original game**: nothing is written, every `MDATA` is
+- **Zero mods leaves this layer unchanged**: nothing is written, every `MDATA` is
   its literal (tests/mods/data_ab.mjs measures it, see Tests). The layer can
   be switched off completely with `SIMGOLF_DATA=0` or `--no-data`.
 
@@ -221,8 +226,8 @@ FUN_00469b00 switches on), with the usual mood change: `holed_tough_putt`
 
 ### trays (1 row `amenities`, code)
 
-How many designs the Amenities panel's strips list (card task-45, the
-built-in mod `cut_content` sets all three; see docs/CUT_CONTENT.md).
+How many designs the Amenities panel's strips list (the
+built-in mod `cut_content` sets all three; see the built-in cut_content manifest).
 
 | Field | Base | Where | Notes |
 |---|---|---|---|
@@ -279,7 +284,11 @@ modctl_core data show buildings --tables data/tables --image build/native/image/
 `env` (for example `{"SIMGOLF_MODS_DIR": "mods/examples", "SIMGOLF_PROFILE": "cheap"}`)
 and `exe` (another build, for A/B runs).
 
-## Tests
+## Internal tests
+
+These tests and evidence paths refer to the internal development tree. The
+public source snapshot does not export the complete suite. See
+[Testing](TESTING.md) for checks available to mod authors.
 
 - `tools/check.sh` runs `data_tests.exe tests/mods/data` (JSON, schema,
   every operation, conflicts, errors with file:line, writing back, zero mods
@@ -297,10 +306,10 @@ and `exe` (another build, for A/B runs).
 - `node tests/mods/data_samples.mjs`: the three sample mods next to the
   original game, screenshots in `evidence/task-19-*-<rev>.png`.
 
-## Adding a table (for later cards)
+## Adding a table
 
 1. Find the table or constant in the decompile (build/gen, data/symbols.json,
-   upstream/simgolf-native/docs for meanings).
+   your own verified export for meanings).
 2. A table in golf.exe's data: write `data/tables/<name>.json` with
    `x-table.image` (`base`, `stride`) and `x-image` per field (`offset`,
    `type` u8 i8 u16 i16 u32 i32 str strptr, `len` for str). Check it with
@@ -324,6 +333,9 @@ are documentation. Our own: `x-table`, `x-image`, `x-code`, `x-where`
 Not supported: `$ref`, `pattern`, `oneOf`/`anyOf`/`allOf`, `format`.
 
 ## Coverage
+
+Use `modctl_core data coverage --tables data/tables` for the current schema
+inventory. The report describes bindings, not live-play verification.
 
 `evidence/task-19-coverage-<rev>.md` lists every table and field with where
 it lives, and what is still hard-coded with addresses (the next tables to

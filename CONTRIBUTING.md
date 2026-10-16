@@ -5,17 +5,19 @@ Forks, fixes, new features, mods and bug reports are all welcome.
 ## Easiest ways to help
 
 - **Report a bug or suggest an idea:** open an [issue](../../issues). Say what you did, what you saw, and attach a screenshot and your `golf.log` (next to `golf.exe`) if the game misbehaved.
-- **Make a mod without building anything:** prices, wages, personalities, difficulty and more live in plain text tables. See [docs/modding](docs/modding) and the examples in `mods-examples` inside the release zip. Share a mod as a pull request into `mods/`, or as its own repo.
+- **Make a mod without building anything:** prices, wages, personalities, difficulty and more live in plain text tables. See [the modding guide](docs/modding/README.md) and the examples in `mods-examples` inside the release zip. Share a mod as a pull request into `mods/`, or as its own repo.
 
-## Building the program
+## Modding and source development
 
-You need your own copy of the game, like a player does. The repo never contains game files or decompiled code; your build makes them locally from your own `golf.exe`.
+The [modding guide](docs/modding/README.md) covers working text-file mods,
+recipes, manifests, data fields, testing and packaging. Start with
+[Your first mod](docs/modding/FIRST_MOD.md); it needs no compiler.
 
-1. Requirements: Windows 10 or 11, Git Bash, Python 3, Node 20+, CMake, Visual Studio 2022 Build Tools (MSVC x86 libraries and a Windows SDK), Ghidra 12.1 with OpenJDK 21. `tools/install_native_tools.sh` downloads the rest (LLVM clang-cl and SDL2, official releases) into a tools folder set in `tools/env.sh`.
-2. Put your installed game in `game/` and the v1.02 no-CD exe at `game/golf_nocd.exe` (both are ignored by git).
-3. Make the decompiler export from your own exe with Ghidra, as described in [port/docs/building.md](port/docs/building.md) and [port/docs/porting.md](port/docs/porting.md).
-4. `bash tools/translate_gen.sh` translates it into C under `build/gen` (never committed, never edited by hand).
-5. `bash tools/build_native.sh` builds `build/native/golf.exe`. Run it from the game folder.
+For engine changes, read [Source development](docs/modding/SOURCE.md).
+It includes a tested standalone build of the mod validation helper and
+explains the current gaps in the public full-game build. The public export
+omits internal test sources and some build/QA helpers, so do not treat the
+older upstream instructions as a verified clean-build recipe for this fork.
 
 ## Rules for pull requests
 
@@ -31,7 +33,9 @@ Fork the repo, make a branch, and open a pull request against `main`. The mainta
 
 ## What is planned
 
-See the "Coming next" list in the README. If you want to take one on, open an issue first so work is not done twice.
+Open an issue before starting a large feature so its scope and compatibility
+can be discussed. The [SDK design](docs/modding/SDK_DESIGN.md) is a historical
+proposal, not a list of implemented mod APIs.
 
 ## Licence
 

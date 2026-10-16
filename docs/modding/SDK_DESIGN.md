@@ -1,6 +1,11 @@
 # Modding SDK design: easy at the top, deep at the bottom
 
-Card task-108. Status: DESIGN, waiting for the owner's approval. Nothing here is built yet.
+**Historical proposal, not a mod-author API.** Some underlying pieces, such
+as data patches and the Mods screen, now exist; the proposed Lua runtime,
+plugin API, hot reload and content pipeline do not. Start with the
+[current modding guide](README.md) for supported features.
+
+The remaining text records the original design proposal (task-108).
 Builds on: docs/modding/CORE.md (mod folders, resolver, profiles), docs/modding/DATA.md
 (data tables), docs/LIMITS.md (engine caps), docs/ui/KIT.md (Frosted Mint kit).
 It becomes the spec that cards task-20 (hooks, scripting, plugins), task-21 (assets),

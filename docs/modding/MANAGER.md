@@ -1,6 +1,8 @@
 # Mods screen
 
-The in-game mod manager (card task-22): a Frosted Mint page to turn mods on and off, order them, see
+[Modding guide](README.md) / Mods screen
+
+The in-game mod manager is a Frosted Mint page to turn mods on and off, order them, see
 conflicts and missing dependencies, and keep profiles. It is the screen version of `tools/modctl`:
 every decision comes from the platform's resolver (`mods_resolve`), nothing is re-implemented in the UI,
 and what it saves is the same `mods/load_order.toml` modctl writes.
@@ -51,7 +53,10 @@ changes_saves = true                  # saves made with it need it to load right
 "Report a problem" = "https://example.com/issues"
 ```
 
-## Code and tests
+## Code and internal tests
+
+Test and gallery paths below describe the internal development suite; some
+are absent from the public export. See [Testing](TESTING.md).
 
 - `port/src/mods/modmgr.c/.h`: the model (scan, draft, resolve, view, edits, profiles, apply). No drawing.
 - `port/src/port/ui/ui_mods.c/.h`: the page (kit components). `port/src/port/mods_frosted.c`: icons,

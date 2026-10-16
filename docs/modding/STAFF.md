@@ -1,5 +1,7 @@
 # Staff capacity and saves
 
+[Modding guide](README.md) / Staff capacity and saves
+
 Options > Gameplay > Staff you can hire changes gameplay.staff_max in the selected mods.ini. Default 20 paid employees (the original visible hiring limit), maximum 100, one reserved physical record for Gary. The backing pool always contains 128 records of 76 bytes. Lowering the cap blocks further paid hires without deleting or hiding existing employees. staff_max=20 is the vanilla default. Unsupported values are clamped to 1..100. The larger backing pool is retained for saved-record compatibility; it does not permit more than 100 paid hires.
 
 The pool is relocated rather than enlarged into adjacent terrain storage. golf.staff.json preserves each original symbol type, guards allocation failure in hiring and course generation, replaces every audited pool loop/end pointer, and keeps the legacy 64-record save field at 4864 bytes. The native staff list, selection adapter, name readers and bridge map to relocated storage. The bridge staff command reports the real base, stride, capacity and current cap. Only the old 64-record address range is aliased; tests must use the descriptor for slots 64..127.
@@ -10,4 +12,5 @@ Both game and course full-load callers preflight the file before mutation, inclu
 
 Writes retain a sticky failure across metadata, map/staff tags, legacy fields and course trailer. Final close returns failure to the original game/course save caller on a short write, invalid extra record or camera sidecar failure. Failed saves do not emit successful mod/camera sidecar receipts. Short writes preserve the previous main save through a temporary replacement. A later camera companion failure can occur after the complete main file is installed; the native caller then receives an error. The bridge save flow retains the previous main save and companions until a fresh native completion receipt and both CRC bindings verify, and restores them on failure. Companion files travel with saves copied into another bridge instance. SIMGOLF_TEST_SAVE_FAIL_AFTER is an isolated test-instance variable for exercising real short writes and is inactive normally.
 
-Native verification is in tests/native/staff_expansion.mjs, staff_codec.mjs, staff_ui.mjs and staff_units.py. Every invocation must hold the machine lock, run hidden and muted at BelowNormal, and finish below ten minutes. No check.sh is used in this card.
+The following verification paths belong to the internal development suite
+and are not all exported publicly. Native verification is in tests/native/staff_expansion.mjs, staff_codec.mjs, staff_ui.mjs and staff_units.py. Every invocation must hold the machine lock, run hidden and muted at BelowNormal, and finish below ten minutes. No check.sh is used in this card.

@@ -71,7 +71,7 @@ it on your PC and nothing from it ever leaves your computer.
 - **Restored cut content:** enable items already present in the original game files, including the oriental house, dinosaur tar pit and lovers' bench.
 - **Community themes:** import compatible story, pro and celebrity ZIPs while keeping stock themes available. See the [installation guide](INSTALL.md#add-a-community-theme).
 - **Editable game data:** adjust building prices and income, terrain costs, staff wages, difficulty, starting cash, golfer moods and personalities through text files.
-- **Mod folders and profiles** with load order, dependencies and conflict handling. Saves remember their mod setup. See [docs/modding](docs/modding).
+- **Mod folders and profiles** with load order, dependencies and conflict handling. Saves remember their mod setup. Start with [the modding guide](docs/modding/README.md) or [make your first mod](docs/modding/FIRST_MOD.md).
 
 ### Setup and updates
 
