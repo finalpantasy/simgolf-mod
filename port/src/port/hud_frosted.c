@@ -335,13 +335,17 @@ static void draw(const HdUiFrame *f, void *user) {
     return;
   }
   update_art(r);
-  g_hud.density = hud_density();
+  // Live, persisted Options switch. Keep the JWE top stats even when the
+  // original 2002 construction wheel and trays take over the bottom edge.
+  g_hud.original_bottom = mods_get_int("ui.original_bottom", 0) != 0;
+  g_hud.density = g_hud.original_bottom ? HUD_JWE : hud_density();
   hide_key(g_hud.hide_key, sizeof g_hud.hide_key);
   if (g_toggle_hidden) {
     g_toggle_hidden = 0;
     g_hud.hidden = !g_hud.hidden;
   }
   g_dock_mode = s.dock_mode;
+  if (g_hud.original_bottom) g_esc = 0;  // original wheel and trays own Escape
   if (g_esc) {   // Esc: close what is open, cancel the tool, and only then the Menu (ui_hud_escape)
     g_esc = 0;
     HudAction ea[2];
@@ -483,6 +487,9 @@ static int input(SDL_Event *e, int course, void *user) {
       return 0;
     case SDL_KEYDOWN: {
       if (e->key.keysym.sym == SDLK_ESCAPE && !opt_is_open() && gwf_escape(e->key.repeat)) return 1;
+      // In hybrid mode let the original game dismiss the active tray/tool.
+      if (e->key.keysym.sym == SDLK_ESCAPE && mode == HUD_MODE_FROSTED &&
+          mods_get_int("ui.original_bottom", 0)) return 0;
       if (e->key.keysym.sym == SDLK_ESCAPE) fprintf(stderr, "hud: esc key (visible %d, options %d, dialog %d)\n", g_visible, opt_is_open(), dlgf_active());
       if (e->key.keysym.sym == SDLK_ESCAPE && g_visible && !opt_is_open() && !dlgf_active()) {
         if (!e->key.repeat) g_esc = 1;   // each Esc is one step (the draw runs ui_hud_escape)
@@ -519,7 +526,8 @@ static int input(SDL_Event *e, int course, void *user) {
     return 0;
   }
   int to = ui_route_event(g_ui, &u);
-  if (mode == HUD_MODE_FROSTED && u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
+  if (mode == HUD_MODE_FROSTED && !mods_get_int("ui.original_bottom", 0) &&
+      u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
     lock();
     int placing = hudf_keep_tray_on_world_click(&g_snap);
     unlock();
