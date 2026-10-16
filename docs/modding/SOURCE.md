@@ -64,7 +64,7 @@ Keep CMake and Ninja on `PATH`. In the [testing commands](TESTING.md), use `--co
 
 ## Full game build: prerequisites and current gaps
 
-The public source includes translation and native build code, but **the 0.1.16 source snapshot is not a self-contained, tested clean-build kit**. In particular:
+The public source includes translation and native build code, but **the 0.1.17 source snapshot is not a self-contained, tested clean-build kit**. In particular:
 
 - Native CMake files reference internal `tests/` sources that are absent from the public tree. A clean configure can fail on missing test sources.
 - `tools/check.sh`, the native hidden-desktop runner and several scripts referenced by older documents are not exported.

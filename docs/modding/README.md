@@ -10,6 +10,7 @@ Change prices, wages, difficulty and golfer dialogue with text files. Use C or C
 |---|---|
 | Make and install a working mod | [Your first mod](FIRST_MOD.md) |
 | Change wages, upkeep or golfer dialogue | [Recipes](RECIPES.md) |
+| Customize Living Club or understand optional content | [Optional content](CONTENT.md) |
 | Define metadata, dependencies and load order | [Manifest and profiles](MANIFEST.md) |
 | Find table names, fields, limits and operations | [Data reference](DATA.md) |
 | Change game logic or work on the engine | [Source development](SOURCE.md) |
@@ -46,4 +47,4 @@ You need your own game files to play or build the game. Share your original mod 
 - [Engine limits](../LIMITS.md): research notes for changes to fixed capacities.
 - [Contributing](../../CONTRIBUTING.md): bug reports and source pull requests.
 
-These instructions were checked against the public source at `c666f4b` (Windows release 0.1.16). They distinguish shipped behavior from design proposals. See [testing](TESTING.md) for what each check can establish.
+These instructions were checked against the public source at `639a3e3` (Windows release 0.1.17). They distinguish shipped behavior from design proposals. See [testing](TESTING.md) for what each check can establish.

@@ -340,6 +340,6 @@ The existing size/CRC-bound `.sve.mods.toml` companion also records a versioned
 gameplay. These values document the rules at save time; loading does not
 silently change the player's current settings. Older readers ignore the table.
 
-For updates started by0.1.16, missing new optional data can load from
+For updates started by 0.1.16, missing new optional data can load from
 `data/tables/_release/`. Existing root data and explicit custom paths retain
 priority. The table loader skips this compatibility folder.

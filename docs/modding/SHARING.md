@@ -26,7 +26,7 @@ There is no `modctl pack` or automatic mod downloader in the current tool. Use a
 # Cheaper Snacks
 
 Version: 1.0.0
-Tested with: SimGolf Remastered 0.1.16 on Windows
+Tested with: SimGolf Remastered 0.1.17 on Windows
 
 ## Changes
 Snack Bar base construction cost becomes $5,000.
@@ -55,7 +55,8 @@ Replace the compatibility and save sections with facts you have tested. State de
 
 ## Save compatibility
 
-The `.sve.mods.toml` companion records mod IDs and versions and binds to the save by size and CRC-32. It enables warnings; it does not store the mod itself, replay old settings or migrate content. Copy it with the save. Other companion files, such as camera metadata, should travel with the save too.
+The `.sve.mods.toml` companion records mod IDs and versions and binds to the save by size and CRC-32. It enables warnings; it does not store the mod itself, replay old settings or migrate content. In 0.1.17 it also records optional balance rules; see
+[save rules](CONTENT.md#save-rules). Copy it with the save. Other companion files, such as camera metadata, should travel with the save too.
 
 Table-only mods do not by themselves require a new save format, but their effects can persist in a course's finances or state. Expanded maps and staff are separate engine features that can add format extensions. Original executables and older builds may not read those saves. See [staff save compatibility](STAFF.md) and test the actual save you intend others to use. Disabling mods cannot remove format extensions already written to a save.
 

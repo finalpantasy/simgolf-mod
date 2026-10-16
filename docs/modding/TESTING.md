@@ -97,4 +97,4 @@ Record your mod version, Remastered version or source commit, resolved order, re
 
 The development repository runs `bash tools/check.sh`. Its exit codes are 0 for pass, 1 for failure and 3 for cannot run. Read skipped stages: a pass with no generated game or native runtime is not a gameplay pass.
 
-The public 0.1.16 tree does not contain that script or the complete internal `tests/` tree. Do not invent a successful full-suite result. For a public-source contribution, provide the commands you could run, their outputs, the gameplay comparison, and any build/test blockers. The maintainer can run the internal suite during integration.
+The public 0.1.17 tree does not contain that script or the complete internal `tests/` tree. Do not invent a successful full-suite result. For a public-source contribution, provide the commands you could run, their outputs, the gameplay comparison, and any build/test blockers. The maintainer can run the internal suite during integration.

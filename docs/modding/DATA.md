@@ -248,6 +248,10 @@ Personalities mods give golfers, each with thoughts of its own.
 | `traits` | list of trait ids | describes it (tools, later cards) |
 | `thoughts` | `{thought_event: [lines]}` | 1 to 20 lines of up to 120 characters each |
 
+In 0.1.17, Living Club dialogue is tried first. To test these table lines
+independently, disable that feature in the test install; see
+[Optional content](CONTENT.md#living-club-dialogue-and-stories).
+
 A golfer's personality comes from its profile id (fixed per golfer, kept in
 saves): the personalities in load order share out 100 percent of golfers by
 `share` (shares past 100 percent are cut). When such a golfer has a thought

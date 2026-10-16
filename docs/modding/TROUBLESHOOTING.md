@@ -23,7 +23,7 @@ Start with `golf.log` beside the running executable. Confirm which install you l
 | Data check can't read image | Supply the mapped `image/golf.bin` from a matching prepared install/build, not the raw `golf_nocd.exe`. |
 | Source edit makes no difference | Retranslate after changing translator patches or override markers, rebuild, then verify the exact executable you launched. |
 | Modern labels or buttons are blank | Use a complete package or native ALL build, including `ui_font_files`; the game target alone can omit fonts. |
-| Clean native configure cannot find tests | This is a known gap in the public 0.1.16 source export. See [full-build limitations](SOURCE.md#full-game-build-prerequisites-and-current-gaps). |
+| Clean native configure cannot find tests | This is a known gap in the public 0.1.17 source export. See [full-build limitations](SOURCE.md#full-game-build-prerequisites-and-current-gaps). |
 
 ## Report a reproducible problem
 

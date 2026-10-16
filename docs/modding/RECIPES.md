@@ -72,6 +72,10 @@ Declare `"difficulty.easy.start_cash" = "set"`. This changes starting cash to $1
 
 Declare `"personalities.optimist" = "merge"`. `personalities` is extensible; most other tables are not. A new row requires `name`. Thought keys must be existing IDs from [thought_events.json](../../data/tables/thought_events.json). Each event accepts 1 to 20 lines, each at most 120 characters.
 
+In 0.1.17, Living Club handles matching dialogue before table personalities.
+Disable it in your test install when checking this recipe independently; see
+[Optional content](CONTENT.md#living-club-dialogue-and-stories).
+
 `share` assigns part of the golfer population, using stable profile IDs. It is not a new roll on every thought. `chance` controls the proportion of matching thoughts that use your lines. Personalities share a combined 100 percent allocation in load order; excess shares are cut. Use `share = 100` temporarily if you need to observe the lines easily, then restore your intended distribution.
 
 `MYNAME` and `PARTNER` substitute names. Thoughts without replacement lines retain their original text. The Player Comments report retains the original wording because it has no specific golfer context. Personality `traits` describe the row to tools; they do not rewrite the golfer's original story traits.
