@@ -7,11 +7,81 @@ It runs your own copy of the game as a modern program: sharp at 1080p, 1440p
 and 4K, widescreen, smooth scrolling and zoom, a cleaner look for the menus and
 course HUD, an Options page, and a way to change the game with mods.
 
+Now with **45 additional golfer identities and portraits**, Living Club personalities,
+an optional **day/night lighting and regional weather system**, and the new Parkland clubhouse.
+
 This download contains **no game files**. You bring your own copy of the game
 (an installed game folder or disc image, and the version 1.02 no-CD `golf.exe`); the installer prepares
 it on your PC and nothing from it ever leaves your computer.
 
 ![The showcase course in HD with the new HUD](screenshots/course-hd.jpg)
+
+## New in 0.1.17
+
+### A course that changes with the light and weather
+
+Enable the optional atmosphere mod for warm dawns and golden afternoons, moonlit
+nights, moving cloud shade, rain, wet ground and storms with thunder. Regional
+weather follows the course's location and season. Lighting adds terrain shading
+and soft directional shadows while keeping the original course and artwork recognizable.
+
+| Daylight | Golden hour |
+|---|---|
+| ![Daylight on the showcase course with optional lighting enabled](screenshots/lighting-day.jpg) | ![Warm golden-hour lighting on the same course](screenshots/lighting-golden.jpg) |
+| **Moonlight** | **Rain and cloud cover** |
+| ![Moonlit course with the optional lighting mod](screenshots/lighting-night.jpg) | ![Rain and cloud shade over the same course](screenshots/weather-rain.jpg) |
+
+These are real screenshots from the Windows 0.1.17 build with the atmosphere mod
+enabled. The hour and weather were selected for the pictures; the default game
+keeps the original lighting. The separate experimental Terrain Mod is not installed
+in these pictures.
+
+To try the moving day/night cycle and regional weather, add or update these
+values in the existing `[environment]` section of `mods.ini`:
+
+```ini
+[environment]
+enabled=1
+day_night=1
+regional_weather=1
+gameplay=0
+```
+
+Set `enabled=0` to return to the original presentation. Weather effects on ball
+rolls and arriving golfers' mood are a separate, **off-by-default** gameplay mod.
+Thunder and rain have their own volume setting; lightning can be disabled.
+See the [independent mod switches](docs/modding/CORE.md#optional-additions-in-0117).
+
+### 45 more faces at the club
+
+Meet **25 new ordinary visitors, 10 touring pros and 10 fictional celebrities**,
+with authored names, portraits and character details. The original cast remains
+available. Living Club adds 25 personalities, contextual dialogue, memories and
+persistent stories, with extra mood reactions available separately.
+
+| Ada Fairway | Calder Stone |
+|---|---|
+| ![Ada Fairway's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-ada.jpg) | ![Calder Stone's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-calder.jpg) |
+
+New ordinary visitors follow **original skill progression by default**. Authored
+arrival skill mixes and extra mood reactions are opt-in. Original energy, mood
+and weed balance is preserved. The roster, stories and reactions each have
+[independent switches](docs/modding/CORE.md#optional-additions-in-0117).
+
+### A new clubhouse and a batch of fixes
+
+The new Parkland clubhouse includes all four views, animated flags and
+birdbath water. Original textures retain the original building. The update also
+repairs construction animation, pro shot controls, Save editing and cancellation,
+long welcome messages, theme memory and the modern Routing Map.
+
+![The new Parkland clubhouse and garden in the Windows game](screenshots/clubhouse-parkland.jpg)
+
+Download [0.1.17 for Windows](https://github.com/finalpantasy/simgolf-mod/releases/tag/v0.1.17)
+or use the in-game updater. The separate experimental Terrain Mod is optional
+and is not needed for the clubhouse, lighting, weather or new golfers.
+
+## More screenshots
 
 | | |
 |---|---|
@@ -76,7 +146,7 @@ it on your PC and nothing from it ever leaves your computer.
 ### Setup and updates
 
 - **Guided setup** from your existing SimGolf installation or a disc image, using your own matching version 1.02 no-CD program.
-- **In-game update checks:** choose when to download and install an update, with checks for incomplete program files and recovery support.
+- **In-game update checks:** choose when to download and install an update, with actual download progress, checksum/unpacking status and recovery support.
 - **Preserved settings:** updates and setup retain player settings, mod profiles and custom mod files.
 
 Original interface and texture options remain available. The default energy, mood and weed balance follows vanilla SimGolf.
