@@ -25,6 +25,7 @@ typedef struct {
   int hist_open;      // the bell's message history is out
   int seen_seq;       // newest message the history has shown (the bell's dot)
   int last_news;      // news_seq of the last frame (a new message replaces the expanded one)
+  int original_bottom; // leave the game's native bottom wheel and construction trays visible
 } UiHud;
 #define UI_HUD_INIT {0, 0, 0, -1, 0, 0}
 // density values past the three named ones: the hub variants the maintainer compares
