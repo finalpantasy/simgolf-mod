@@ -83,6 +83,7 @@
 #include "port/hd_art.h"
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
+#include "port/hd_buffer_alloc.h"
 #include "port/ui/ui_course_map.h"
 #include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
@@ -1410,10 +1411,24 @@ static DWORD WINAPI render_main(void *arg) {
     return 0;
   }
   Rt *t = calloc(1, sizeof *t);
+  if (!t) {
+    fprintf(stderr, "hd: out of memory allocating renderer state; using original presentation\n");
+    SDL_DestroyWindow(g_window);
+    g_window = NULL;
+    g_start_ok = 0;
+    SetEvent(g_ready);
+    return 0;
+  }
   t->profile=getenv("SIMGOLF_RENDER_PROFILE")!=NULL;
-  t->local = calloc((size_t)FRAME_W * FRAME_H, 2);
-  t->local_ui = calloc((size_t)FRAME_W * FRAME_H, 2);
-  t->mask = calloc((size_t)FRAME_W * FRAME_H, 1);
+  if (!hd_allocate_render_buffers(&t->local, &t->local_ui, &t->mask, (size_t)FRAME_W * FRAME_H)) {
+    fprintf(stderr, "hd: out of memory allocating frame buffers; using original presentation\n");
+    free(t);
+    SDL_DestroyWindow(g_window);
+    g_window = NULL;
+    g_start_ok = 0;
+    SetEvent(g_ready);
+    return 0;
+  }
   Uint32 flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE | (g_cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0);
   SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
   t->r = SDL_CreateRenderer(g_window, -1, flags);
@@ -1429,6 +1444,8 @@ static DWORD WINAPI render_main(void *arg) {
   if (!t->r || made < 4) {
     fprintf(stderr, "hd: no renderer (%s); the original presentation takes over\n", SDL_GetError());
     if (t->r) { ui_course_map_clear(t->r); SDL_DestroyRenderer(t->r); }
+    hd_free_render_buffers(&t->local, &t->local_ui, &t->mask);
+    free(t);
     SDL_DestroyWindow(g_window);
     g_window = NULL;
     g_start_ok = 0;
