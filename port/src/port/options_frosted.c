@@ -105,7 +105,7 @@ static const Row k_gameplay[] = {
     PREF(32, "Animals and habitats", "Include animals and habitats on the course."),
     {.type = OT_HEAD, .label = "Look of the game"},
     // The legacy build controls can coexist with the modern top course HUD.
-    {.type = OT_TOGGLE, .label = "Original Bottom UI", .key = "ui.original_bottom", .def = "0",
+    {.type = OT_TOGGLE, .label = "Original Bottom UI", .key = "ui.original_bottom", .def = "1",
      .desc = "Restore the 2002 course-building wheel and Terrain, Buildings, Landscape and People trays. Keep the modern top stats and menus."},
     {.type = OT_SEG, .label = "Golfer tags and cards", .key = "ui.golfers", .def = "frosted_mint",
      .desc = "Name tags, thought bubbles and the golfer card on the course.",
