@@ -55,9 +55,46 @@ void ui_hud_money(char *buf, int cap, int v) {
 }
 
 typedef struct { HudAction *out; int n, max; } Acts;
+static void weather_values(const HudSnap *s,char *buf,int cap) {
+  if(!s->weather_air_valid){buf[0]=0;return;}
+  double c=isfinite(s->weather_c)?fmax(-45,fmin(55,s->weather_c)):20;
+  double rh=isfinite(s->weather_rh)?fmax(5,fmin(100,s->weather_rh)):65;
+  snprintf(buf,cap,"%d\xC2\xB0%s  %d%%",(int)lround(s->weather_fahrenheit?c*1.8+32:c),
+    s->weather_fahrenheit?"F":"C",(int)lround(rh));
+}
+static void weather_icon(UiCtx *c,const HudSnap *s,UiRect r) {
+  static const UiIcon icons[]={UI_ICON_WEATHER_SUN,UI_ICON_WEATHER_PARTLY,UI_ICON_WEATHER_CLOUD,
+    UI_ICON_WEATHER_RAIN,UI_ICON_WEATHER_RAIN,UI_ICON_WEATHER_STORM};
+  static const char *const names[]={"Sunny","Partly cloudy","Overcast","Light rain","Rain","Thunderstorm"};
+  int kind=s->weather_kind>=0&&s->weather_kind<=5?s->weather_kind:0;
+  UiIcon icon=kind==0&&s->weather_night?UI_ICON_WEATHER_MOON:icons[kind];
+  const char *label=kind==0&&s->weather_night?"Clear night":names[kind];
+  char values[48],tip[128];weather_values(s,values,sizeof values);
+  if(s->weather_air_valid)snprintf(tip,sizeof tip,"%s, %s humidity",label,values);
+  else snprintf(tip,sizeof tip,"%s",label);
+  uint32_t id=ui_id("hud.weather");
+  ui_hit(c,r,0,id,UI_HIT_BLOCK|UI_HIT_INTERACT);
+  ui_icon(c,icon,ui_rect(r.x,r.y,ui_s(c,30),r.h),ui_s(c,22),ui_tokens(c)->accent_soft_text);
+  if(s->weather_air_valid)ui_text_in(c,ui_rect(r.x+ui_s(c,34),r.y,r.w-ui_s(c,34),r.h),
+    UI_TYPE_CAPTION,ui_tokens(c)->text_primary,values,0);
+  ui_tooltip(c,id,r,tip);
+  if(getenv("SIMGOLF_WEATHER_HUD_LOG")) {
+    static int last=-1,hover=-1,last_unit=-1;static float last_x,last_y;
+    int state=kind+s->weather_night*8;
+    if(last!=state||last_x!=r.x||last_y!=r.y||last_unit!=s->weather_fahrenheit) {
+      UiRect screen=ui_screen(c);
+      fprintf(stderr,"weather: badge kind %d night %d rect %.2f %.2f %.2f %.2f screen %.0f %.0f label %s\n",
+        kind,s->weather_night,r.x,r.y,r.w,r.h,screen.w,screen.h,label);
+      last=state;last_x=r.x;last_y=r.y;last_unit=s->weather_fahrenheit;
+      if(s->weather_air_valid)fprintf(stderr,"weather: badge air c %.3f rh %.3f unit %s\n",s->weather_c,s->weather_rh,s->weather_fahrenheit?"F":"C");
+    }
+    if(ui_is_hot(c,id)&&hover!=state){fprintf(stderr,"weather: badge hover %s\n",label);hover=state;}
+  }
+}
 static void act(Acts *a, HudAction x) {
   if (a->n < a->max) a->out[a->n++] = x;
 }
+static void path_view(Acts *a) { act(a, (HudAction){HUD_ACT_PATH_VIEW, 0, 0, 0, 0}); }
 static void click(Acts *a, int x, int y) { act(a, (HudAction){HUD_ACT_CLICK, x, y, 0, 0}); }
 static void wheel(Acts *a, int i) { click(a, k_wheel[i][0], k_wheel[i][1]); }
 static void goal(Acts *a, int g, int x, int y) { act(a, (HudAction){HUD_ACT_GOAL, x, y, g, 0}); }
@@ -1052,7 +1089,12 @@ static float club(UiCtx *c, const HudSnap *s, SDL_Texture *const *art, float x, 
   return x;
 }
 
-// Play/pause at x (vertically centred on cy); returns the end x.
+static float speed_width(UiCtx *c, const HudSnap *s) {
+  static const UiIcon icons[2] = {UI_ICON_PLAY, UI_ICON_PAUSE};
+  return ui_segmented_width(c, NULL, icons, 2) + (s->speed_button_off ? 0 : ui_s(c, 66));
+}
+
+// Play/pause and a cycling speed button; fixed width keeps all controls still.
 static float speed(UiCtx *c, const HudSnap *s, float x, float cy, Acts *a) {
   static const UiIcon seg_icons[2] = {UI_ICON_PLAY, UI_ICON_PAUSE};
   static const char *const none[2] = {NULL, NULL};
@@ -1060,7 +1102,30 @@ static float speed(UiCtx *c, const HudSnap *s, float x, float cy, Acts *a) {
   int sel = s->paused ? 1 : 0, want = sel;
   ui_segmented(c, ui_id("hud.barspeed"), ui_rect(x, cy - segh / 2, segw, segh), NULL, seg_icons, 2, &want);
   if (want != sel) wheel(a, W_PAUSE);
-  return x + segw;
+  if (!s->speed_button_off) {
+    UiRect r = ui_rect(x + segw + ui_s(c, 6), cy - segh / 2, ui_s(c, 60), segh);
+    uint32_t id = ui_id("hud.speedcycle");
+    double pace = s->game_speed > 0 ? s->game_speed : 1;
+    int arrows = (int)pace;
+    int next = pace >= 1 && pace < 4 ? (int)pace + 1 : 1;
+    if (ui_button(c, id, r, NULL, UI_ICON_NONE, UI_BTN_PILL, 0))
+      act(a, (HudAction){HUD_ACT_SPEED, next, 0, 0, 0});
+    if (arrows >= 1 && arrows <= 4 && pace == arrows) {
+      // Icon cells include side padding, so overlap the cells to keep four full-size arrows readable.
+      float iw = ui_s(c, 18), gap = ui_s(c, -5);
+      float left = r.x + (r.w - arrows * iw - (arrows - 1) * gap) / 2;
+      for (int i = 0; i < arrows; i++)
+        ui_icon(c, UI_ICON_PLAY, ui_rect(left + i * (iw + gap), r.y, iw, r.h), iw, ui_tokens(c)->text_primary);
+    } else {
+      char label[16];
+      snprintf(label, sizeof label, "%gx", pace);
+      ui_text_in(c, r, UI_TYPE_LABEL, ui_tokens(c)->text_primary, label, 1);
+    }
+    char tip[96];
+    snprintf(tip, sizeof tip, "Game speed: %gx. Click for %dx speed", pace, next);
+    ui_tooltip(c, id, r, tip);
+  }
+  return x + speed_width(c, s);
 }
 
 // Category icons in a row from x (labels in tooltips); n of them from first.
@@ -1106,7 +1171,7 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
     float cw = ui_text_width(c, UI_TYPE_CAPTION, s->date) + ui_s(c, 16);
     static const char *const none[2] = {NULL, NULL};
     static const UiIcon seg_icons[2] = {UI_ICON_PLAY, UI_ICON_PAUSE};
-    float segw = ui_segmented_width(c, none, seg_icons, 2);
+    float segw = speed_width(c, s);
     float mid = top.x + top.w / 2 - (cw + segw) / 2;
     ui_text(c, mid, floorf(cy + ui_font(c, UI_TYPE_CAPTION).px * 0.36f + 0.5f), UI_TYPE_CAPTION, ui_tokens(c)->text_secondary, s->date);
     speed(c, s, mid + cw, cy, a);
@@ -1139,7 +1204,7 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
     cat_row(c, hud, s, a, bot.x + (bot.w - bw) / 2, cy, ui_s(c, 38), 0, D_N - 1, &act);
     static const char *const none[2] = {NULL, NULL};
     static const UiIcon seg_icons[2] = {UI_ICON_PLAY, UI_ICON_PAUSE};
-    float segw = ui_segmented_width(c, none, seg_icons, 2);
+    float segw = speed_width(c, s);
     float rx = bot.x + bot.w - m - ui_s(c, 38) - ui_s(c, 10) - segw;
     speed(c, s, rx, cy, a);
     cat_row(c, hud, s, a, bot.x + bot.w - m - ui_s(c, 38), cy, ui_s(c, 38), D_MENU, 1, NULL);
@@ -1151,10 +1216,12 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
     // on the readable glass (7:1 text contrast over any course picture)
     static const char *const none[2] = {NULL, NULL};
     static const UiIcon seg_icons[2] = {UI_ICON_PLAY, UI_ICON_PAUSE};
-    float cw = stats_row_width(c, s, 0), segw = ui_segmented_width(c, none, seg_icons, 2), pad = ui_s(c, 12);
+    float cw = stats_row_width(c, s, 0), segw = speed_width(c, s), pad = ui_s(c, 12);
     float dw = ui_text_width(c, UI_TYPE_CAPTION, s->date);
     float bell = ui_s(c, 30), bellw = bell + ui_s(c, 6);   // task-62: the message history's bell, at the left end
-    float ch = ui_s(c, 40), w = bellw + pad + cw + pad + dw + ui_s(c, 12) + segw + ui_s(c, 8);
+    char air_values[48];weather_values(s,air_values,sizeof air_values);
+    float weather_w=s->weather_report?ui_s(c,34)+(s->weather_air_valid?ui_text_width(c,UI_TYPE_CAPTION,air_values)+ui_s(c,12):0):0;
+    float ch = ui_s(c, 40), w = bellw + weather_w + pad + cw + pad + dw + ui_s(c, 12) + segw + ui_s(c, 8);
     UiRect cl = ui_rect_round(ui_anchor(scr, w, ch, UI_TOP_RIGHT, m, m));
     ui_panel(c, cl, ui_s(c, 14), UI_PANEL_READABLE);
     float cy = cl.y + ch / 2;
@@ -1169,13 +1236,14 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
       if (newest > hud->seen_seq && !hud->hist_open)   // unread: a dot on the bell
         uid_rrect(ui_drawer(c), ui_rect(br.x + br.w - ui_s(c, 11), br.y + ui_s(c, 3), ui_s(c, 8), ui_s(c, 8)), ui_s(c, 4), ui_tokens(c)->danger);
     }
-    float x = stats_row(c, s, cl.x + bellw + pad, cy, 0, 0) + pad;
+    if(s->weather_report)weather_icon(c,s,ui_rect(cl.x+bellw,cy-bell/2,weather_w-ui_s(c,4),bell));
+    float x = stats_row(c, s, cl.x + bellw + weather_w + pad, cy, 0, 0) + pad;
     x = ui_text(c, x, floorf(cy + ui_font(c, UI_TYPE_CAPTION).px * 0.36f + 0.5f), UI_TYPE_CAPTION, ui_tokens(c)->text_secondary, s->date);
     speed(c, s, x + ui_s(c, 12), cy, a);
     // build toolbar at the bottom left: one small button; it opens the category row, a click on the
     // course or Esc folds it away again (hud_frosted.c), the first button folds it too
     float tsq = ui_s(c, 34), tpad = ui_s(c, 5), tg = ui_s(c, 6);
-    int cells = hud->bar_open ? D_N + 1 : 1;
+    int cells = hud->bar_open ? D_N + 1 + !!s->paths_available : 1;
     float tw = cells * tsq + (cells - 1) * tg + 2 * tpad, th = tsq + 2 * tpad;
     UiRect tb = ui_rect_round(ui_rect(scr.x + m, scr.y + scr.h - m - th, tw, th));
     ui_panel(c, tb, ui_s(c, 16), 0);
@@ -1191,6 +1259,12 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
         hud->tray_hidden = 1;
       }
       cat_row(c, hud, s, a, first.x + tsq + tg, tb.y + th / 2, tsq, 0, D_N, &act);
+      if (s->paths_available) {
+        UiRect pr = ui_rect(first.x + (D_N + 1) * (tsq + tg), first.y, tsq, tsq);
+        if (ui_dock_item(c, ui_id("hud.paths"), pr, UI_ICON_PATH, NULL, s->paths_on ? UI_SELECTED : 0,
+                         s->paths_on ? "Path view: hide clubhouse connections" : "Path view: show clubhouse connections"))
+          path_view(a);
+      }
       g_pan.left = tb.x;
       g_pan.anchor_left = 1;
       g_pan.edge = tb.y - ui_s(c, 8);
@@ -1238,6 +1312,20 @@ static void panel_tray(UiCtx *c, const char *title, const char *const *tabs, int
   UiRect r = ui_rect_round(ui_rect(x0, y0, w, h));
   ui_panel(c, r, ui_s(c, slim ? 18 : 22), 0);
   float x = r.x + pad, y = r.y + pad;
+  if (getenv("SIMGOLF_HUD_LOG")) {
+    char buf[1536];
+    int len = snprintf(buf, sizeof buf, "hud: tray %s target %.0fx%.0f tab %d count %d", title, scr.w, scr.h, tab ? *tab : -1, n);
+    float tabx = x + title_w + ui_s(c, 3);
+    for (int i = 0; i < ntabs && len < (int)sizeof buf - 64; i++) {
+      float sw = ui_segmented_width(c, &tabs[i], NULL, 1) - ui_s(c, 6);
+      len += snprintf(buf + len, sizeof buf - len, " t%d %.0f,%.0f", i, tabx + sw / 2, y + segh / 2);
+      tabx += sw + ui_s(c, 2);
+    }
+    for (int i = 0; i < n && len < (int)sizeof buf - 64; i++)
+      len += snprintf(buf + len, sizeof buf - len, " i%d %.0f,%.0f", i, x + (i % per) * (tw + g) + tw / 2, y + segh + hgap + (i / per) * (th + g) + th / 2);
+    static char last[1536];
+    if (strcmp(last, buf)) fprintf(stderr, "%s\n", buf), snprintf(last, sizeof last, "%s", buf);
+  }
   ui_text_in(c, ui_rect(x + ui_s(c, 2), y, title_w, segh), UI_TYPE_HEADING, t->text_primary, title, 0);
   if (ntabs) ui_segmented(c, ui_id(title) ^ 0x7ab5u, ui_rect(x + title_w, y, tabs_w, segh), tabs, NULL, ntabs, tab);
   if (rot) rot_button(c, r.x + r.w - pad - (undo_w ? undo_w + ui_s(c, 10) : 0), y + segh / 2, segh, a);
@@ -1270,8 +1358,8 @@ static void row_tray(UiCtx *c, const char *title, const char *const *tabs, int n
   float pad = ui_s(c, 8), item = ui_s(c, 56), gap = ui_s(c, 6), sep = ui_s(c, 12), tw = ui_s(c, 64) * g_tile_wmul;
   float segh = ui_s(c, tabs_above ? 30 : 36), arrow = ui_s(c, 30), undo_w = ui_s(c, 32);
   float m = ui_s(c, 8), bottom = ui_s(c, 8);
-  UiFont hf = ui_font(c, UI_TYPE_LABEL);
-  float title_w = ui_text_width(c, UI_TYPE_HEADING, title) + sep;
+  int title_style = tabs_above ? UI_TYPE_LABEL : UI_TYPE_HEADING;
+  float title_w = ui_text_width(c, title_style, title) + sep + ui_s(c, 4);
   float tabs_w = ntabs ? ui_segmented_width(c, tabs, NULL, ntabs) : 0;
   float tiles_w = n > 0 ? n * tw + (n - 1) * gap : ui_s(c, 300);
   float H = tabs_above ? pad + segh + gap + item + pad : pad + item + pad;
@@ -1291,7 +1379,6 @@ static void row_tray(UiCtx *c, const char *title, const char *const *tabs, int n
   UiRect r = ui_rect_round(ui_rect(x0 - (1 - k) * ui_s(c, 16), scr.y + scr.h - bottom - H, inner + 2 * pad, H));
   ui_panel(c, r, ui_s(c, 22), 0);
   float x = r.x + pad, rowy = r.y + r.h - pad - item;
-  (void)hf;
   if (tabs_above) {
     float ty = r.y + pad;
     ui_text_in(c, ui_rect(x + ui_s(c, 4), ty, title_w, segh), UI_TYPE_LABEL, t->text_primary, title, 0);
@@ -1432,12 +1519,15 @@ static void landscape_tray(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *co
     tl->name = k_elev_short[i];
     tl->price = i < 3 ? "- and = keys" : "";
     tl->tip = k_elevation[i].name;
-    tl->art = art ? art[HUD_ART_ELEVATION + i] : NULL;
+    tl->art = NULL; // scalable native tools replace the old lavender icon cards
     tl->icon = k_elevation[i].icon;
+    tl->labelled = 1;
     tl->selected = s->elev_edit && s->elevation_tool == k_elevation[i].tool;
     tl->act = (HudAction){HUD_ACT_GOAL, k_elevation[i].x, k_elevation[i].y, HUD_GOAL_LANDSCAPE, 0};
   }
+  g_tile_wmul = 1.5f;
   tray(c, h, "Landscape", NULL, 0, NULL, tiles, 4, 4, 267, 561, dock_r, a);
+  g_tile_wmul = 1;
 }
 
 // task-92: the "Your pro" page stands in for the original's player panel (FUN_004362f0, hidden with the old

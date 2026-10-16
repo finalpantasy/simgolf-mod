@@ -7,6 +7,7 @@
 
 #include <SDL.h>
 #include <stdint.h>
+#include "port/environment.h"
 
 // Settings (hd_native.c's reader hands over every art* key; then the mods
 // store's art.<category> and SIMGOLF_DISPLAY beat golf.ini).
@@ -14,6 +15,10 @@ void hd_art_set_key(const char *key, const char *value);
 // Game thread, from hd_native_prepare (images loaded, before any drawing).
 void hd_art_init(int presenter_on);
 int hd_art_active(void);   // any category not original
+// Game thread: current people-art source for the separate native portrait.
+int hd_art_portrait_source(char *dir, int cap);
+// Read-only identity of an existing original sprite wrapper, game thread only.
+int hd_art_portrait_frame(uint32_t wrap, char *source, int cap, int *ax, int *ay);
 // Pixel HD (card task-71): the size in screen pixels of the pixel grid the course picture is drawn on
 // (0: off). k: screen pixels per canvas pixel. Render thread.
 int hd_art_pixel_grid(double k);
@@ -58,8 +63,23 @@ int hd_art_prepare(SDL_Renderer *r, int new_frame);
 // 1: canvas pixel i belongs to a drawn hi-res sprite of that list
 // (hd_native.c cuts it out of golf's layer). NULL: none.
 const uint8_t *hd_art_cut_mask(int which);
+// Render-thread only: shared wind sample for anchored flag cloth.
+#include "port/course_relief.h"
+void hd_art_relief(const CourseRelief *relief,int enabled);
+void hd_art_fog_features(uint8_t *features,int width,int height,double fog_pixels);
+void hd_art_enclosure_ground(SDL_Renderer *r,const uint8_t *ground,int width,int height,double ox,double oy,double scale);
+void hd_art_lighting(const EnvironmentConfig *config,const EnvironmentSample *sun,double ax,double ay,double bx,double by);
+void hd_art_lamps(SDL_Renderer *r,SDL_Rect clip,const uint8_t *receiver,int w,int h,double ox,double oy,double scale);
+void hd_art_wind(int enabled,double seconds,double wind_x);
 // Draws a list: canvas px -> target via (ox, oy) + px * k.
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k);
+// Course-only ground pass, immediately before hd_art_draw. The terrain mask
+// uses canvas coordinates. Slopes are screen-ground displacement per pixel
+// of displayed sprite height, after applying the camera's sun projection.
+// enabled=0 releases all shadow resources and restores baked-shadow drawing.
+int hd_art_draw_shadows(SDL_Renderer *r, SDL_Rect clip, double ox, double oy, double k,
+                        const uint8_t *ground, int width, int height, int enabled,
+                        double slope_x, double slope_y, double opacity, double ground_aspect);
 
 // Game thread (hd_terrain_native.c): the terrain texture loaded from `src`
 // (rgba w x h, rows as the terrain renderer keeps them) in the terrain look:

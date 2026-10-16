@@ -15,6 +15,7 @@
 #include "port/fs.h"
 #include "port/host.h"
 #include "mods/mods.h"
+#include "mods/living_club.h"
 
 // The folder a game-relative path lives in: the per-instance user folder
 // (SIMGOLF_USER_DIR, task-13) for saves and snapshots, else the game folder.
@@ -38,8 +39,10 @@ void fs_init(void) {
 
 // DOS path -> path relative to the game folder ('/' separated), as fs.c does:
 // drive letters, the reported install folder C:\SimGolf and "./" go away.
-static void normalize(const char *dos, char *out, int outlen) {
+static int normalize(const char *dos, char *out, int outlen) {
+  if (!dos || !out || outlen <= 0) return 0;
   char tmp[512];
+  if (strlen(dos) >= sizeof tmp) return 0;
   int j = 0;
   for (const char *p = dos; *p && j < (int)sizeof tmp - 1; p++) tmp[j++] = *p == '\\' ? '/' : *p;
   tmp[j] = 0;
@@ -49,11 +52,12 @@ static void normalize(const char *dos, char *out, int outlen) {
   while (*s == '/') s++;
   int k = 0;
   while (*s && k < outlen - 1) {
-    if (s[0] == '.' && s[1] == '/') { s += 2; continue; }
+    if (s[0] == '.' && s[1] == '/' && (k == 0 || out[k - 1] == '/')) { s += 2; continue; }
     if (s[0] == '/' && k > 0 && out[k - 1] == '/') { s++; continue; }
     out[k++] = *s++;
   }
   out[k] = 0;
+  return *s == 0;
 }
 
 // task-114j: a game path never climbs out of the game folder ("..\..\x" from a hostile save or mod).
@@ -69,18 +73,34 @@ static int has_parent_part(const char *rel) {
 }
 
 int fs_resolve(const char *dospath, char *out, int outlen, int for_write) {
-  if (!dospath) return 0;
+  if (!dospath || !out || outlen <= 0) return 0;
   char rel[512];
-  normalize(dospath, rel, sizeof rel);
+  if (!normalize(dospath, rel, sizeof rel)) return 0;
   if (has_parent_part(rel)) { fprintf(stderr, "fs: refused a path with a parent part: %s\n", dospath); return 0; }
-  snprintf(out, outlen, "%s/%s", base_for(rel), rel);
+  int n = snprintf(out, outlen, "%s/%s", base_for(rel), rel);
+  if (n < 0 || n >= outlen) { out[0] = 0; return 0; }
   harness_note_file(out);
   DWORD a = GetFileAttributesA(out);
   if (a != INVALID_FILE_ATTRIBUTES) {
     if (!for_write) mods_save_opened(out);   // a .sve: check its mod record (task-11)
     return 1;
   }
-  if (!for_write) return 0;
+  if (!for_write) {
+    // Authored roster companions travel with the program, without modifying
+    // installed themes. Existing player copies above retain precedence.
+    const char *theme_end = !_strnicmp(rel, "Themes/", 7) ? strchr(rel + 7, '/') : NULL;
+    const char *name = strrchr(rel, '/');
+    const char *ext = name ? strrchr(name, '.') : NULL;
+    int pro = theme_end && !_strnicmp(rel + 7, "Championship/", 13) && name == theme_end && ext && !_stricmp(ext, ".pro");
+    int character = theme_end && !_strnicmp(theme_end, "/New Roster/", 12) && name == theme_end + 11 && ext && !_stricmp(ext, ".chr");
+    if ((pro || character) && mods_get_int("gameplay.new_roster", 1)) {
+      n = snprintf(out, outlen, "%s/ui/characters/%s", host_exe_dir(), name + 1);
+      if (n < 0 || n >= outlen) { out[0] = 0; return 0; }
+      a = GetFileAttributesA(out);
+      if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return 1;
+    }
+    return 0;
+  }
   // Writing: the file may be missing, its folder may not.
   char dir[600];
   snprintf(dir, sizeof dir, "%s", out);
@@ -92,7 +112,7 @@ int fs_resolve(const char *dospath, char *out, int outlen, int for_write) {
 }
 
 // A .sve the game wrote gets a record of the loaded mods next to it (task-11).
-void fs_written(const char *realpath) { mods_save_written(realpath); }
+void fs_written(const char *realpath) { mods_save_written(realpath); living_written(realpath); }
 void fs_deleted(const char *realpath) { (void)realpath; }
 
 int fs_commit(int fd) { return _commit(fd) == 0; }
@@ -101,9 +121,10 @@ int fs_safe_saves(void) { return mods_get_int("fixes.safe_saves", 1); }
 
 int fs_list(const char *dospattern, fs_list_fn fn, void *ctx) {
   char rel[512], pat[600];
-  normalize(dospattern, rel, sizeof rel);
+  if (!fn || !normalize(dospattern, rel, sizeof rel)) return 0;
   if (has_parent_part(rel)) return 0;
-  snprintf(pat, sizeof pat, "%s/%s", base_for(rel), rel);
+  int len = snprintf(pat, sizeof pat, "%s/%s", base_for(rel), rel);
+  if (len < 0 || len >= (int)sizeof pat) return 0;
   WIN32_FIND_DATAA fd;
   HANDLE h = FindFirstFileA(pat, &fd);
   if (h == INVALID_HANDLE_VALUE) return 0;

@@ -230,6 +230,9 @@ static char *parse_string(Parser *ps) {
         unsigned cp, lo;
         if (!hex4(ps->p, &cp)) { perr(ps, "bad \\u escape"); free(out); return NULL; }
         ps->p += 4;
+        // JsonVal strings and object keys are NUL-terminated. Accepting an
+        // embedded NUL would silently discard the rest of a value or key.
+        if (cp == 0) { perr(ps, "embedded NUL is not supported in strings"); free(out); return NULL; }
         if (cp >= 0xd800 && cp < 0xdc00 && ps->p[0] == '\\' && ps->p[1] == 'u' && hex4(ps->p + 2, &lo) &&
             lo >= 0xdc00 && lo < 0xe000) {
           cp = 0x10000 + ((cp - 0xd800) << 10) + (lo - 0xdc00);
@@ -367,6 +370,14 @@ JsonVal *json_load(const char *path, char *err, size_t errlen) {
   char *text = mods_read_file(path, &len);
   if (!text) {
     if (err && errlen) snprintf(err, errlen, "%s: cannot read the file", path);
+    return NULL;
+  }
+  const char *nul = memchr(text, 0, len);
+  if (nul) {
+    int line = 1;
+    for (const char *p = text; p < nul; p++) if (*p == '\n') line++;
+    if (err && errlen) snprintf(err, errlen, "%s:%d: embedded NUL in JSON file", path, line);
+    free(text);
     return NULL;
   }
   char e[300];

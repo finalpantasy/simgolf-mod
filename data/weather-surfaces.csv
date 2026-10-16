@@ -1,0 +1,22 @@
+# Presentation-only weather surface tuning. Times are unpaused seconds.
+wet_seconds,18
+dry_seconds,100
+puddle_seconds,32
+flash_gain,0.72
+splash_strength,0.85
+evaporation_strength,0.16
+cloud_size,1.9
+cloud_shade,0.28
+cloud_feather,0.22
+cloud_morph_seconds,180
+
+# Material response: unknown, grass, paths, sand. Water keeps its own renderer.
+wet_grass_gloss,0.042
+wet_path_gloss,0.18
+wet_sand_gloss,0.001
+wet_grass_power,10
+wet_path_power,28
+wet_sand_power,4
+wet_grass_absorb,0.075
+wet_path_absorb,0.13
+wet_sand_absorb,0.20

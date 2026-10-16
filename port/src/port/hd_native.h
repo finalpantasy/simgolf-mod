@@ -25,6 +25,7 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame);
 // serial of the course frame on screen; a newer scene waits for its frame
 // (task-68: the ground and the course must move on the same presented frame).
 SDL_Texture *hdt_render(SDL_Renderer *r, int w, int h, long shown);
+SDL_Texture *hdt_render_guard(SDL_Renderer *r, long shown);
 
 // ------------------------------------------------------------------ UI layer (task-3 B4)
 //

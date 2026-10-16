@@ -1,0 +1,22 @@
+# Authored simulated course conditions, not live weather observations.
+# place,spring_c,summer_c,autumn_c,spring_rh,summer_rh,autumn_rh,day_swing_c,spell_swing_c
+San Diego,17,22,20,70,68,68,5,3
+Jamaica,27,29,28,76,77,80,4,2.5
+Scotland,9,15,10,78,75,82,5,5
+Carolina,18,28,19,68,73,72,6,5
+Rocky Mtns.,8,20,9,50,46,50,10,7
+Nova Scotia,6,18,9,76,77,80,6,5
+Monterey,14,18,17,78,80,78,4,3
+Ireland,10,15,11,81,78,84,4,4
+Phoenix,24,35,25,28,30,33,10,7
+Las Vegas,22,34,23,25,20,30,12,8
+Oahu,25,28,27,72,70,75,4,2.5
+Hawaii,24,27,26,75,73,77,4,2.5
+Wales,10,16,11,80,77,84,5,4
+Florida,24,29,25,72,78,77,5,4
+Spain,17,27,20,57,46,62,8,6
+Northeast,11,24,13,60,65,68,8,6
+Parkland,14,24,15,65,67,72,7,5
+Desert,23,35,24,25,22,30,11,8
+Tropical,26,29,27,76,78,80,4,3
+Links,10,16,11,79,76,83,5,4

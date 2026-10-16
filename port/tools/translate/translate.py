@@ -60,11 +60,37 @@ if args.config:
             for name, lst in extra_cfg.get("required_patch_counts", {}).items():
                 cfg.setdefault("required_patch_counts", {}).setdefault(name, []).extend(lst)
             cfg.setdefault("global_types", {}).update(extra_cfg.get("global_types", {}))
+            cfg.setdefault("address_maps", []).extend(extra_cfg.get("address_maps", []))
+            for owner, addresses in extra_cfg.get("address_map_exemptions", {}).items():
+                cfg.setdefault("address_map_exemptions", {}).setdefault(owner, []).extend(addresses)
 native = {int(k, 16): v for k, v in cfg.get("native", {}).items()}   # addr -> C name
 skip = {int(k, 16) for k in cfg.get("skip", [])}
 patches = cfg.get("patches", {})                                    # name -> [[old, new], ...]
 # Address-wide overrides take precedence over individual Ghidra function types.
 global_types = {int(k, 16): v for k, v in cfg.get("global_types", {}).items() if not k.startswith("_")}
+address_maps = [(int(x["start"], 16), int(x["end"], 16), x["function"])
+                for x in cfg.get("address_maps", [])]
+address_map_exemptions = {owner: {int(address,16) for address in addresses}
+                         for owner,addresses in cfg.get("address_map_exemptions", {}).items()}
+
+
+def relocate_addresses(source, owner=None):
+    """Redirect literal data addresses while retaining the decompiler's types.
+
+    End addresses are exclusive: the next global may be an unrelated bank.
+    Function bodies and their typed global definitions use the same mapping.
+    """
+    def replace(match):
+        address = int(match.group(), 16)
+        if address in address_map_exemptions.get(owner, set()):
+            return match.group()
+        for start, end, function in address_maps:
+            if start <= address < end:
+                if source[:match.start()].endswith(function + '('):
+                    return match.group()
+                return '%s(%s)' % (function, match.group())
+        return match.group()
+    return re.sub(r'\b0x[0-9a-fA-F]+\b', replace, source)
 
 funcs = []
 with open(os.path.join(args.export, "functions.jsonl")) as f:
@@ -870,6 +896,8 @@ def translate_fn(d):
     if brace >= 0:
         c = c[:brace + 1] + "\n  PORT_TRACE(0x%s);" % d["addr"] + c[brace + 1:]
     out = "/* %s @ %s */\n" % (name, d["addr"])
+    c = relocate_addresses(c, name)
+    defs = [relocate_addresses(line, name) for line in defs]
     if defs:
         out += "\n".join(defs) + "\n"
     out += c.strip() + "\n"

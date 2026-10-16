@@ -2,6 +2,38 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.17",
+      "date": "2026-10-16",
+      "name": "A larger cast, optional living-course features and a batch of interface repairs",
+      "summary": "A larger cast, optional living-course features and a batch of interface repairs.",
+      "notes": [
+        "Added 45 authored golfer identities and portraits, with original ordinary visitor skill progression by default. New arrival skill mixes are optional.",
+        "Added switchable Living Club personalities, dialogue, memories and stories. Extra mood reactions are opt-in.",
+        "Added optional lighting and regional weather. Effects on ball rolls and arriving golfers are opt-in.",
+        "Bundled the approved Parkland clubhouse. New authored terrain is a separate optional Terrain Mod download; original textures and independent art switches remain available.",
+        "Fixed clubhouse layer loading, retention while Options is open, and the original falling construction animation.",
+        "Fixed pro shot readouts and shot choices in Practice and matches, with original-text controls retained.",
+        "Modernised Routing Map, remembered the selected theme and added Space pause under the modern keyboard profile.",
+        "Fixed Save-name selection and quiet cancellation. Empty submitted names still produce the original warning.",
+        "Fixed duplicate welcome history, welcome wording and truncation of longer welcome messages.",
+        "Added real updater byte progress and a visible verification phase while protecting player settings, mods and saves.",
+        "Retained staff placement repairs for expanded courses and camera/scrolling fixes. New gameplay additions are independently switchable. Original energy, mood and weed balance remains the default. Manual par editing and drag-to-build are not included. No original game files are bundled."
+      ]
+    },
+    {
+      "version": "0.1.16",
+      "date": "2026-10-16",
+      "name": "Release 0.1.16",
+      "summary": "",
+      "notes": [
+        "Bundled clubhouse art is delivered through the existing updater while preserving user HD packs.",
+        "Added the approved Parkland clubhouse model and garden, with all four views and original-cadence animated flags and birdbath water. Existing HD art stays available; Original textures retain the original building.",
+        "Restored the original assigned golfer clothing colours after repairing lost palette-call arguments in the translated game.",
+        "Saved courses open over the clubhouse, with tee and map-centre fallbacks when needed, avoiding empty black starting views on expanded courses.",
+        "Modern course hints and placement, purchase and removal labels now use the readable native typography. Original text options remain available. Existing loading improvements, HD chooser pictures and landmark benefit descriptions are retained. Original energy, mood and weed balance is unchanged. Original game data is not included. # Changelog"
+      ]
+    },
+    {
       "version": "0.1.14",
       "date": "2026-10-15",
       "name": "Faster startup and course creation, with smooth loading progress",

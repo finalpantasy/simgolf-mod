@@ -29,6 +29,7 @@
 #include "port/frontend_frosted.h"
 #include "port/host.h"
 #include "port/runtime.h"
+#include "port/crash_record.h"
 #include "mods/mods.h"
 
 extern int win_closing;   // win32.h (not included: its enum clashes with wingdi.h)
@@ -192,6 +193,7 @@ static LONG WINAPI on_wild_access(EXCEPTION_POINTERS *ep) {
 }
 
 static LONG WINAPI on_crash(EXCEPTION_POINTERS *ep) {
+  host_write_crash_record(g_log_path, ep);
   EXCEPTION_RECORD *er = ep->ExceptionRecord;
   fprintf(stderr, "crash: exception %08lx at %08x", er->ExceptionCode, (unsigned)(uintptr_t)er->ExceptionAddress);
   if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2)

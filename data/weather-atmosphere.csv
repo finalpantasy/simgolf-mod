@@ -1,0 +1,9 @@
+# Optional artistic atmosphere. Unpaused presentation clock, no gameplay changes.
+mist_strength,0.26
+haze_strength,0.065
+gust_strength,0.55
+golden_strength,0.32
+shadow_opacity,0.32
+puddle_drain,0.40
+front_lead_seconds,12
+distant_thunder_gain,0.24

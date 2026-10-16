@@ -110,8 +110,9 @@ static float g_zs = 1, g_zx, g_zy;
 
 static int slot_idx(int slot) {
   if (slot < 0) return -1;
+  if (slot == 999) return GW_SLOT_ALL - 1;   // tutorial guidance has no golfer owner
   if (slot < GW_SLOT_G) return slot;
-  if (slot >= 1000) return GW_SLOT_G + (slot - 1000) % (GW_SLOT_ALL - GW_SLOT_G);
+  if (slot >= 1000) return GW_SLOT_G + (slot - 1000) % (GW_SLOT_ALL - GW_SLOT_G - 1);
   return -1;
 }
 
@@ -330,19 +331,24 @@ static void draw_tags(UiCtx *c, const GwNote *n, float vx, float vy, float k, fl
 }
 
 // A big thought: the glass bubble with the mood face (or the speaker's) and the words.
-static void draw_bubble_full(UiCtx *c, float x, float bottom, SDL_Texture *tex, SDL_Texture *mood_tex, int mood, const char *text, float a) {
+static void draw_bubble_full(UiCtx *c, float x, float bottom, SDL_Texture *tex, SDL_Texture *mood_tex, int mood, const char *text, float a, int tutorial) {
   const UiTokens *t = ui_tokens(c);
   const GwOpts *o = opts();
   UiDraw *d = ui_drawer(c);
-  float maxw = ui_s(c, t->bubble_max_w), isz = ui_s(c, 28);
-  char ln[2][160];
+  UiRect scr = ui_screen(c);
+  float maxw = tutorial ? fminf(ui_s(c, 560), scr.w - ui_s(c, 40)) : ui_s(c, t->bubble_max_w), isz = ui_s(c, 28);
+  char ln[10][160];
   float padl = ui_s(c, 9), padr = ui_s(c, 16), padv = ui_s(c, 9);
-  int lines = wrap_lines(c, UI_TYPE_LABEL, text, maxw - padl - isz - ui_s(c, 8) - padr, ln, 2);
+  int lines = wrap_lines(c, UI_TYPE_LABEL, text, maxw - padl - isz - ui_s(c, 8) - padr, ln, tutorial ? 10 : 2);
   UiFont f = ui_font(c, UI_TYPE_LABEL);
   float tw = ln[0][0] ? ui_text_width(c, UI_TYPE_LABEL, ln[0]) : 0;
-  if (lines > 1) tw = fmaxf(tw, ui_text_width(c, UI_TYPE_LABEL, ln[1]));
+  for (int i = 1; i < lines; i++) tw = fmaxf(tw, ui_text_width(c, UI_TYPE_LABEL, ln[i]));
   float w = padl + isz + ui_s(c, 8) + tw + padr, h = fmaxf(isz, lines * f.line) + 2 * padv;
   UiRect r = ui_rect(x - w / 2, bottom - h, w, h);
+  if (tutorial) {
+    r.x = fmaxf(scr.x + ui_s(c, 12), fminf(r.x, scr.x + scr.w - ui_s(c, 12) - w));
+    r.y = fmaxf(scr.y + ui_s(c, 12), r.y);
+  }
   float rad = fminf(h / 2, ui_s(c, 22));
   float op = o->tag_opacity;
   uid_rrect_shadow(d, r, rad, 0, ui_s(c, 6), ui_s(c, 16), uid_alpha(t->glass_shadow.color, 0.8f * a));
@@ -378,7 +384,6 @@ static int mood_of_art(int art) { return art >= GW_ART_MOOD && art <= GW_ART_MOO
 static void draw_bubbles(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float vx, float vy, float k, float sx, float sy) {
   const GwOpts *o = opts();
   for (int i = 0; i < GW_SLOT_ALL; i++) g_bub[i].live = 0;
-  if (o->bubbles == GW_BUB_OFF) return;
   float ts = o->tag_scale < 0.4f ? 0.4f : o->tag_scale > 1.6f ? 1.6f : o->tag_scale;
   float zk = zoom_k(n);
   int order[GW_BUBBLES], m = 0;
@@ -396,6 +401,7 @@ static void draw_bubbles(UiCtx *c, const GwNote *n, SDL_Texture *const *art, flo
   float zoom = n->zoom > 0 ? (float)n->zoom : 4;
   for (int a = 0; a < m; a++) {
     const GwBubble *b = &n->bubbles[order[a]];
+    if (o->bubbles == GW_BUB_OFF && b->kind != 2) continue;
     if (!b->text[0]) continue;
     int si = slot_idx(b->slot);
     if (si < 0) continue;
@@ -423,10 +429,10 @@ static void draw_bubbles(UiCtx *c, const GwNote *n, SDL_Texture *const *art, flo
     if (!o->still) {
       float ramp = life / 140;
       al = ramp > 1 ? 1 : ramp;
-      if (o->bubbles != GW_BUB_FULL && life > brief && !(n->paused && life < brief + 700)) al *= fmaxf(0, 1 - (life - brief) / 700);   // paused: a thought that was still on show stays on show
+      if (b->kind != 2 && o->bubbles != GW_BUB_FULL && life > brief && !(n->paused && life < brief + 700)) al *= fmaxf(0, 1 - (life - brief) / 700);   // tutorial guidance stays while the game supplies it
     }
     if (al <= 0.01f) continue;
-    int big = o->bubbles == GW_BUB_FULL || (o->bubbles == GW_BUB_BRIEF && (b->tone != 0 || b->slot >= 1000)) || hov;
+    int big = b->kind == 2 || o->bubbles == GW_BUB_FULL || (o->bubbles == GW_BUB_BRIEF && (b->tone != 0 || b->slot >= 1000)) || hov;
     int mood = mood_of_art(b->art);
     SDL_Texture *tex = b->kind == 1 && b->art >= 0 && b->art < GW_ART_MAX ? art[b->art] : NULL;
     float bottom = y - ui_s(c, 14);
@@ -456,7 +462,7 @@ static void draw_bubbles(UiCtx *c, const GwNote *n, SDL_Texture *const *art, flo
     float rise = o->still ? 0 : (1 - al) * ui_s(c, 4);   // a little lift as it fades in and out
     float aa = al * (0.6f + 0.4f * zk);
     SDL_Texture *mt = mood >= 0 && GW_ART_MOOD + mood < GW_ART_MAX ? art[GW_ART_MOOD + mood] : NULL;
-    if (big) draw_bubble_full(c, x, bottom - rise, tex, mt, mood, b->text, aa);
+    if (big) draw_bubble_full(c, x, bottom - rise, tex, mt, mood, b->text, aa, b->kind == 2);
     else draw_bubble_icon(c, x, bottom - rise, tex, mt, mood, aa);
   }
   for (int i = 0; i < GW_SLOT_ALL; i++)
@@ -491,13 +497,16 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   int n_l2 = g->line2[0] ? wrap_lines(c, UI_TYPE_CAPTION, g->line2, head_w, l2, 3) : 0;
   float head_h = fmaxf(portrait, tf.line + cf.line + n_l2 * cf.line + ui_s(c, 6));
 
-  int story = g->layout == 1;
+  int story = g->layout != 0;
   char q[4][160];
   int n_q = g->quote[0] && !story ? wrap_lines(c, UI_TYPE_BODY, g->quote, in_w - ui_s(c, 28), q, 4) : 0;
   float quote_h = n_q ? n_q * bf.line + ui_s(c, 24) : 0;
   char wl[2][160];
   int n_w = g->skills[0] && !story ? wrap_lines(c, UI_TYPE_CAPTION, g->skills, in_w - ui_s(c, 28) - ui_text_width(c, UI_TYPE_CAPTION, "Wants more  "), wl, 2) : 0;
   float wants_h = n_w ? n_w * cf.line + ui_s(c, 10) : 0;
+  char club[3][160];
+  int n_club = g->club_story[0] ? wrap_lines(c, UI_TYPE_CAPTION, g->club_story, in_w, club, 3) : 0;
+  float club_h = n_club ? n_club * cf.line + ui_s(c, 12) + ui_s(c, t->pill_h) + ui_s(c, 8) : 0;
 
   float meters_h = story ? 0 : GW_METERS * ui_s(c, 24);
   float card_rows_h = 0;
@@ -527,7 +536,7 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   }
   float btn_h = ui_s(c, t->pill_h);
   float h = pad + head_h + ui_s(c, 14) + quote_h + (quote_h ? ui_s(c, 8) : 0) + wants_h + (wants_h ? ui_s(c, 10) : 0) + meters_h +
-            (meters_h ? ui_s(c, 6) : 0) + card_rows_h + story_h + btn_h + pad;
+            (meters_h ? ui_s(c, 6) : 0) + card_rows_h + story_h + club_h + btn_h + pad;
 
   // beside the golfer, on the side with room; the arrow points at the body
   float body = (n->zoom > 0 ? n->zoom : 4) * 5.0f;   // canvas px from the feet to the middle of the golfer
@@ -560,7 +569,7 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
     int tw = 0, th = 0;
     SDL_QueryTexture(ptex, NULL, NULL, &tw, &th);
     float s = fminf(portrait * 0.96f / tw, portrait * 0.96f / th);
-    s = fmaxf(s, 1.0f);
+    // Direct source portraits can exceed the card. Fit the entire face.
     float iw = tw * s, ih = th * s;
     UiRect clip = pr;
     uid_set_clip(d, &clip);
@@ -610,6 +619,17 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
     for (int i = 0; i < n_w; i++)
       ui_text_in(c, ui_rect(lx + lw, y + i * cf.line, in_w - ui_s(c, 28) - lw, cf.line), UI_TYPE_CAPTION, t->text_secondary, wl[i], 0);
     y += wants_h + ui_s(c, 10);
+  }
+  if (n_club) {
+    for (int i = 0; i < n_club; i++)
+      ui_text_in(c, ui_rect(x, y + i * cf.line, in_w, cf.line), UI_TYPE_CAPTION, t->accent_soft_text, club[i], 0);
+    y += n_club * cf.line + ui_s(c, 6);
+    const char *label = g->layout == 2 ? "Back to golfer" : "Club diary";
+    UiRect diary = ui_rect(x, y, ui_text_width(c, UI_TYPE_LABEL, label) + ui_s(c, 40), ui_s(c, t->pill_h));
+    g_layout.diary = diary;
+    if (ui_button(c, ui_id("club.diary"), diary, label, UI_ICON_FLAG, UI_BTN_PILL, 0) && na < max_acts)
+      acts[na++] = (GwAction){GW_ACT_DIARY, 0};
+    y += ui_s(c, t->pill_h) + ui_s(c, 14);
   }
   if (!story) {
     for (int i = 0; i < GW_METERS; i++) {
@@ -672,7 +692,7 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
     int id = B[i].id;
     if (!g->btn[id][0]) continue;
     if (id == 3 && !g->has_story) continue;
-    const char *label = id == 0 ? "Profile" : id == 2 ? "Snapshot" : id == 3 ? (story ? "Comments" : "Story") : "Eject";
+    const char *label = id == 0 ? "Profile" : id == 2 ? "Snapshot" : id == 3 ? (g->layout == 1 ? "Comments" : "Story") : "Eject";
     float bw = ui_text_width(c, UI_TYPE_LABEL, label) + ui_s(c, 44);
     UiRect b = ui_rect(bx, by, bw, btn_h);
     if (bx + bw > x + in_w) break;

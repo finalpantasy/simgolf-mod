@@ -1,6 +1,6 @@
 // Frosted Mint cart path help, render side (simgolf mod, task-53), see paths_frosted.h. Native build only.
 // Two UI layers of the presenter (hd_native.h): the world layer (path view tint, "No path" markers) goes under
-// the HUD, like the golfers' name tags; the top layer (button, legend, hover card) over it. Both draw the
+// the HUD, like the golfers' name tags; the top layer (legend, hover card) over it. Both draw the
 // PvNote the game thread attached to the frame (second note channel).
 #pragma clang diagnostic error "-Wimplicit-function-declaration"
 
@@ -205,16 +205,20 @@ static void draw(const HdUiFrame *f, void *user) {
     ui_end(c);
     return;
   }
-  // the button
-  float pad;
-  UiRect br = button_rect(c, f, &pad);
-  ui_panel(c, br, ui_s(c, 22), 0);
-  char tip[96], key[12];
+  char key[12];
   toggle_key(key, sizeof key);
-  snprintf(tip, sizeof tip, "%s%s%s", n->view ? "Hide the cart path view" : "Show which cart paths join the clubhouse", key[0] ? " (" : "", key[0] ? key : "");
-  if (key[0]) strncat(tip, ")", sizeof tip - strlen(tip) - 1);
-  UiRect ir = ui_rect(br.x + pad, br.y + pad, br.w - 2 * pad, br.h - 2 * pad);
-  if (ui_icon_button(c, ui_id("paths.view"), ir, UI_ICON_PATH, n->view ? UI_COMPACT | UI_SELECTED : UI_COMPACT, tip)) g_user_on = !g_user_on;
+  // Compatibility switch keeps the previous standalone control available.
+  if (!mods_get_int("ui.paths_menu", 1)) {
+    // the button
+    float pad;
+    UiRect br = button_rect(c, f, &pad);
+    ui_panel(c, br, ui_s(c, 22), 0);
+    char tip[96];
+    snprintf(tip, sizeof tip, "%s%s%s", n->view ? "Hide the cart path view" : "Show which cart paths join the clubhouse", key[0] ? " (" : "", key[0] ? key : "");
+    if (key[0]) strncat(tip, ")", sizeof tip - strlen(tip) - 1);
+    UiRect ir = ui_rect(br.x + pad, br.y + pad, br.w - 2 * pad, br.h - 2 * pad);
+    if (ui_icon_button(c, ui_id("paths.view"), ir, UI_ICON_PATH, n->view ? UI_COMPACT | UI_SELECTED : UI_COMPACT, tip)) g_user_on = !g_user_on;
+  }
   if (n->view) ui_paths_draw_legend(c, n, n->placing && !g_user_on);
   if (hov >= 0 && !n->not_needed) ui_paths_draw_card(c, n, &m, hov, key);
   ui_end(c);
@@ -296,6 +300,7 @@ static void refresh_switch(void) {
   }
 }
 
+int pvf_view_available(void) { return g_want && !g_failed && mods_get_int("ui.paths_menu", 1); }
 int pvf_view_user(void) { return g_user_on; }
 void pvf_set_view(int on) { g_user_on = on != 0; }
 

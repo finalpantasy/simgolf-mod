@@ -30,8 +30,11 @@
 #include "port/runtime.h"
 #include "mods/mods.h"
 #include "port/water_native.h"
+#include "platform/terrain_lighting.h"
+#include "port/course_relief.h"
 
 extern int terrain_hd_build(void);
+extern void terrain_hd_scroll_padding(int on);
 extern const float *terrain_hd_vertices(void);
 extern int terrain_hd_batch_count(void);
 extern const int32_t *terrain_hd_batches(void);
@@ -40,7 +43,10 @@ extern void terrain_hd_target(int32_t *out);
 extern const char *terrain_hd_texture_src(int i);
 extern void terrain_hd_invalidate(void);
 extern const float *terrain_hd_world(void);
+extern const float *terrain_hd_normals(void);
+extern void terrain_hd_light_model(TerrainLightingModel *out);
 extern void terrain_hd_view(float out[6]);
+extern float terrain_hd_height_pixels(void);
 extern int terrain_water_tiles(uint8_t *code, float *height, int cap);
 extern int terrain_grid_size(int *w, int *h);
 
@@ -102,6 +108,11 @@ typedef struct {
   int nverts, cap_verts;
   float *world;              // task-78: world x, y, z per vertex
   int cap_world;
+  float *normals;
+  int cap_normals;
+  TerrainLightingModel light_model;
+  float height_pixels;
+  uint8_t *materials;int cap_materials;
   float view[6];             // toward the viewer, toward the light (world)
   uint8_t *wcode;            // task-78: the whole map's water tiles (terrain_water_tiles)
   float *wheight;
@@ -192,6 +203,7 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   // Menus and other full-screen pages leave a stale cache behind: only use it
   // when a good part of the frame is terrain.
   if (same <= HD_FRAME_W * HD_FRAME_H / 8) return 0;
+  terrain_hd_scroll_padding(mods_get_int("fixes.drag_scroll", 1));
   if (!g_on || !terrain_hd_build()) return 1;   // layer off, or nothing redrawn: the last scene stands
 
   int nb = terrain_hd_batch_count();
@@ -208,7 +220,13 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   s->nverts = nverts;
   GROW(s->world, s->cap_world, nverts * 3, sizeof(float));
   memcpy(s->world, terrain_hd_world(), (size_t)nverts * 3 * sizeof(float));
+  GROW(s->normals, s->cap_normals, nverts * 3, sizeof(float));
+  memcpy(s->normals, terrain_hd_normals(), (size_t)nverts * 3 * sizeof(float));
+  terrain_hd_light_model(&s->light_model);
   terrain_hd_view(s->view);
+  s->height_pixels=terrain_hd_height_pixels();
+  GROW(s->materials,s->cap_materials,nb,1);
+  for(int i=0;i<nb;i++)s->materials[i]=(b[i*5+4]&kTextured)?(uint8_t)course_relief_material(terrain_hd_texture_src(b[i*5+2])):0;
   int mw = 0, mh = 0;
   if (terrain_grid_size(&mw, &mh) && mw * mh > 0) {   // the map's water tiles, sent on when they changed
     static uint8_t *code;
@@ -276,6 +294,14 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
 
 typedef struct { uint32_t serial; SDL_Texture *tex; } TexEntry;
 
+typedef struct {
+  SDL_Texture *texture;
+  int w, h;
+  LONG serial;
+  unsigned lighting_revision;
+  float x, y;
+} TerrainTarget;
+
 static struct {
   TexEntry *tex;
   int ntex, cap_tex;
@@ -283,22 +309,27 @@ static struct {
   int nverts, cap_verts;
   float *world;
   int cap_world;
+  float *normals;
+  int cap_normals;
+  TerrainLightingModel light_model;
+  unsigned lighting_revision;
+  float height_pixels;
+  uint8_t *materials;int cap_materials;
   float view[6];
   int32_t *batches;
   int nbatches, cap_batches;
   int tw, th;
-  LONG serial, drawn_serial;
+  LONG serial;
   uint8_t *wcode;
   float *wheight;
   int map_w, map_h, cap_map;
   LONG map_serial;
-  SDL_Texture *target;
-  int target_w, target_h;
+  TerrainTarget targets[2];
   SDL_Vertex *sv;
   int cap_sv;
   SDL_BlendMode keep_alpha;
   int logged;
-} R = {.serial = 0, .drawn_serial = -1};
+} R = {.serial = 0};
 
 static SDL_Texture *find_tex(uint32_t serial) {
   for (int i = R.ntex - 1; i >= 0; i--)
@@ -323,6 +354,12 @@ static void take(SDL_Renderer *r, long shown) {
   R.nverts = s->nverts;
   GROW(R.world, R.cap_world, s->nverts * 3, sizeof(float));
   memcpy(R.world, s->world, (size_t)s->nverts * 3 * sizeof(float));
+  GROW(R.normals, R.cap_normals, s->nverts * 3, sizeof(float));
+  memcpy(R.normals, s->normals, (size_t)s->nverts * 3 * sizeof(float));
+  R.light_model = s->light_model;
+  R.height_pixels=s->height_pixels;
+  GROW(R.materials,R.cap_materials,s->nbatches,1);
+  memcpy(R.materials,s->materials,(size_t)s->nbatches);
   memcpy(R.view, s->view, sizeof R.view);
   if (s->map_serial != R.map_serial && s->map_w > 0) {
     GROW(R.wcode, R.cap_map, s->map_w * s->map_h, 1);
@@ -368,41 +405,53 @@ static void take(SDL_Renderer *r, long shown) {
   LeaveCriticalSection(&g_tlock);
 }
 
-SDL_Texture *hdt_render(SDL_Renderer *r, int w, int h, long shown) {
+static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float ox, float oy, int guard) {
   take(r, shown);
+  TerrainTarget *target = &R.targets[guard];
   if (!R.nbatches || R.tw <= 0 || R.th <= 0) return NULL;
-  if (!R.target || R.target_w != w || R.target_h != h) {
-    if (R.target) SDL_DestroyTexture(R.target);
-    R.target = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
-    R.target_w = w;
-    R.target_h = h;
-    R.drawn_serial = -1;
-    if (!R.target) return NULL;
-    SDL_SetTextureBlendMode(R.target, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureScaleMode(R.target, SDL_ScaleModeLinear);
+  if (!target->texture || target->w != w || target->h != h) {
+    if (target->texture) SDL_DestroyTexture(target->texture);
+    target->texture = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    target->w = w;
+    target->h = h;
+    target->serial = -1;
+    if (!target->texture) return NULL;
+    SDL_SetTextureBlendMode(target->texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(target->texture, SDL_ScaleModeLinear);
     // The browser build's blendFuncSeparate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ZERO, ONE).
     R.keep_alpha = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                                               SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE,
                                               SDL_BLENDOPERATION_ADD);
   }
-  if (R.drawn_serial == R.serial) return R.target;
-  SDL_SetRenderTarget(r, R.target);
+  unsigned lighting_revision = terrain_lighting_revision();
+  if (target->serial == R.serial && target->x == ox && target->y == oy && target->lighting_revision == lighting_revision) return target->texture;
+  const float *draw_vertices = R.verts;
+  const int32_t *draw_batches = R.batches;
+  if (terrain_lighting_rebuild(R.verts, R.world, R.normals, R.nverts, R.batches, R.nbatches,
+                               &R.light_model, R.serial)) {
+    draw_vertices = terrain_lighting_vertices();
+    draw_batches = terrain_lighting_batches();
+  }
+  SDL_SetRenderTarget(r, target->texture);
   SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
   SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
   SDL_RenderClear(r);
-  float sx = (float)w / R.tw, sy = (float)h / R.th;
+  // The guard texture uses canvas resolution. It is recorded once per game
+  // frame, then cropped by the presenter at display speed without replaying
+  // thousands of geometry batches for every mouse interpolation step.
+  float sx = guard ? 1.0f : (float)w / R.tw, sy = guard ? 1.0f : (float)h / R.th;
   float umin = 1e9f, umax = -1e9f, vmin = 1e9f, vmax = -1e9f;
   for (int k = 0; k < R.nbatches; k++) {
-    const int32_t *b = R.batches + k * 5;
+    const int32_t *b = draw_batches + k * 5;
     int first = b[0], count = b[1], flags = b[4];
     SDL_Texture *tex = flags & kTextured ? find_tex((uint32_t)b[3]) : NULL;
     if ((flags & kTextured) && !tex) continue;
     GROW(R.sv, R.cap_sv, count, sizeof(SDL_Vertex));
     for (int i = 0; i < count; i++) {
-      const float *v = R.verts + (size_t)(first + i) * 8;
+      const float *v = draw_vertices + (size_t)(first + i) * 8;
       SDL_Vertex *o = &R.sv[i];
-      o->position.x = v[0] * sx;
-      o->position.y = (R.th - v[1]) * sy;
+      o->position.x = v[0] * sx + ox;
+      o->position.y = (R.th - v[1]) * sy + oy;
       float c[4] = {v[2], v[3], v[4], flags & kBlend ? v[5] : 1.0f};
       Uint8 *d = &o->color.r;
       for (int j = 0; j < 4; j++) d[j] = (Uint8)(c[j] <= 0 ? 0 : c[j] >= 1 ? 255 : c[j] * 255.0f + 0.5f);
@@ -426,8 +475,21 @@ SDL_Texture *hdt_render(SDL_Renderer *r, int w, int h, long shown) {
     fprintf(stderr, "hd: terrain layer %d triangles, %d batches, %d textures, uv %.2f..%.2f x %.2f..%.2f, target %dx%d\n",
             R.nverts / 3, R.nbatches, R.ntex, umin, umax, vmin, vmax, R.tw, R.th);
   }
-  R.drawn_serial = R.serial;
-  return R.target;
+  target->serial = R.serial;
+  target->lighting_revision = lighting_revision;
+  target->x = ox; target->y = oy;
+  return target->texture;
+}
+
+SDL_Texture *hdt_render(SDL_Renderer *r, int w, int h, long shown) {
+  return render_at(r, w, h, shown, 0, 0, 0);
+}
+
+// One viewport of padding on every side, at the source canvas resolution.
+SDL_Texture *hdt_render_guard(SDL_Renderer *r, long shown) {
+  take(r, shown);
+  if (R.tw <= 0 || R.th <= 0) return NULL;
+  return render_at(r, R.tw * 3, R.th * 3, shown, (float)R.tw, (float)R.th, 1);
 }
 
 // task-78: the scene the terrain layer shows, for the water pass (render thread).
@@ -446,5 +508,6 @@ int hdt_scene(HdtScene *out) {
   out->map_w = R.map_w;
   out->map_h = R.map_h;
   out->map_serial = R.map_serial;
+  out->normals=R.normals;out->materials=R.materials;out->height_pixels=R.height_pixels;
   return 1;
 }

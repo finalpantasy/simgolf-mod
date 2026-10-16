@@ -34,106 +34,82 @@ static void tr_read(const RpSnap *s, Tract tr[9], char *cash, char *cash_label) 
   fix_text(cash_label, RP_TEXT, l ? l->s : "Cash Reserve");
 }
 
-#define TR_W 1160.0f
-#define TR_H 808.0f
+#define TR_W 1440.0f
+#define TR_H 920.0f
 
 static int draw_tracts(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
   const UiTokens *t = ui_tokens(c);
   UiDraw *d = ui_drawer(c);
   int na = 0;
-  Tract tr[9];
-  char cash[RP_TEXT], cash_label[RP_TEXT];
+  Tract tr[9]; char cash[RP_TEXT], cash_label[RP_TEXT];
   tr_read(s, tr, cash, cash_label);
   UiRect scr = ui_screen(c);
   float margin = ui_s(c, t->edge_margin);
-  float k = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, TR_W), (scr.h - 2 * margin) / ui_s(c, TR_H)));
-  if (k < 1.0f) ui_push_scale(c, k);
-  float pad = ui_s(c, 28);
-  UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, TR_W), ui_s(c, TR_H)));
+  float k = fminf(1, fminf((scr.w - 2 * margin) / ui_s(c, TR_W), (scr.h - 2 * margin) / ui_s(c, TR_H)));
+  if (k < 1) ui_push_scale(c, k);
+  float pad = ui_s(c, 28), gap = ui_s(c, 24);
+  UiRect pr = ui_rect_round(ui_center(scr, ui_s(c, TR_W), ui_s(c, TR_H))), in = ui_inset_all(pr, pad);
   scrim_and_panel(c, pr);
-  UiRect in = ui_inset_all(pr, pad);
-  g_pf_layout.panel = pr;
-
-  UiFont tf = ui_font(c, UI_TYPE_TITLE);
+  memset(&g_pf_layout, 0, sizeof g_pf_layout); g_pf_layout.panel = pr;
   float cb = ui_s(c, 40);
-  UiRect close_r = ui_rect(in.x + in.w - cb, in.y, cb, cb);
-  if (ui_icon_button(c, ui_id("pages.close"), close_r, UI_ICON_X, 0, "Close (Esc)") && na < max) acts[na++] = (RpAction){RP_A_CLOSE, 0};
-  g_pf_layout.close_x = close_r.x + close_r.w / 2, g_pf_layout.close_y = close_r.y + close_r.h / 2;
-  ui_text_fit(c, ui_rect(in.x, in.y + (cb - tf.line) / 2, ui_s(c, 400), tf.line), UI_TYPE_TITLE, t->text_primary, "Tracts for sale", 0);
-  // Cash Reserve, top right
-  char line[RP_TEXT * 2];
-  snprintf(line, sizeof line, "%s  %s", cash_label, cash);
-  float cw = ui_text_width(c, UI_TYPE_HEADING, line) + ui_s(c, 36);
-  UiRect cr = ui_rect(in.x + in.w - cb - ui_s(c, 16) - cw, in.y, cw, cb);
-  uid_rrect(d, cr, cb / 2, uid_alpha(t->surface_inset, 0.7f));
-  uid_rrect_stroke(d, cr, cb / 2, ui_s(c, 1), uid_alpha(t->divider, 0.8f));
-  ui_text_fit(c, ui_inset(cr, ui_s(c, 18), 0, ui_s(c, 18), 0), UI_TYPE_HEADING, t->text_primary, line, 0.5f);
-
-  // the nine tract cards in reading order (golf numbers its tiles down the columns)
-  float gap = ui_s(c, 12), ch = ui_s(c, 86);
-  float cwid = (in.w - 2 * gap) / 3;
-  float gy = in.y + ui_s(c, 40 + 16);
-  UiFont bf = ui_font(c, UI_TYPE_BODY), lf = ui_font(c, UI_TYPE_LABEL);
+  UiRect close = ui_rect(in.x + in.w - cb, in.y, cb, cb);
+  if (ui_icon_button(c, ui_id("pages.close"), close, UI_ICON_X, 0, "Close (Esc)") && na < max) acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  g_pf_layout.close_x = close.x + cb / 2; g_pf_layout.close_y = close.y + cb / 2;
+  ui_text_in(c, ui_rect(in.x, in.y, in.w - cb - gap, cb), UI_TYPE_TITLE, t->text_primary, "Tracts for sale", 0);
+  // Cash and purchase choices share one column, away from the map.
+  float dw = ui_s(c, 512), mw = in.w - dw - gap, top = in.y + ui_s(c, 64);
+  UiRect map = ui_rect(in.x, top, mw, in.h - ui_s(c, 124));
+  UiRect list = ui_rect(map.x + mw + gap, top, dw, map.h);
+  uid_rrect(d, map, ui_s(c, 16), uid_alpha(t->surface_inset, .40f));
+  ui_text_in(c, ui_rect(map.x + ui_s(c, 20), map.y + ui_s(c, 16), map.w - ui_s(c, 40), ui_s(c, 28)), UI_TYPE_LABEL, t->text_secondary, "Course map", 0);
+  (void)art;
+  ui_course_map_draw(c, &s->map, ui_rect(map.x, map.y + ui_s(c, 48), map.w, map.h - ui_s(c, 96)));
+  ui_text_in(c, ui_rect(map.x + ui_s(c, 20), map.y + map.h - ui_s(c, 42), map.w - ui_s(c, 40), ui_s(c, 24)), UI_TYPE_CAPTION,
+      t->text_secondary, "Numbered markers show the golf holes.", 0);
+  ui_text_in(c, ui_rect(list.x, list.y, list.w * .48f, ui_s(c, 32)), UI_TYPE_LABEL, t->text_secondary, cash_label, 0);
+  ui_text_fit(c, ui_rect(list.x + list.w * .48f, list.y, list.w * .52f, ui_s(c, 32)), UI_TYPE_HEADING, t->text_primary, cash, 1);
+  float row_top = list.y + ui_s(c, 48), rh = (list.h - ui_s(c, 48)) / 9;
   for (int n = 0; n < 9; n++) {
-    UiRect r = ui_rect(in.x + (n % 3) * (cwid + gap), gy + (n / 3) * (ch + gap), cwid, ch);
+    UiRect r = ui_rect(list.x, row_top + n * rh, list.w, rh);
     const Tract *tt = &tr[n];
-    char key[24];
-    snprintf(key, sizeof key, "tr.tract%d", n);
+    char key[24]; snprintf(key, sizeof key, "tr.tract%d", n);
     uint32_t id = ui_id(key);
     int can = tt->has && !tt->sold && tt->text[0];
-    ui_hit(c, r, ui_s(c, t->radius_card), id, can ? UI_HIT_BLOCK | UI_HIT_INTERACT : UI_HIT_BLOCK);
-    float hov = ui_anim(c, id, can && ui_is_hot(c, id) ? 1.0f : 0.0f, t->motion_hover);
-    uid_rrect(d, r, ui_s(c, t->radius_card), uid_alpha(can ? t->surface_inset : t->surface_inset, can ? 0.55f + 0.4f * hov : 0.3f));
-    uid_rrect_stroke(d, r, ui_s(c, t->radius_card), ui_s(c, can && hov > 0.5f ? 2 : 1), can && hov > 0.5f ? t->accent : uid_alpha(t->divider, 0.6f));
-    float bs = ui_s(c, 44);
-    UiRect badge = ui_rect(r.x + ui_s(c, 12), r.y + (r.h - bs) / 2, bs, bs);
-    uid_rrect(d, badge, bs / 2, can ? uid_mix(t->accent_soft, t->accent, 0.2f * hov) : uid_alpha(t->divider, 0.5f));
-    char num[8];
-    snprintf(num, sizeof num, "%d", n + 1);
-    ui_text_in(c, badge, UI_TYPE_HEADING, can ? t->accent_soft_text : t->text_tertiary, num, 0.5f);
-    float tx = badge.x + bs + ui_s(c, 12), tw = r.x + r.w - tx - ui_s(c, 12);
-    if (tt->sold) {
-      ui_text_in(c, ui_rect(tx, r.y, tw, r.h), UI_TYPE_BODY, t->text_tertiary, "Already purchased", 0);
-    } else if (tt->text[0]) {
+    ui_hit(c, r, ui_s(c, 8), id, can ? UI_HIT_BLOCK | UI_HIT_INTERACT : UI_HIT_BLOCK);
+    pf_ctl(key, r);
+    float hov = ui_anim(c, id, can && ui_is_hot(c, id) ? 1 : 0, t->motion_hover);
+    if (!(n % 2) || hov > 0) uid_rrect(d, r, ui_s(c, 8), uid_alpha(hov > 0 ? t->accent_soft : t->surface_inset, .55f + .35f * hov));
+    if (can && ui_is_hot(c, id)) uid_rrect_stroke(d, r, ui_s(c, 8), ui_s(c, 1), t->accent);
+    char num[12]; snprintf(num, sizeof num, "%d", n + 1);
+    ui_text_in(c, ui_rect(r.x + ui_s(c, 4), r.y, ui_s(c, 32), r.h), UI_TYPE_LABEL, can ? t->accent_soft_text : t->text_secondary, num, .5f);
+    float x = r.x + ui_s(c, 48), width = r.w - ui_s(c, 60);
+    if (tt->sold || !tt->has) {
+      ui_text_in(c, ui_rect(x, r.y, width, r.h), UI_TYPE_BODY, t->text_secondary, tt->sold ? "Already purchased" : "Unavailable", 0);
+    } else {
+      // Number is already in the first column. Preserve the original factual description.
+      const char *description = strchr(tt->text, ',');
+      description = description ? description + 1 : tt->text;
+      while (*description == ' ') description++;
+      float ty = r.y + ui_s(c, 6);
+      char price[RP_TEXT]; snprintf(price, sizeof price, "%s", tt->price);
+      const char *amount = !strncmp(price, "Price: ", 7) ? price + 7 : price;
+      ui_text_fit(c, ui_rect(x, ty, width, ui_s(c, 22)), UI_TYPE_LABEL, t->accent_soft_text, amount, 0);
       char lines[WRAP_LINES][WRAP_LEN];
-      int nl = wrap(c, UI_TYPE_BODY, tt->text, tw, lines);
-      if (nl > 3) nl = 3;
-      float ty = r.y + ui_s(c, 8);
-      for (int i = 0; i < nl; i++, ty += bf.line) ui_text_in(c, ui_rect(tx, ty, tw, bf.line), UI_TYPE_BODY, t->text_primary, lines[i], 0);
-      if (tt->price[0]) ui_text_in(c, ui_rect(tx, r.y + r.h - lf.line - ui_s(c, 6), tw, lf.line), UI_TYPE_LABEL, t->accent_soft_text, tt->price, 0);
+      int nl = wrap(c, UI_TYPE_CAPTION, description, width, lines);
+      float line = ui_font(c, UI_TYPE_CAPTION).line;
+      for (int j = 0; j < nl && j < 2; j++)
+        ui_text_fit(c, ui_rect(x, ty + ui_s(c, 24) + j * line, width, line), UI_TYPE_CAPTION, t->text_secondary, lines[j], 0);
+      ui_tooltip(c, id, r, tt->text);
     }
     if (can && ui_clicked(c, id) && na < max) acts[na++] = (RpAction){RP_A_CLICK, CLICK(TR_X[n / 3], TR_Y[n % 3])};
   }
-
-  // the map, with golf's painted frame
-  float my = gy + 3 * ch + 2 * gap + ui_s(c, 14);
   float fy = in.y + in.h - ui_s(c, 44);
-  UiRect M = ui_rect(in.x, my, in.w, fy - ui_s(c, 14) - my);
-  int pic = 0, pw = 0, ph = 0;
-  for (int i = 0; i < s->n; i++)
-    if (s->it[i].type == RP_IT_PIC) pic = s->it[i].art, pw = s->it[i].w, ph = s->it[i].h;
-  SDL_Texture *ptex = art && pic > 0 ? art[pic - 1] : NULL;
-  uid_rrect(d, M, ui_s(c, t->radius_card), uid_alpha(t->surface_inset, 0.35f));
-  if (ptex && pw > 0 && ph > 0) {
-    float kk = fminf((M.w - ui_s(c, 12)) / pw, (M.h - ui_s(c, 12)) / ph);
-    UiRect ir = ui_rect_round(ui_center(M, pw * kk, ph * kk));
-    uid_image(d, ptex, NULL, ir, 0, (UiColor){255, 255, 255, 255});
-    // the check button painted in golf's frame (page 662..725 x 533..596) is golf's own "leave" control: keep it working
-    UiRect ck = ui_rect(ir.x + (662 - 8) * kk, ir.y + (533 - 282) * kk, 64 * kk, 64 * kk);
-    uint32_t cid = ui_id("tr.check");
-    ui_hit(c, ck, ck.w / 2, cid, UI_HIT_BLOCK | UI_HIT_INTERACT);
-    float chov = ui_anim(c, cid, ui_is_hot(c, cid) ? 1.0f : 0.0f, t->motion_hover);
-    if (chov > 0.01f) uid_rrect_stroke(d, ck, ck.w / 2, ui_s(c, 2), uid_alpha(t->accent, chov));
-    if (ui_clicked(c, cid) && na < max) acts[na++] = (RpAction){RP_A_CLICK, CLICK(688, 560)};
-  }
-
-  // footer
-  float bh = ui_s(c, 44);
-  const char *lab = "I don't think I'll buy any land";
-  float bw = ui_text_width(c, UI_TYPE_LABEL, lab) + ui_s(c, 64);
-  UiRect br = ui_rect(in.x + in.w - bw, fy, bw, bh);
-  if (ui_button(c, ui_id("tr.no"), br, lab, UI_ICON_NONE, UI_BTN_PRIMARY, 0) && na < max) acts[na++] = (RpAction){RP_A_CLICK, CLICK(688, 560)};
-  ui_text_in(c, ui_rect(in.x, fy, in.w - bw - ui_s(c, 12), bh), UI_TYPE_CAPTION, t->text_tertiary, "Pick a tract to buy it. Esc leaves without buying.", 0);
-  if (k < 1.0f) ui_pop_scale(c);
+  UiRect no = ui_rect(in.x + in.w - ui_s(c, 180), fy, ui_s(c, 180), ui_s(c, 44));
+  pf_ctl("decline", no);
+  if (ui_button(c, ui_id("tr.no"), no, "No thanks", UI_ICON_NONE, UI_BTN_PRIMARY, 0) && na < max)
+    acts[na++] = (RpAction){RP_A_CLICK, CLICK(688, 560)};
+  ui_text_in(c, ui_rect(in.x, fy, in.w - no.w - gap, no.h), UI_TYPE_CAPTION, t->text_secondary,
+      "Choose a tract from the list. Esc leaves without buying.", 0);
+  if (k < 1) ui_pop_scale(c);
   return na;
 }

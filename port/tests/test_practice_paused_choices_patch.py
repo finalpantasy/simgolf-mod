@@ -12,7 +12,7 @@ from required_patches import validate_required_patches
 
 class PracticePausedChoicesPatchTests(unittest.TestCase):
     def setUp(self):
-        self.config = json.loads((TOOLS / "golf.practice.json").read_text())
+        self.config = json.loads((TOOLS / "golf.placement_practice.json").read_text())
         self.name = "FUN_00435f00"
         self.old, self.new = self.config["patches"][self.name][0]
         self.required = {self.name: self.config["required_patch_counts"][self.name]}

@@ -778,6 +778,7 @@ bool culled(const Tile *t, const Tile *centre, float rot) {
   const TerrainState *s = g_inst;
   if (s->zoomShift == 2) return false;
   int mx = (s->screenW >> 1) * s->zoomShift, my = (s->screenH >> 1) * s->zoomShift;
+  mx += g_gl.record_pad_x; my += g_gl.record_pad_y;
   int dy = t->y - centre->y, dx = t->x - centre->x;
   int tw = 64, th = 40, hw = 32, hh = 20;  // 800x600 (also the fallback)
   if (s->screenW == 1024 && s->screenH == 768) { tw = 80; th = 52; hw = 40; hh = 26; }
@@ -1458,6 +1459,7 @@ void Terrain::calcAllNormals(Tile *centre) {
 bool Terrain::render(Tile *centre, float rot) {
   TerrainState *s = (TerrainState *)this;
   int r = tileRange(s, 16);
+  r += (int)ceil((g_gl.record_pad_x / 64.0 + g_gl.record_pad_y / 40.0) / 2) << s->zoomShift;
   int right = r, left = r, down = r, up = r;  // x+, x-, y+, y-
   beginView(centre, centre, rot);
   setRotation(rot);

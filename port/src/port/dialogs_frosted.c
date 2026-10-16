@@ -59,26 +59,29 @@ void dlgf_publish(const DlgSnap *s) {
   unlock();
 }
 
-void dlgf_publish_art(int key, const uint32_t *argb, int w, int h) {
-  if (key < 0 || key >= DLG_ART_MAX) return;
-  lock();
-  free(g_art[key].px);
-  g_art[key].px = NULL;
-  g_art[key].w = g_art[key].h = 0;
-  if (argb && w > 0 && h > 0) {
-    g_art[key].px = malloc((size_t)w * h * 4);
-    if (g_art[key].px) {
-      memcpy(g_art[key].px, argb, (size_t)w * h * 4);
-      g_art[key].w = w;
-      g_art[key].h = h;
-    }
+// Caller owns the publication lock, so face text and images change together.
+static void set_art(int key,const uint32_t *argb,int w,int h) {
+  free(g_art[key].px);g_art[key].px=NULL;g_art[key].w=g_art[key].h=0;
+  if(argb && w>0 && h>0) {
+    g_art[key].px=malloc((size_t)w*h*4);
+    if(g_art[key].px){memcpy(g_art[key].px,argb,(size_t)w*h*4);g_art[key].w=w;g_art[key].h=h;}
   }
-  g_art[key].serial = ++g_art_pub;
+  g_art[key].serial=++g_art_pub;
+}
+void dlgf_publish_art(int key,const uint32_t *argb,int w,int h) {
+  if(key<0 || key>=DLG_ART_MAX)return;
+  lock();set_art(key,argb,w,h);unlock();
+}
+void dlgf_publish_faces(const DlgSnap *s,const DlgPixels *tiles,const DlgPixels *preview) {
+  lock();
+  if(tiles)for(int i=0;i<DLG_FACE_TILES;i++)set_art(DLG_ART_FACE_FIRST+i,tiles[i].px,tiles[i].w,tiles[i].h);
+  if(preview)set_art(DLG_ART_PORTRAIT,preview->px,preview->w,preview->h);
+  g_snap=*s;g_snap_t=host_now_ms();g_ended=0;
   unlock();
 }
 
+// draw() holds the publication lock across uploads and the matching snapshot.
 static void update_art(SDL_Renderer *r) {
-  lock();
   Uint32 now = SDL_GetTicks();
   for (int i = 0; i < DLG_ART_MAX; i++) {
     if (g_art[i].serial == g_tex_serial[i]) continue;
@@ -106,7 +109,6 @@ static void update_art(SDL_Renderer *r) {
     g_tex_serial[i] = g_art[i].serial;
     g_tex_retry_at[i] = 0;
   }
-  unlock();
 }
 
 void dlgf_end(void) {
@@ -158,7 +160,8 @@ static float dlg_scale(int w, int h) {
   return base < 0.5f ? 0.5f : base;
 }
 
-int dlgf_gap(void) { return dlgf_active() && !g_visible; }   // test aid (SIMGOLF_FRAMELOG): a dialog is up in the game, the layer drew none
+static volatile int g_frame_gap;
+int dlgf_gap(void) { return g_frame_gap; } // latch with this frame's layer draw, like reports
 
 static void refresh_want(void);
 
@@ -166,6 +169,8 @@ static void draw(const HdUiFrame *f, void *user) {
   (void)user;
   g_drawn_t = f->now_ms;
   if (!g_game_asked) refresh_want();   // before the game thread's first dlgf_enabled()
+  int expected = dlgf_active();
+  g_frame_gap = expected;
   if (g_failed || !g_want) {
     g_visible = 0;
     if (g_ui) ui_skip_frame(g_ui);
@@ -190,27 +195,37 @@ static void draw(const HdUiFrame *f, void *user) {
   g_view_x = (float)f->view.x;
   g_view_y = (float)f->view.y;
   g_view_px = f->px > 0 ? f->px : 1;
-  int show = dlgf_active() && w > 0;
+  int show = expected && w > 0;
   g_visible = show;
+  g_frame_gap = expected && !show;
   if (!show) {
     ui_skip_frame(g_ui);
     return;
   }
   DlgSnap *s = malloc(sizeof *s);
-  if (!s) return;
+  if (!s) {
+    g_visible = 0;
+    g_frame_gap = expected;
+    ui_skip_frame(g_ui);
+    return;
+  }
+  SDL_Texture *art[DLG_ART_MAX];
   lock();
   memcpy(s, &g_snap, sizeof *s);
+  update_art(r);
+  for(int i=0;i<DLG_ART_MAX;i++)
+    art[i]=s->kind!=DLG_FACE || g_tex_serial[i]==g_art[i].serial?g_tex[i]:NULL;
   unlock();
   if (s->magic != DLG_MAGIC || s->kind == DLG_NONE) {
     g_visible = 0;
+    g_frame_gap = expected;
     ui_skip_frame(g_ui);
     free(s);
     return;
   }
-  update_art(r);
   ui_begin(g_ui, f->target, w, h, dlg_scale(w, h), f->target, host_now_ms());
   DlgAction acts[8];
-  int n = ui_dialogs_draw(g_ui, s, g_tex, acts, 8);
+  int n = ui_dialogs_draw(g_ui, s, art, acts, 8);
   ui_end(g_ui);
   free(s);
   if (n) {
@@ -231,6 +246,16 @@ static int input(SDL_Event *e, int course, void *user) {
   UiEvent u = {0};
   int cx = 0, cy = 0;
   switch (e->type) {
+    case SDL_KEYDOWN:
+    case SDL_KEYUP: {
+      int vk = e->key.keysym.sym == SDLK_HOME ? 0x24 : e->key.keysym.sym == SDLK_END ? 0x23 :
+               e->key.keysym.sym == SDLK_LEFT ? 0x25 : e->key.keysym.sym == SDLK_RIGHT ? 0x27 : 0;
+      if (vk && dlgf_active()) {
+        if (e->type == SDL_KEYDOWN) return dlg_entry_nav(vk, (e->key.keysym.mod & KMOD_SHIFT) != 0);
+        if (g_snap.kind == DLG_ENTRY) return 1;
+      }
+      return 0;
+    }
     case SDL_MOUSEMOTION:
       if (!e->motion.windowID) return 0;   // scripted input (harness, bridge, our own clicks) is the game's
       u.kind = UI_EV_MOVE;
@@ -245,6 +270,12 @@ static int input(SDL_Event *e, int course, void *user) {
       break;
     case SDL_MOUSEWHEEL:
       if (!e->wheel.windowID) return 0;
+      lock();
+      if(g_snap.kind==DLG_FACE && !g_ended && g_visible) {
+        if(e->wheel.y && g_qn<QMAX)g_q[g_qn++]=(DlgAction){DLG_A_FACE_PAGE,e->wheel.y<0?1:-1};
+        unlock();return 1;
+      }
+      unlock();
       u.kind = UI_EV_WHEEL;
       u.wheel = (float)e->wheel.y;
       break;

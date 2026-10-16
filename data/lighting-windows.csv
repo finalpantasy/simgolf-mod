@@ -1,0 +1,36 @@
+# Authored dark-glass regions, normalized to each inspected original sprite.
+# asset,view,x,y,width,height,entrance_x,entrance_y
+flics/bldgs/park/clubl1.flc,0,0.416,0.204,0.084,0.075,.300,.740
+flics/bldgs/park/clubl1.flc,0,0.445,0.434,0.087,0.047,.300,.740
+flics/bldgs/park/clubl1.flc,0,0.158,0.505,0.045,0.023,.300,.740
+flics/bldgs/park/clubl1.flc,0,0.248,0.500,0.027,0.045,.300,.740
+flics/bldgs/park/clubl1.flc,0,0.299,0.510,0.044,0.043,.300,.740
+flics/bldgs/park/clubl1.flc,0,0.488,0.786,0.054,0.028,.300,.740
+flics/bldgs/park/clubl1.flc,1,0.495,0.205,0.035,0.060,.700,.730
+flics/bldgs/park/clubl1.flc,1,0.466,0.415,0.071,0.049,.700,.730
+flics/bldgs/park/clubl1.flc,1,0.724,0.466,0.023,0.050,.700,.730
+flics/bldgs/park/clubl1.flc,1,0.789,0.502,0.025,0.020,.700,.730
+flics/bldgs/park/clubl1.flc,1,0.490,0.780,0.027,0.023,.700,.730
+flics/bldgs/park/clubl1.flc,2,0.475,0.140,0.084,0.060,.460,.800
+flics/bldgs/park/clubl1.flc,2,0.501,0.439,0.086,0.043,.460,.800
+flics/bldgs/park/clubl1.flc,2,0.731,0.612,0.054,0.025,.460,.800
+flics/bldgs/park/clubl1.flc,3,0.423,0.145,0.030,0.049,.500,.780
+flics/bldgs/park/clubl1.flc,3,0.426,0.339,0.073,0.050,.500,.780
+flics/bldgs/park/clubl1.flc,3,0.219,0.561,0.057,0.026,.500,.780
+flics/bldgs/park/clubl2.flc,0,0.425,0.225,0.080,0.072,.300,.740
+flics/bldgs/park/clubl2.flc,0,0.219,0.382,0.124,0.041,.300,.740
+flics/bldgs/park/clubl2.flc,0,0.287,0.506,0.046,0.047,.300,.740
+flics/bldgs/park/clubl2.flc,0,0.492,0.600,0.042,0.040,.300,.740
+flics/bldgs/park/clubl2.flc,0,0.223,0.522,0.025,0.027,.300,.740
+flics/bldgs/park/clubl2.flc,1,0.491,0.258,0.038,0.057,.700,.730
+flics/bldgs/park/clubl2.flc,1,0.649,0.375,0.113,0.050,.700,.730
+flics/bldgs/park/clubl2.flc,1,0.676,0.513,0.023,0.043,.700,.730
+flics/bldgs/park/clubl2.flc,1,0.438,0.601,0.064,0.040,.700,.730
+flics/bldgs/park/clubl2.flc,2,0.473,0.213,0.057,0.045,.460,.800
+flics/bldgs/park/clubl2.flc,2,0.508,0.406,0.077,0.043,.460,.800
+flics/bldgs/park/clubl2.flc,2,0.626,0.413,0.112,0.043,.460,.800
+flics/bldgs/park/clubl2.flc,2,0.716,0.563,0.042,0.026,.460,.800
+flics/bldgs/park/clubl2.flc,3,0.432,0.172,0.041,0.055,.500,.780
+flics/bldgs/park/clubl2.flc,3,0.239,0.425,0.159,0.048,.500,.780
+flics/bldgs/park/clubl2.flc,3,0.409,0.409,0.041,0.047,.500,.780
+flics/bldgs/park/clubl2.flc,3,0.219,0.559,0.047,0.024,.500,.780

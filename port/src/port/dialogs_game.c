@@ -18,6 +18,8 @@
 // the game takes as its pointer) at the ORIGINAL control's place, one step per
 // frame, so the original handlers run.
 #include <SDL.h>
+#include "port/text_selection.h"
+#include "mods/mods.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -27,6 +29,8 @@
 #include "port/dialogs_frosted.h"
 #include "port/hd_art_dialog_cutoff.h"
 #include "port/hd_native.h"
+#include "port/roster.h"
+#include "port/portrait_game.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 
@@ -147,10 +151,29 @@ void dlg_pre(void) {
 void hud_clean_pages(void);   // hud_game.c
 int rp_is_on(void);           // reports_game.c: a report page (task-73: the golfer profile) is up under this dialog
 
+static int g_text_anchor = -1;
+static char *g_entry_text;
+static unsigned *g_entry_cursor, *g_entry_length;
+static int g_entry_capacity;
+unsigned GetKeyState(unsigned vk);
+int dlg_entry_nav(int vk, int shift) {
+  if (!g_on || g_kind != 1 || !g_entry_text || !mods_get_int("fixes.text_selection", 1)) return 0;
+  return text_selection_key(g_entry_text, g_entry_cursor, g_entry_length,
+                            &g_text_anchor, 0, vk, shift, (unsigned)g_entry_capacity);
+}
+int dlg_edit_key(char *text, unsigned *cursor, unsigned *length, int ch, int vk, int capacity) {
+  if (!g_on || !mods_get_int("fixes.text_selection", 1) || capacity <= 0) return 0;
+  if (g_entry_cursor) *cursor = *g_entry_cursor;
+  return text_selection_key(text, cursor, length, &g_text_anchor, ch, vk,
+                            (GetKeyState(0x10) & 0x8000) != 0, (unsigned)capacity);
+}
+
 static void begin(int kind) {
   if (g_log < 0) g_log = getenv("SIMGOLF_DIALOGS_LOG") != NULL;
   g_on = dlgf_enabled();
   g_kind = kind;
+  g_text_anchor = -1;
+  g_entry_text = NULL;
   g_inj = 0;
   if (g_log && g_on) fprintf(stderr, "dialogs: open %s\n", kind == 1 ? "entry" : "menu");
   if (g_on) {
@@ -236,8 +259,9 @@ int dlg_menu(int px, int py, int sel, int checks, unsigned mask, unsigned disabl
 // ------------------------------------------------------------------ text entry (FUN_0045b2c0)
 
 // Returns 1 for Enter (OK), 2 for Esc (Cancel), 0 otherwise.
-int dlg_entry(const char *prompt, const char *text, int caret, int max_chars) {
+int dlg_entry(const char *prompt, char *text, unsigned *caret, unsigned *length, int max_chars) {
   if (!g_on) return 0;
+  g_entry_text = text; g_entry_cursor = caret; g_entry_length = length; g_entry_capacity = max_chars;
   hd_ui_show_golf_ui(0);
   DlgSnap *s = &g_snap;
   memset(s, 0, sizeof *s);
@@ -246,7 +270,8 @@ int dlg_entry(const char *prompt, const char *text, int caret, int max_chars) {
   s->kind = DLG_ENTRY;
   copy_str(s->prompt, sizeof s->prompt, prompt);
   copy_str(s->field, sizeof s->field, text);
-  s->caret = caret;
+  s->caret = (int)*caret;
+  s->selection_anchor = g_text_anchor;
   s->max_chars = max_chars;
   dlgf_publish(s);
   int r = 0;
@@ -360,6 +385,121 @@ static uint32_t *capture(int BW, int BH, DrawFn draw, void *user, int *ow, int *
   return out;
 }
 
+// ------------------------------------------------------------------ normal face browser
+// pickCharEditor00438390 is kept as the original-mode fallback. Native mode
+// previews faces in its own catalog, then changes only appearance on acceptance.
+unsigned dlg_done(unsigned v);
+int FUN_0045ae70(void);
+int FUN_0045ae30(void);
+void FUN_0045c030(void);
+void FUN_0045bf80(int ticks,int unused);
+
+static void draw_picker_head(int bx,int by,void *user) {
+  int code=(int)(intptr_t)user;
+  FUN_00473cb0((void *)(uintptr_t)(0x562914+code*0x84),G32(0x4c1570),bx+8,by+8,1,1,1,0);
+}
+static DlgPixels picker_image(int male,int code) {
+  DlgPixels p={0};
+  if(code>=1000)p.px=portrait_face_image(code-1000,&p.w,&p.h);
+  else {
+    p.px=portrait_original_face_image(male,code,&p.w,&p.h);
+    if(p.px)fprintf(stderr,"faces: original painted head %d male %d\n",code,male);
+    else p.px=capture(160,160,draw_picker_head,(void *)(intptr_t)(code+male*72),&p.w,&p.h);
+  }
+  return p;
+}
+static void picker_label(char *text,int capacity,int code) {
+  if(code>=1000)snprintf(text,capacity,"%s",roster_face_name(code-1000));
+  else snprintf(text,capacity,code<20?"Original %d":"Imported %d",code<20?code+1:code-19);
+}
+static int picker_catalog(int male,int stock,int filter,int *entries) {
+  int count=0;
+  // Index19 is the stock authoring stencil ("place Normal face here"),
+  // not a golfer face. Imported allocations start at20 and remain visible.
+  if(filter!=1)for(int head=0;head<stock;head++)if(head!=19)entries[count++]=head;
+  if(filter!=2)for(int i=0;i<roster_face_count(male);i++)entries[count++]=1000+roster_face_character(male,i);
+  return count;
+}
+int dlg_face_picker(int profile,int male) {
+  if(!dlgf_enabled() || !roster_profile_valid(profile) || (male!=0 && male!=1))return -2;
+  const uint8_t *record=(const uint8_t *)(uintptr_t)(roster_address(0x4d6088)+profile*560);
+  int stock=G32(0x59b76c+male*4);if(stock<0)stock=0;if(stock>72)stock=72;
+  int entries[72+ROSTER_ADDITIONS],filter=0,page=0;
+  int selected=roster_character(profile),count=picker_catalog(male,stock,filter,entries);
+  selected=selected>=0?1000+selected:record[34];if(selected==19)selected=0;
+  for(int i=0;i<count;i++)if(entries[i]==selected)page=i/DLG_FACE_TILES;
+  int loaded_page=-1,loaded_filter=-1,loaded_preview=-2,preview_ready=0;
+  int answer=-1,accept=0;
+  DlgSnap snap={0};snap.magic=DLG_MAGIC;snap.kind=DLG_FACE;snap.face_male=male;
+  dlg_begin(DLG_FACE);
+  fprintf(stderr,"faces: open profile %d male %d originals %d new %d selected %d\n",profile,male,stock,roster_face_count(male),selected);
+  for(;;) {
+    count=picker_catalog(male,stock,filter,entries);
+    int pages=(count+DLG_FACE_TILES-1)/DLG_FACE_TILES;if(pages<1)pages=1;
+    if(page<0)page=0;if(page>=pages)page=pages-1;
+    DlgPixels tiles[DLG_FACE_TILES]={{0}},preview={0};
+    int refresh_page=page!=loaded_page || filter!=loaded_filter;
+    int refresh_preview=selected!=loaded_preview;
+    if(refresh_page) {
+      snap.face_rows=count-page*DLG_FACE_TILES;
+      if(snap.face_rows>DLG_FACE_TILES)snap.face_rows=DLG_FACE_TILES;
+      for(int i=0;i<DLG_FACE_TILES;i++) {
+        snap.face_code[i]=-1;snap.face_ready[i]=0;snap.face_name[i][0]=0;
+        if(i>=snap.face_rows)continue;
+        int code=entries[page*DLG_FACE_TILES+i];snap.face_code[i]=code;
+        picker_label(snap.face_name[i],sizeof snap.face_name[i],code);
+        tiles[i]=picker_image(male,code);snap.face_ready[i]=tiles[i].px!=NULL;
+      }
+      loaded_page=page;loaded_filter=filter;
+      fprintf(stderr,"faces: page %d filter %d count %d rows %d\n",page,filter,count,snap.face_rows);
+    }
+    if(refresh_preview) {
+      preview=picker_image(male,selected);preview_ready=preview.px!=NULL;
+      picker_label(snap.face_preview,sizeof snap.face_preview,selected);loaded_preview=selected;
+      fprintf(stderr,"faces: preview code %d ready %d [%s]\n",selected,preview_ready,snap.face_preview);
+    }
+    snap.serial=++g_serial;snap.face_filter=filter;snap.face_page=page;
+    snap.face_total=count;snap.face_selected=selected;snap.has_art=preview_ready;
+    dlgf_publish_faces(&snap,refresh_page?tiles:NULL,refresh_preview?&preview:NULL);
+    for(int i=0;i<DLG_FACE_TILES;i++)free(tiles[i].px);free(preview.px);
+    keep_restore();hd_art_hide_dialog();FUN_00480c80((void *)0x519a60);
+    FUN_0045bf80(1,0);FUN_0045c030();
+    DlgAction action;
+    int cancel=0;
+    while(dlgf_take_action(&action)) {
+      if(action.kind==DLG_A_CANCEL)cancel=1;
+      else if(action.kind==DLG_A_OK && preview_ready && selected==loaded_preview)accept=1;
+      else if(action.kind==DLG_A_FACE_PAGE)page+=action.arg<0?-1:1;
+      else if(action.kind==DLG_A_FACE_FILTER && action.arg>=0 && action.arg<=2){filter=action.arg;page=0;}
+      else if(action.kind==DLG_A_ITEM)for(int i=0;i<count;i++)if(entries[i]==action.arg){selected=action.arg;break;}
+    }
+    if(FUN_0045ae70()) {
+      int key=FUN_0045ae30(),index=-1;
+      for(int i=0;i<count;i++)if(entries[i]==selected){index=i;break;}
+      if(key==0x1b)cancel=1;
+      else if(key==0x0d && preview_ready && selected==loaded_preview)accept=1;
+      else if(key==0x21)page--;
+      else if(key==0x22)page++;
+      else if(key>=0x25 && key<=0x28 && count>0) {
+        int step=key==0x25?-1:key==0x27?1:key==0x26?-4:4;
+        index=index<0?0:index+step;if(index<0)index=0;if(index>=count)index=count-1;
+        selected=entries[index];page=index/DLG_FACE_TILES;
+      }
+    }
+    if(cancel){fprintf(stderr,"faces: cancelled profile %d\n",profile);break;}
+    if(accept) {
+      int character=selected>=1000?selected-1000:-1;
+      if(roster_face_apply(profile,male,selected,character)) {
+        answer=character>=0?-1:selected;
+        fprintf(stderr,"faces: applied profile %d character %d stock %d\n",profile,character,character<0?selected:-1);
+      }
+      break;
+    }
+  }
+  dlg_done((unsigned)-1);
+  return answer;
+}
+
 // The speaker's picture as FUN_0040d320 draws it (golf's speaker code in 0x4c2e08), at the box's origin.
 static void draw_speaker(int bx, int by, void *user) {
   int sp = (int)(intptr_t)user;
@@ -406,7 +546,9 @@ void dlg_hint_pre(void) {
 void dlg_wait_begin(void) { g_hint_open = 1; }
 
 // Once per iteration of FUN_0045c0c0, golf's wait for a click or a key. 1 when the native hint was closed.
+void rp_analysis_tick(void);
 int dlg_wait(void) {
+  rp_analysis_tick();
   g_hint_open = 1;   // the original wait loop also owns input until dlg_hint_end
   if (!g_hint_on) {
     if (g_on || !g_hint_t || SDL_GetTicks() - g_hint_t > 400 || !g_kept || !dlgf_enabled()) return 0;
@@ -499,6 +641,125 @@ int dlg_hire(int hover) {
 }
 
 static unsigned finish(unsigned v);
+unsigned dlg_done(unsigned v);
+void FUN_0045bf80(int n, int unused);
+void FUN_0045c030(void);
+
+// Original catalogue and return value of chooseFace (0x00438390). Only the
+// presentation and input collection change; the profile applies the result.
+static void draw_face_thumbnail(int x, int y, void *user) {
+  int index = (int)(intptr_t)user;
+  FUN_00473cb0((void *)(uintptr_t)(0x562914 + index * 0x84), G32(0x4c1570), x + 8, y + 8, 1, 1, 1, 0);
+}
+
+int dlg_face_native(int group) {
+  if (!dlgf_enabled() || group < 0 || group > 1) return -2;
+  int count = G32(0x59b76c + group * 4);
+  if (count < 1 || count > 72) return -2;
+  int visible_count = count - (count > 19); // slot 19 is the original authoring stencil
+  int page = G32(0x5aa55c) / 10, loaded_page = -1, answer = -1, done = 0;
+  int pages = (visible_count + 9) / 10;
+  if (page < 0 || page >= pages) page = 0;
+  dlg_begin(DLG_FACE);
+  if (g_log) fprintf(stderr, "faces: native open group %d count %d\n", group, count);
+  while (!done) {
+    DlgSnap snap = {0};
+    snap.magic = DLG_MAGIC; snap.serial = ++g_serial; snap.kind = DLG_FACE;
+    snap.face_page = page; snap.face_count = visible_count;
+    if (page != loaded_page) {
+      for (int i = 0; i < 10; i++) {
+        int entry = page * 10 + i, head = entry + (entry >= 19), w = 0, h = 0;
+        uint32_t *px = entry < visible_count ? capture(160, 160, draw_face_thumbnail, (void *)(intptr_t)(group * 72 + head), &w, &h) : NULL;
+        dlgf_publish_art(DLG_ART_FACE_FIRST + i, px, w, h);
+        free(px);
+      }
+      loaded_page = page;
+      G32(0x5aa55c) = page * 10;
+      if (g_log) fprintf(stderr, "faces: native page %d\n", page);
+    }
+    dlgf_publish(&snap);
+    keep_restore();
+    hd_art_hide_dialog();
+    FUN_00480c80((void *)0x519a60);
+    FUN_0045bf80(1, 0);
+    FUN_0045c030();
+    DlgAction action;
+    while (dlgf_take_action(&action)) {
+      if (action.kind == DLG_A_CANCEL) done = 1;
+      else if (action.kind == DLG_A_ITEM && action.arg >= 0 && action.arg != 19 && action.arg < count) { answer = action.arg; done = 1; }
+      else if (action.kind == DLG_A_FACE_PAGE) {
+        int next = page + (action.arg < 0 ? -1 : 1);
+        if (next >= 0 && next < pages) page = next;
+      }
+    }
+    if (FUN_0045ae70()) {
+      int key = FUN_0045ae30();
+      if (key == 0x1b) done = 1;
+      else if (key == 0x25 && page > 0) --page;
+      else if (key == 0x27 && page + 1 < pages) ++page;
+    }
+  }
+  dlg_done(0);
+  if (g_log) fprintf(stderr, "faces: native result %d\n", answer);
+  return answer;
+}
+
+// runScrollText (0x0046dea0) is shared by profile notices, file errors and
+// roster messages. Its original parser, keyboard handling and return stay live.
+static char g_document[2048];
+static uint32_t g_document_epoch;
+void dlg_document_begin(const char *text) {
+  dlg_begin(DLG_DOCUMENT);
+  ++g_document_epoch;
+  copy_str(g_document, sizeof g_document, text);
+  if (g_log && g_on) fprintf(stderr, "dialogs: open document %u bytes %u\n", g_document_epoch, (unsigned)strlen(g_document));
+}
+
+int FUN_00404970(int value);
+uint32_t FUN_004657e0(int x, int y);
+uint32_t FUN_00465840(int x, int y);
+void dlg_document_frame(int selected, int input) {
+  if (!g_on || g_kind != DLG_DOCUMENT) return;
+  memset(&g_snap, 0, sizeof g_snap);
+  g_snap.magic = DLG_MAGIC; g_snap.serial = ++g_serial; g_snap.kind = DLG_DOCUMENT;
+  copy_str(g_snap.document, sizeof g_snap.document, g_document);
+  g_snap.document_first = G32(0x83927c);
+  g_snap.n_items = G32(0x838f7c);
+  g_snap.disabled = (uint32_t)G32(0x839280);
+  g_snap.sel = selected;
+  g_snap.document_epoch = g_document_epoch;
+  dlgf_publish(&g_snap);
+  if (input) {
+    DlgAction a;
+    while (dlgf_take_action(&a)) {
+      if (a.kind == DLG_A_ITEM) {
+        int item = a.arg & 0xffff;
+        if (item < 0 || item >= g_snap.n_items || item >= 32 || (g_snap.disabled & (1u << item))) continue;
+        int x = FUN_00404970(G32(0x839260) + 12);
+        int y = FUN_00404970(G32(0x839264) + 5 + (g_snap.document_first + item) * G32(0x4e3dac));
+        sdl_motion(x, y); // the original also hit-tests the cursor when the button is released
+        if (a.arg & 0x10000) FUN_00465840(x, y); else FUN_004657e0(x, y);
+        if (g_log) fprintf(stderr, "dialogs: document original choice %d at %d,%d\n", item, x, y);
+      } else if (a.kind == DLG_A_CANCEL || a.kind == DLG_A_OK) {
+        SDL_Event e = {0}; e.type = SDL_KEYDOWN; e.key.keysym.sym = SDLK_ESCAPE; SDL_PushEvent(&e);
+        e.type = SDL_KEYUP; SDL_PushEvent(&e);
+      }
+    }
+  }
+  keep_restore();
+  hd_art_hide_dialog();
+}
+
+void dlg_document_flush(void *page) {
+  dlg_document_frame(-1, 0);
+  FUN_00480c80(page);
+}
+
+int dlg_document_end(int result) {
+  if (g_log && g_on) fprintf(stderr, "dialogs: document result %d\n", result);
+  dlg_done((unsigned)result);
+  return result;
+}
 
 void dlg_hint_end(void) {
   g_hint_open = 0;

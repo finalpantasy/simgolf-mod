@@ -363,12 +363,16 @@ static void draw_update_notice(Scene *s, UpdState *u, const UiRect *p, FeAction 
   UiCtx *c = s->c;
   const UiTokens *t = s->t;
   char msg[160];
-  if (u->busy == 1) snprintf(msg, sizeof msg, "%s", u->status_text[0] ? u->status_text : "Updating");
+  if (u->busy == 1 && !strncmp(u->status_text,"Downloading",11)) {
+    if(u->download_per_mille>=0)snprintf(msg,sizeof msg,"Downloading update %d%% (%d / %d MB)",u->download_per_mille/10,u->download_kb/1000,u->download_total_kb/1000);
+    else snprintf(msg,sizeof msg,"Downloading update (%d MB received)",u->download_kb/1000);
+  } else if (u->busy == 1) snprintf(msg, sizeof msg, "%s", u->status_text[0] ? u->status_text : "Updating");
   else if (u->busy == 2) snprintf(msg, sizeof msg, "%s", u->status_text[0] ? u->status_text : "The update did not work");
   else snprintf(msg, sizeof msg, "SimGolf Remastered %s is out", u->latest);
   float tw = ui_text_width(c, UI_TYPE_HEADING, msg) / s->u;
   int buttons = u->busy == 0 || u->busy == 2;
-  const float bw = 150, lw = 100, h = 64;
+  const float bw = 150, lw = 100;
+  const float h = u->busy==1 ? 90 : 64;
   float w = 58 + tw + (buttons ? 24 + bw + 10 + lw : 0) + 18;
   if (w > 1500) w = 1500;
   UiRect r = R(s, (1920 - w) / 2, (p->y - s->S.y) / s->u - h - 22, w, h);
@@ -376,6 +380,12 @@ static void draw_update_notice(Scene *s, UpdState *u, const UiRect *p, FeAction 
   ui_panel(c, r, r.h / 2, UI_PANEL_READABLE);
   uid_rrect(ui_drawer(c), ui_rect(r.x + U(s, 20), r.y + (r.h - U(s, 12)) / 2, U(s, 12), U(s, 12)), U(s, 6), u->busy == 2 ? t->danger : t->accent);
   ui_text_fit(c, ui_rect(r.x + U(s, 44), r.y, U(s, tw + 8), r.h), UI_TYPE_HEADING, t->text_primary, msg, 0);
+  if (u->busy==1) {
+    UiRect track=ui_rect(r.x+U(s,44),r.y+r.h-U(s,20),r.w-U(s,64),U(s,6));
+    uid_rrect(ui_drawer(c),track,U(s,3),t->meter_track);
+    int amount=u->download_per_mille;
+    if(amount>=0){UiRect fill=track;fill.w*=fminf(1000,fmaxf(0,(float)amount))/1000;uid_rrect(ui_drawer(c),fill,U(s,3),t->accent);}
+  }
   if (!buttons) return;
   UiRect now = ui_rect(r.x + r.w - U(s, 18 + lw + 10 + bw), r.y + U(s, 10), U(s, bw), r.h - U(s, 20));
   UiRect later = ui_rect(r.x + r.w - U(s, 18 + lw), r.y + U(s, 10), U(s, lw), r.h - U(s, 20));

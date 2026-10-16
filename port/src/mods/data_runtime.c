@@ -14,6 +14,7 @@
 #include "mods/data.h"
 #include "mods/mdata.h"
 #include "mods/mods.h"
+#include "mods/living_club.h"
 
 #ifndef SIMGOLF_DEFAULT_TABLES
 #define SIMGOLF_DEFAULT_TABLES ""
@@ -141,6 +142,15 @@ void mdata_thought_begin(char *buf) { g_len0 = buf ? strlen(buf) : 0; }
 
 void mdata_thought_end(int event, int arg, int arg2, int slot, char *buf) {
   if (!g_on || !buf || event < 0 || event > 255) return;
+  char contextual[LC_TEXT];
+  if (living_thought(slot, event, arg, arg2, contextual, sizeof contextual)) {
+    // The original global buffer is large, but a line always fits its known
+    // 600-character append budget. Preserve the routine's pre-existing prefix.
+    if (strlen(buf) >= g_len0 && g_len0 < 600) {
+      snprintf(buf + g_len0, 601 - g_len0, "%s", contextual);
+      return;
+    }
+  }
   const Persona *p = persona_of(slot);
   if (!p || !p->nlines[event]) return;
   uint32_t h = mix((uint32_t)profile_of(slot) * 31u + (uint32_t)event * 7919u + (uint32_t)arg * 104729u +
@@ -281,6 +291,7 @@ void mdata_init(int argc, char **argv) {
   say(line);
   g_on = 1;
   build_personas();
+  living_init(g_dir);
 }
 
 int mdata_enabled(void) { return g_on; }

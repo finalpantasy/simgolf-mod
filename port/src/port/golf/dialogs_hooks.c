@@ -18,14 +18,24 @@
 
 #ifdef __EMSCRIPTEN__
 
+int dlg_face_picker(int profile,int male) { (void)profile;(void)male;return -2; }
+int dlg_face_native(int group) { (void)group; return -2; }
+void dlg_document_begin(const char *text) { (void)text; }
+void dlg_document_frame(int selected, int input) { (void)selected; (void)input; }
+void dlg_document_flush(void *page) { FUN_00480c80(page); }
+int dlg_document_end(int result) { return result; }
+
 void dlg_pre(void) {}
 void dlg_begin(int kind) { (void)kind; }
 int dlg_menu(int px, int py, int sel, int checks, unsigned mask, unsigned disabled, int left, int first_y, int n_items, int width, int height) {
   (void)px, (void)py, (void)sel, (void)checks, (void)mask, (void)disabled, (void)left, (void)first_y, (void)n_items, (void)width, (void)height;
   return 0;
 }
-int dlg_entry(const char *prompt, const char *text, int caret, int max_chars) {
-  (void)prompt, (void)text, (void)caret, (void)max_chars;
+int dlg_edit_key(char *text, unsigned *cursor, unsigned *length, int ch, int vk, int capacity) {
+  (void)text; (void)cursor; (void)length; (void)ch; (void)vk; (void)capacity; return 0;
+}
+int dlg_entry(const char *prompt, char *text, unsigned *caret, unsigned *length, int max_chars) {
+  (void)prompt, (void)text, (void)caret, (void)length, (void)max_chars;
   return 0;
 }
 void dlg_hint_pre(void) {}

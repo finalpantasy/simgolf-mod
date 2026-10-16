@@ -61,7 +61,10 @@ void grid_init(void) {
   double scale = map_scale();
   int side = kOrigSide;
   if (scale > 1) {
-    side = (int)(kOrigSide * sqrt(scale) + 0.5);
+    // Clamp before converting to int: huge or infinite settings otherwise
+    // become a negative dimension before the existing upper bound can help.
+    double wanted = kOrigSide * sqrt(scale) + 0.5;
+    side = wanted >= GRID_MAX_SIDE ? GRID_MAX_SIDE : (int)wanted;
     side &= ~1;   // even, so the map keeps a centre line between tiles
     if (side > GRID_MAX_SIDE) side = GRID_MAX_SIDE;
   }

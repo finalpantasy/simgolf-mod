@@ -31,6 +31,8 @@ static int g_registered, g_failed;
 static volatile int g_want, g_game_asked;
 static volatile double g_drawn_t = -1e9;
 static volatile float g_view_x, g_view_y, g_view_px = 1;
+static UiRect g_live_bounds;
+int opt_is_open(void);
 static struct {
   uint32_t *px;
   int w, h;
@@ -127,8 +129,8 @@ static int active(void) {
   return g_want && g_registered && !g_ended && host_now_ms() - g_snap_t < lim;
 }
 
-int rpf_gap(void) { return g_frame_gap; }   // test aid: gap latched with the report layer's draw for this frame
-int rpf_visible(void) { return g_visible; }
+int rpf_gap(void) { return g_frame_gap && g_snap.kind != RP_LEADERBOARD; }
+int rpf_visible(void) { return g_visible && g_snap.kind != RP_LEADERBOARD; }
 
 static void load_tokens(UiTokens *t) {
   char base[1024];
@@ -191,9 +193,8 @@ static void draw(const HdUiFrame *f, void *user) {
   g_view_x = (float)f->view.x;
   g_view_y = (float)f->view.y;
   g_view_px = f->px > 0 ? f->px : 1;
-  // the task-73 pages hide while a native dialog is up over them (a name strip, a menu): the dialogs layer was registered first
-  // (at the title) and so draws under this one
-  int show = report_active && w > 0 && !(g_snap.kind >= RP_PROFILE && dlgf_active());
+  // Reports draw below dialogs, so nested menus retain their native parent page.
+  int show = report_active && w > 0 && !(g_snap.kind == RP_LEADERBOARD && (dlgf_active() || opt_is_open()));
   g_visible = show;
   g_frame_gap = report_active && !show;
   if (!show) {
@@ -221,6 +222,11 @@ static void draw(const HdUiFrame *f, void *user) {
   ui_begin(g_ui, f->target, w, h, rp_scale(w, h), f->target, host_now_ms());
   RpAction acts[8];
   int n = ui_reports_draw(g_ui, s, g_tex, acts, 8);
+  if (s->kind == RP_LEADERBOARD) {
+    RpLayout layout;
+    ui_reports_layout(&layout);
+    g_live_bounds = layout.panel;
+  }
   ui_end(g_ui);
   static int log_layout = -1;
   static uint32_t logged_kind = ~0u, logged_hash;
@@ -265,6 +271,17 @@ static int input(SDL_Event *e, int course, void *user) {
   UiEvent u = {0};
   int cx = 0, cy = 0;
   switch (e->type) {
+    case SDL_KEYDOWN:
+    case SDL_KEYUP:
+      if (g_visible && active() && !dlgf_active() && !opt_is_open() && g_snap.kind == RP_ROSTER && e->key.keysym.sym == SDLK_ESCAPE) {
+        if (e->type == SDL_KEYDOWN && !e->key.repeat) {
+          lock();
+          if (g_qn < QMAX) g_q[g_qn++] = (RpAction){RP_A_CLOSE, 0};
+          unlock();
+        }
+        return 1;
+      }
+      return 0;
     case SDL_MOUSEMOTION:
       if (!e->motion.windowID) return 0;   // scripted input (harness, bridge, our own clicks) is the game's
       u.kind = UI_EV_MOVE;
@@ -290,6 +307,9 @@ static int input(SDL_Event *e, int course, void *user) {
   cy = hd_raw_mouse_y;
   u.x = g_view_x + (cx + 0.5f) * g_view_px;
   u.y = g_view_y + (cy + 0.5f) * g_view_px;
+  if (g_snap.kind == RP_LEADERBOARD &&
+      (dlgf_active() || opt_is_open() || u.x < g_live_bounds.x || u.y < g_live_bounds.y ||
+       u.x >= g_live_bounds.x + g_live_bounds.w || u.y >= g_live_bounds.y + g_live_bounds.h)) return 0;
   if (!g_visible) {
     ui_input_reset(g_ui);
     return 0;
@@ -301,7 +321,7 @@ static int input(SDL_Event *e, int course, void *user) {
 // the task-73 pages follow ui.dialogs too (they were left by the dialogs card); the older reports only ui.reports
 int rpf_enabled_kind(int kind) {
   if (!rpf_enabled()) return 0;
-  if (kind < RP_PROFILE) return 1;
+  if (kind < RP_PROFILE || kind == RP_ROUTING) return 1;
   const char *v = mods_get("ui.dialogs");
   const char *e = getenv("SIMGOLF_DIALOGS");
   if (e && !strcasecmp(e, "original")) return 0;

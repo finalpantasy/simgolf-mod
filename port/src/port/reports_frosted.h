@@ -19,6 +19,7 @@
 int rp_game_active(void);
 
 #include "port/ui/ui_kit.h"
+#include "port/ui/ui_course_map.h"
 
 enum { RP_AL_LEFT = 0, RP_AL_CENTRE = 1, RP_AL_RIGHT = 2 };
 
@@ -46,9 +47,11 @@ typedef struct {
   int kind;              // RP_*
   char title[64];        // the report's own title (first title-font text)
   int32_t ext[8];        // task-73 pages: kind specific numbers (golf's hover, a nested editor is open, ...)
+  int32_t ranking_counts[10][5]; // RP_MONTH: counts of the original five pictograms in displayed row order
   char bio[512];         // RP_PROFILE: the golfer's bio text as it is in golf's buffer (live while it is edited)
   int n;
   RpItem it[RP_ITEMS];
+  UiCourseMap map;
 } RpSnap;
 
 enum { RP_A_NONE, RP_A_CLOSE, RP_A_TAB, RP_A_CLICK, RP_A_RCLICK, RP_A_KEY };
@@ -84,5 +87,6 @@ void rpf_publish(const RpSnap *s);            // game thread, once per frame of 
 void rpf_end(void);                           // the report closed
 int rpf_take_action(RpAction *a);             // game thread: next native action, 1 if any
 void rpf_publish_art(int slot, const uint32_t *argb, int w, int h);   // game thread: a sprite as ARGB
+void rp_route_selected(int hole, int staff_count, int staff_offset); // original overview state before presenting
 
 #endif

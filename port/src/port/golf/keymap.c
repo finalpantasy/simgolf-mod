@@ -68,7 +68,7 @@ static const Act k_act[] = {
     A("analyze_shot", "Analyze a shot", "Build and tools", K_CHAR, '.', ".", "/", SAME),
     A("next_shape", "Next shape", "Build and tools", K_CHAR, 9, "Tab", NONE, SAME),
     A("clear_tool", "Put the tool away", "Build and tools", K_CHAR, 13, "Return", "Escape", SAME),
-    A("close_dock", "Close the tray", "Build and tools", K_CHAR, ' ', "Space", NONE, SAME),
+    A("close_dock", "Close the tray", "Build and tools", K_CHAR, ' ', "Space", NONE, NONE, NONE),
     // holes
     A("hole_1", "Hole 1", "Holes", K_CHAR, '1', "1", NONE, SAME),
     A("hole_2", "Hole 2", "Holes", K_CHAR, '2', "2", NONE, SAME),
@@ -101,7 +101,7 @@ static const Act k_act[] = {
     A("accomplishments", "Professional accomplishments", "Reports and maps", K_VK, 0x79, "F10", NONE, SAME),
     A("repeat_message", "Repeat the last message", "Reports and maps", K_CHAR, '?', "Shift+/", NONE, SAME),
     // the game
-    A("pause", "Pause", "Game", K_CHAR, 'P', "Shift+P", NONE, SAME),
+    A("pause", "Pause", "Game", K_CHAR, 'P', "Shift+P", NONE, "Space", "Shift+P"),
     A("save_game", "Save the game", "Game", K_CHAR, 'S', "Shift+S", NONE, SAME),
     A("load_game", "Load a game", "Game", K_CHAR, 'L', "Shift+L", NONE, SAME),
     A("save_course", "Save the course for championship", "Game", K_CHAR, 'C', "Shift+C", NONE, SAME),
@@ -368,6 +368,7 @@ int keymap_event(SDL_Event *e) {
       if (act->kind == K_OPT || act->kind == K_STORE) return 0;   // the page and the HUD read these themselves
       if (orig_has(act, &ev)) return 0;                           // the very key the game reads for it
       g_eat_text_until = now + 80;
+      if (!strcmp(act->id, "pause") && e->key.repeat) return 1;
       if (act->kind == K_CHAR) {
         win_key_char(act->arg);
         track(sym, K_CHAR, act->arg);

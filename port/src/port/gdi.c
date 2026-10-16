@@ -186,7 +186,7 @@ extern void terrain_set_hdc_resolver(const TerrainSurface *(*resolve)(void *hdc)
 
 #ifndef __EMSCRIPTEN__
 void hd_native_prepare(int *w, int *h, unsigned *flags);
-int hd_native_start(SDL_Window *window);
+SDL_Window *hd_native_start(int w, int h, unsigned flags);
 #endif
 
 static const TerrainSurface *terrain_surface(void *hdc) {
@@ -211,11 +211,12 @@ void gdi_init(void) {
 #ifndef __EMSCRIPTEN__
   hd_native_prepare(&win_w, &win_h, &win_flags);   // task-3: any size, borderless (hd_native.c)
 #endif
-  g_window = SDL_CreateWindow("SimGolf", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, win_flags);
 #ifndef __EMSCRIPTEN__
-  if (!hd_native_start(g_window))   // 1: hd_native.c presents on its own render thread
+  g_window = hd_native_start(win_w, win_h, win_flags);
+  if (!g_window)   // original presentation owns its window on the game thread
 #endif
   {
+    g_window = SDL_CreateWindow("SimGolf", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, win_flags);
     g_renderer = SDL_CreateRenderer(g_window, -1, SDL_RENDERER_ACCELERATED);
     g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING,
                                   WIN_SCREEN_W, WIN_SCREEN_H);

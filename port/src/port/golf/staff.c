@@ -7,6 +7,7 @@
 #include "port/staff.h"
 #include "port/grid.h"
 #include "port/runtime.h"
+#include "port/roster.h"
 #include "port/camera_tiles.h"
 #ifndef __EMSCRIPTEN__
 #include "mods/mods.h"
@@ -126,6 +127,7 @@ int staff_preflight(int fd, int course, int offset) {
     if (flag_word & 0x200000) bytes += 0xb7c0 + 0x19a28;
   } else bytes += 8; // course trailer written outside the field serializer
   if (ok) ok = end >= body + bytes;
+  if (ok) ok = roster_preflight_file(f,body+bytes,end,course);
   if (fclose(f)) ok = 0;
   if (!ok) { fprintf(stderr, "staff: rejected invalid or truncated %s save before mutation\n", course ? "course" : "game"); return 0; }
   memcpy(staged, extra, sizeof staged); staged_fd = fd; staged_tag = tag;

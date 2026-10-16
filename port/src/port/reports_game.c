@@ -1,3 +1,4 @@
+#include "port/roster.h"
 // Frosted Mint reports, game-thread side, native build (simgolf mod, task-28). Overview in
 // port/reports_frosted.h. This file does not include golf_protos.h (its types clash with the C library
 // headers).
@@ -17,8 +18,12 @@
 #include <string.h>
 
 #include "port/hd_native.h"
+#include "port/dialogs_frosted.h"
 #include "port/reports_frosted.h"
+#include "port/portrait_game.h"
 #include "port/reports_handoff_policy.h"
+#include "port/grid.h"
+#include "port/host.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define SCREEN_STATE 0x569498
@@ -35,6 +40,7 @@ int FUN_00404bc0(char *s, int x, int y, uint32_t col);
 int FUN_004049d0(char *s, int x, int y, uint32_t col);
 int FUN_00404ad0(char *s, int x, int y, uint32_t col);
 uint32_t FUN_004657e0(int x, int y);   // original scaled left-click entry
+uint32_t FUN_00465840(int x, int y);   // original scaled right-click entry
 void FUN_00480c80(void *page);   // flush the page's changes to the screen
 void hd_art_dlg_begin(void);       // hd_art.c (task-88): golf's sprites drawn from here on are its old screen
 void hd_art_hide_dialog(void);     // and are not drawn as the art pack's hi-res copies
@@ -43,6 +49,8 @@ int FUN_00455a30(void);          // best scores (modal)
 
 static int g_on;          // this report: the native panel replaces the original
 static int g_kind;
+static int g_route_drawing;
+static void rp_map_begin(void);
 static int g_top_local_close, g_top_close_key;
 static int g_log = -1;
 static int g_closing;     // a close was asked: the key is on its way
@@ -151,11 +159,18 @@ static void inj_start(int arg, int btn) {
 // click sequence.
 static void inj_step(void) {
   if (!g_inj) return;
+  if (g_kind == RP_ROUTING || g_kind == RP_ROSTER) {
+    // These screens clear pending clicks after each redraw. Move first so its
+    // hover is current, then deliver one event after the original message pump.
+    if (g_inj_stage == 0) sdl_motion(g_inj_x, g_inj_y);
+    if (g_inj_stage < 2) g_inj_stage++;
+    return;
+  }
   if (g_inj_wait > 0) {
     g_inj_wait--;
     return;
   }
-  int page = g_kind >= RP_PROFILE;
+  int page = g_kind >= RP_PROFILE && g_kind != RP_ROUTING;
   int pairing = g_kind == RP_PAIRING;
   if (g_log_on() && page) fprintf(stderr, "reports: click step %d at %u ms cursor %d mask 0x%04x\n",
     g_inj_stage, (unsigned)SDL_GetTicks(), g_snap.ext[1], (unsigned)g_snap.ext[0] & 0xffffu);
@@ -209,6 +224,7 @@ static void inj_step(void) {
       break;
     default:
       g_inj = 0;
+      if (g_kind == RP_ROUTING && g_log_on()) fprintf(stderr, "reports: routing input idle\n");
       if (g_iqn) {   // the next click the page asked for
         int arg = g_iq[0], btn = g_iq_btn[0];
         memmove(g_iq, g_iq + 1, sizeof g_iq[0] * (size_t)(g_iqn - 1));
@@ -280,7 +296,9 @@ void rp_done(void);
 
 void rp_tick(void) {
   int on = rpf_enabled();   // keeps the layer registered and drawing before a report opens
+  if (g_on && (g_kind == RP_MONTH || g_kind == RP_LEADERBOARD) && !on) rp_done();
   if (g_on && g_kind == RP_MONTH && G32(SCREEN_STATE) != RP_MONTH) rp_done();   // the per-frame report went away
+  if (g_on && g_kind == RP_LEADERBOARD && (!(G32(0x59e7b8) & 0x200000) || G32(0x53df54))) rp_done();
   if (!g_pending) return;
   int k = g_pending;
   g_pending = 0;
@@ -324,11 +342,13 @@ void rp_begin(int kind) {
   g_col = 0;
   g_dirty = 1;
   memset(&g_snap, 0, offsetof(RpSnap, it));
+  g_snap.map.valid = 0;
   g_snap.magic = RP_MAGIC;
   g_snap.kind = kind;
   if (kind == RP_PHOTO) g_snap.ext[5] = g_serial + 1;   // a new board resets the renderer's history selection
   if (kind == RP_END_YEAR || kind == RP_PAIRING) g_snap.ext[5] = g_serial + 1;
   g_npic = 0;
+  if (kind == RP_PROFILE) portrait_profile_reset();
   g_ph_n = 0;
   g_pair_row = -1;
   g_pair_last_selected = -1;
@@ -338,12 +358,13 @@ void rp_begin(int kind) {
   g_pair_inj_row = -1;
   memset(g_pic, 0, sizeof g_pic);
   if (kind == RP_PROFILE) pic_add(358, 31, 76, 184);   // the portrait in golf's page, clear of the buttons around it
-  if (kind == RP_PROFILE) pic_add(298, 205, 48, 48);    // task-102c: the little golfers on their disc (shirt, pants, skin)
-  if (kind == RP_TRACTS) pic_add(8, 282, 784, 312);    // the map below the tract tiles, with its painted frame
+  if (kind == RP_PROFILE) pic_add(298, 205, 48, 48);    // outfit sprites, captured on a transparent key
   if (g_log) fprintf(stderr, "reports: open %d native %d\n", kind, g_on), fflush(stderr);
   if (g_on) {
-    hd_ui_show_golf_ui(0);
-    hud_clean_pages();
+    if (kind != RP_LEADERBOARD) {
+      hd_ui_show_golf_ui(0);
+      hud_clean_pages();
+    }
     hd_art_dlg_begin();   // task-102c: the art pack's hi-res copies of golf's own screen are hidden too (below)
     keep_save();
   }
@@ -378,6 +399,9 @@ static RpItem *slot(int type, int x, int y) {
 static RpItem *record(const char *s, int len, int x, int y, int align, int big) {
   if (!g_on || !s) return NULL;
   RpSnap *p = &g_snap;
+  // The roster redraw starts at its Member heading. Clear the previous window
+  // so absent per-hole markers and rows cannot survive a scroll redraw.
+  if (g_kind == RP_ROSTER && x == 33 && y == 60) p->n = 0;
   if (big && !p->title[0]) {
     copy_str(p->title, sizeof p->title, s, len);
     return NULL;
@@ -417,8 +441,8 @@ void rp_rect(void *page, int x, int y, int w, int h, uint32_t col) {
 // The page the report draws on: the one whose pixel at (x, y) now differs from the kept picture.
 uint16_t *gdi_dib_at(uintptr_t p, int *w, int *h, int *pitch, int *is565);
 static int drawn_page(int x, int y) {
-  if (g_kind == RP_TRACTS || g_kind == RP_PHOTO) {   // match the actual target surface, not an animated page's changed pixel
-    uint32_t wrap = g_kind == RP_PHOTO ? PAGE_WIDGET : (uint32_t)G32(0x4c1570);
+  if (g_kind == RP_TRACTS || g_kind == RP_PHOTO || g_kind == RP_ROUTING || g_kind == RP_SNAPSHOT) {   // match the actual target surface
+    uint32_t wrap = g_kind == RP_TRACTS ? (uint32_t)G32(0x4c1570) : PAGE_WIDGET;
     uint32_t p = wrap > 0x10000 ? G32(wrap + 4) : 0, bits = p > 0x10000 ? G32(p + 0x4c0) : 0;
     int w, h, pitch, is565;
     uint16_t *want = bits ? gdi_dib_at(bits, &w, &h, &pitch, &is565) : NULL;
@@ -459,6 +483,16 @@ int rp_chip(void *sprite, int target, int x, int y, int clip) {
   uintptr_t sp = (uintptr_t)sprite;
   if (sp == 0x820f40 || sp == 0x820f6c || sp == 0x820fc4) return r;   // the board's close button (the panel has its own)
   if (!g_on || !sprite_size(sprite, &w, &h, &ox, &oy)) return r;
+  int ranking_col = -1;
+  if (g_kind == RP_MONTH) {
+    static const uintptr_t symbols[5] = {0x59b28c, 0x59b33c, 0x59b368, 0x59b394, 0x59b578};
+    int row = (y - 50) / 14;
+    for (int i = 0; i < 5; i++) if (sp == symbols[i]) ranking_col = i;
+    if (ranking_col < 0 || row < 0 || row >= 10 || y != 50 + row * 14) return r;
+    // Count every original symbol, but capture only one sprite for its column.
+    // Long-running courses can otherwise exhaust the snapshot or overflow the old box.
+    if (g_snap.ranking_counts[row][ranking_col]++ > 0) return r;
+  }
   int k = 0;
   while (k < g_nart && g_art[k].spr != sprite) k++;
   if (k == g_nart) {
@@ -472,6 +506,9 @@ int rp_chip(void *sprite, int target, int x, int y, int clip) {
   if (it) {
     it->w = (int16_t)w, it->h = (int16_t)h, it->art = (uint8_t)(k + 1);
     it->big = (uint8_t)g_art[k].plain, it->col = g_art[k].col;
+    if (ranking_col >= 0) it->group = (uint8_t)ranking_col;
+    if (g_kind == RP_ROSTER && sp >= 0x821fa0 && sp <= 0x822184 && (sp - 0x821fa0) % 44 == 0)
+      it->group = (uint8_t)((sp - 0x821fa0) / 44 + 1);
   }
   return r;
 }
@@ -565,8 +602,9 @@ static int rp_tc_original(int fn, char *s, int x, int y, uint32_t col) {
   }
 }
 int rp_tc(int fn, char *s, int x, int y, uint32_t col) {
-  RpItem *it = record(s, -1, x, y, fn < 2 ? RP_AL_CENTRE : RP_AL_LEFT, 0);
+  RpItem *it = record(s, -1, x, y, fn < 2 ? RP_AL_CENTRE : RP_AL_LEFT, g_kind == RP_TOURNEY && y == 0x10);
   if (it) it->col = (uint16_t)col;
+  if (g_on && g_kind == RP_SHOT_ANALYSIS) return 0;
   return rp_tc_original(fn, s, x, y, col);
 }
 
@@ -619,6 +657,18 @@ static void capture_pics(void) {
           if (bb[(ptrdiff_t)(g_pic[k].y + y) * pitch + g_pic[k].x + x] != g_keep[g_pic[k].page][(size_t)(g_pic[k].y + y) * w + g_pic[k].x + x]) { same = 0; break; }
       if (same) continue;
     }
+    if (g_kind == RP_PROFILE && k == 0 && portrait_profile((uint16_t)G32(0x582e6e), g_pic[k].art)) {
+      g_pic[k].hash = 0; // Returning to a legacy/custom picture must publish it again.
+      RpItem *it = slot(RP_IT_PIC, g_pic[k].x, g_pic[k].y);
+      if (it) it->w = PORTRAIT_PROFILE_W, it->h = PORTRAIT_PROFILE_H, it->art = (uint8_t)(g_pic[k].art + 1);
+      continue;
+    }
+    if (g_kind == RP_PROFILE && k == 1 && portrait_preview((uint16_t)G32(0x582e6e), g_pic[k].art)) {
+      g_pic[k].hash = 0;
+      RpItem *it = slot(RP_IT_PIC, g_pic[k].x, g_pic[k].y);
+      if (it) it->w = 48, it->h = 48, it->art = (uint8_t)(g_pic[k].art + 1);
+      continue;
+    }
     uint32_t *px = malloc((size_t)pw * ph * 4);
     if (!px) continue;
     uint32_t hash = 2166136261u;
@@ -630,6 +680,8 @@ static void capture_pics(void) {
         if (is565) r = ((v >> 11) & 31) * 255 / 31, g = ((v >> 5) & 63) * 255 / 63, b = (v & 31) * 255 / 31;
         else r = ((v >> 10) & 31) * 255 / 31, g = ((v >> 5) & 31) * 255 / 31, b = (v & 31) * 255 / 31;
         px[y * pw + x] = 0xff000000u | (uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b;
+        // Overview maps are drawn on a transparent key instead of a baked-in UI frame.
+        if ((g_kind == RP_ROUTING || g_kind == RP_TRACTS) && r > 245 && g < 8 && b > 245) px[y * pw + x] = 0;
       }
     if (hash != g_pic[k].hash) {
       g_pic[k].hash = hash;
@@ -646,8 +698,16 @@ static void capture_pics(void) {
   }
 }
 
-int rp_is_on(void) { return g_on; }
-int rp_game_active(void) { return g_kind != RP_NONE; }
+int rp_is_on(void) { return g_on && g_kind != RP_LEADERBOARD; }
+
+void rp_snapshot_begin(int x, int y, int w, int h) {
+  rp_begin(RP_SNAPSHOT);
+  if (!g_on) return;
+  pic_add(x, y, w, h);
+  capture_pics(); // the clean photo, before its original frame, captions and file export
+  for (int i = 0; i < g_npic; i++) g_pic[i].on = 0;
+}
+int rp_game_active(void) { return g_kind != RP_NONE && g_kind != RP_LEADERBOARD; }
 
 void rp_year_continue(int y) {
   if (!g_on || g_kind != RP_END_YEAR) return;
@@ -732,6 +792,62 @@ static int g_sub, g_in_edit;
 static uint16_t *g_pf;          // the profile page as golf drew it (last frame, before the picture from before it was put back)
 static int g_pf_w, g_pf_h;
 
+int rp_profile_preview(void) {
+  if (!g_on || g_kind != RP_PROFILE) return 0;
+  // Erase the old lavender disc and surrounding source page before the two
+  // outfit sprites draw. Their original rendering and customization stay live.
+  FUN_00480b00((void *)0x519a60, 298, 205, 48, 48, 0x80000000);
+  return 1;
+}
+
+void *FUN_0043d6f0(int group, int last, int flags);
+uint32_t FUN_004628d0(int x, int y, int z, int sx, int sy, void *set, int rot, uint32_t frame);
+static void outfit_rgb(uint16_t v, int is565, int rgb[3]) {
+  rgb[0] = ((v >> (is565 ? 11 : 10)) & 31) * 255 / 31;
+  rgb[1] = ((v >> 5) & (is565 ? 63 : 31)) * 255 / (is565 ? 63 : 31);
+  rgb[2] = (v & 31) * 255 / 31;
+}
+void rp_profile_outfit(unsigned group) {
+  if (!g_on || g_kind != RP_PROFILE || g_npic < 2) return;
+  int page = drawn_page(396, 123), w, h, pitch, is565;
+  uint16_t *bb = page >= 0 ? gdi_screen_dib(page, &w, &h, &pitch, &is565) : NULL;
+  if (!bb || w < 346 || h < 253) return;
+  uint16_t black[48 * 48];
+  uint32_t px[48 * 48], hash = 2166136261u;
+  void *sets[2] = {FUN_0043d6f0(group,5,0),FUN_0043d6f0(group,5,4)};
+  for (int pass = 0; pass < 2; pass++) {
+    for (int y = 0; y < 48; y++)
+      for (int x = 0; x < 48; x++) bb[(ptrdiff_t)(205 + y) * pitch + 298 + x] = pass ? (is565 ? 0xffff : 0x7fff) : 0;
+    for (int i = 0; i < 2; i++) FUN_004628d0(315 + 20 * i,239,239,30,40,sets[i],4,0x199);
+    for (int y = 0; y < 48; y++) for (int x = 0; x < 48; x++) {
+      int at = y * 48 + x;
+      uint16_t v = bb[(ptrdiff_t)(205 + y) * pitch + 298 + x];
+      if (!pass) { black[at] = v; continue; }
+      int b[3], q[3]; outfit_rgb(black[at],is565,b); outfit_rgb(v,is565,q);
+      int alpha = 255 - ((q[0]-b[0])+(q[1]-b[1])+(q[2]-b[2])) / 3;
+      if (alpha < 4) px[at] = 0;
+      else {
+        if (alpha > 255) alpha = 255;
+        for (int i = 0; i < 3; i++) { b[i] = b[i] * 255 / alpha; if (b[i] > 255) b[i] = 255; }
+        px[at] = (uint32_t)alpha << 24 | (uint32_t)b[0] << 16 | (uint32_t)b[1] << 8 | b[2];
+      }
+      hash = (hash ^ px[at]) * 16777619u;
+    }
+  }
+  if (hash != g_pic[1].hash) {
+    rpf_publish_art(g_pic[1].art, px, 48, 48);
+    g_pic[1].hash = hash;
+    if (g_log) {
+      int visible = 0, transparent = 0;
+      for (int i = 0; i < 48 * 48; i++) { visible += (px[i] >> 24) > 0; transparent += (px[i] >> 24) == 0; }
+      fprintf(stderr, "reports: outfit visible %d transparent %d\n", visible, transparent);
+    }
+  }
+  g_pic[1].on = 0;
+  RpItem *it = slot(RP_IT_PIC,298,205);
+  if (it) it->w = it->h = 48, it->art = (uint8_t)(g_pic[1].art + 1);
+}
+
 static void profile_page_keep(void) {
   if (g_kind != RP_PROFILE || g_npic < 1 || g_pic[0].page < 0) return;
   int w, h, pitch, is565;
@@ -751,6 +867,12 @@ void rp_sub(int open) {
   if (g_log) fprintf(stderr, "reports: profile nested screen %s\n", open ? "open" : "closed");
   if (open) {
     g_sub = 1;
+    if (dlgf_enabled()) {
+      keep_restore();
+      rpf_end();
+      hd_ui_show_golf_ui(0);
+      return;
+    }
     int w, h, pitch, is565;
     uint16_t *bb = g_npic > 0 && g_pic[0].page >= 0 ? gdi_screen_dib(g_pic[0].page, &w, &h, &pitch, &is565) : NULL;
     if (bb && g_pf && w == g_pf_w && h == g_pf_h)
@@ -953,17 +1075,30 @@ static void rp_frame_run(int present) {
 void rp_frame(void) { rp_frame_run(1); }
 void rp_frame_preflush(void) { rp_frame_run(0); }  // the game's original flush presents this frame
 
+int rp_analysis_on(void) { return g_on && g_kind == RP_SHOT_ANALYSIS; }
+void rp_analysis_tick(void) {
+  if (rp_analysis_on() || (g_on && g_kind == RP_SNAPSHOT)) {
+    static double last;
+    double now = host_now_ms();
+    if (now - last < 16) return;
+    last = now;
+    rp_frame();
+  }
+}
+void rp_snapshot_ready(void) { if (g_kind == RP_SNAPSHOT) rp_frame_preflush(); }
+void rp_snapshot_end(void) { if (g_kind == RP_SNAPSHOT) rp_done(); }
+
 static void rp_frame_body(int present) {
   if (!g_on || g_sub) return;
   if (g_kind == RP_PROFILE) {
     g_snap.ext[0] = g_in_edit;   // the bio editor is open
     int gi = (int16_t)G32(0x582e6e) & 0xffff;
-    const char *bio = (const char *)(uintptr_t)(0x4d60b8 + (uint32_t)gi * 0x230);
+    const char *bio = (const char *)(uintptr_t)(roster_address(0x4d60b8) + (uint32_t)gi * 0x230);
     if (g_in_edit) {   // golf's text widget (0x5a9f78) edits its own copy of the bio: show that, live
       uint32_t wb = G32(0x5a9f78 + 0x574);
       if (wb > 0x10000) bio = (const char *)(uintptr_t)wb;
     }
-    if (gi < 0x200) copy_str(g_snap.bio, sizeof g_snap.bio, bio, -1);
+    if (roster_profile_valid(gi)) copy_str(g_snap.bio, sizeof g_snap.bio, bio, -1);
     // task-102: whose page it is and, for the player's pro before the first skill setup, the points golf will give
     // (FUN_004065c0: 10, plus 3 for each accomplishment already won in the table at 0x4c15a0)
     g_snap.ext[1] = gi;
@@ -973,15 +1108,15 @@ static void rp_frame_body(int present) {
     for (int i = 0; i < 22; i++) pts += G32(0x4c15a0 + 0x30 * i) != 0 ? 3 : 0;
     g_snap.ext[2] = gi == 0 && !set_up && g_pro_next;
     g_snap.ext[3] = pts;
-    if (gi < 0x200) {   // task-102c: the colours golf has now (shirt, pants, skin, hair), for the page's chips
-      const volatile uint8_t *r = (const volatile uint8_t *)(uintptr_t)(0x4d6088 + (uint32_t)gi * 0x230);
+    if (roster_profile_valid(gi)) {   // The profile's current appearance controls.
+      const volatile uint8_t *r = (const volatile uint8_t *)(uintptr_t)(roster_address(0x4d6088) + (uint32_t)gi * 0x230);
       g_snap.ext[5] = r[0x24], g_snap.ext[6] = r[0x25], g_snap.ext[7] = r[0x27] | r[0x28] << 8;
       // task-119 (tester F27, the pro drawn as a child): body type (0x23 bits 4..5), the child bit (bit 3 of the
       // flag dword at 0x2c) and whether golf uses the profile's own look (the dword non-zero), for the page's chips
       uint32_t look = (uint32_t)r[0x2c] | (uint32_t)r[0x2d] << 8 | (uint32_t)r[0x2e] << 16 | (uint32_t)r[0x2f] << 24;
       g_snap.ext[7] |= (int32_t)(((r[0x23] >> 4) & 3u) << 16 | ((look & 8u) ? 1u : 0u) << 18 | (look ? 1u : 0u) << 19);
     }
-    g_snap.ext[4] = gi < 0x200 ? *(volatile uint8_t *)(uintptr_t)(0x4d60a9 + (uint32_t)gi * 0x230) : 0x80;   // 0x80: a woman (task-102c)
+    g_snap.ext[4] = roster_profile_valid(gi) ? *(volatile uint8_t *)(uintptr_t)(roster_address(0x4d60a9) + (uint32_t)gi * 0x230) : 0x80;
     if (!g_in_edit) profile_page_keep();
   }
   if (g_kind == RP_SKILLS) skills_snap();
@@ -994,11 +1129,16 @@ static void rp_frame_body(int present) {
   if (g_log > 0 && g_kind >= RP_PROFILE) {   // task-102: when golf took a click (the tests time a click from the native action)
     static uint32_t last;
     uint32_t hsh = 2166136261u;
-    hsh = (hsh ^ *(volatile uint8_t *)(uintptr_t)0x4d60a8) * 16777619u;   // the pro's personality
+    hsh = (hsh ^ *(volatile uint8_t *)(uintptr_t)roster_address(0x4d60a8)) * 16777619u;   // the pro's personality
     hsh = (hsh ^ *(volatile uint8_t *)(uintptr_t)0x582dd1) * 16777619u;   // the page's skill wants
     for (int i = 0; i < 10; i++) hsh = (hsh ^ *(volatile uint8_t *)(uintptr_t)(0x5a5a04 + i)) * 16777619u;
     if (hsh != last) fprintf(stderr, "reports: golf state changed at %u ms\n", (unsigned)SDL_GetTicks());
     last = hsh;
+  }
+  if (g_kind == RP_ROUTING && g_route_drawing) {
+    g_snap.ext[0] = G32(0x4d20dc);
+    capture_pics();
+    g_route_drawing = 0;
   }
   g_snap.serial = ++g_serial;
   rpf_publish(&g_snap);
@@ -1008,7 +1148,7 @@ static void rp_frame_body(int present) {
       int action = a.kind == RP_A_CLOSE ? RP_HANDOFF_ACTION_CLOSE : RP_HANDOFF_ACTION_TAB;
       g_pending = rp_handoff_next_pending(g_pending, g_kind, action, a.arg);
     }
-    if (g_kind == RP_TOP_DESIGNERS && a.kind == RP_A_CLOSE) {
+    if ((g_kind == RP_TOP_DESIGNERS || g_kind == RP_CREDITS) && a.kind == RP_A_CLOSE) {
       g_top_local_close = 1;
       continue;
     }
@@ -1017,6 +1157,10 @@ static void rp_frame_body(int present) {
       g_pair_cancel_state = 1;
       continue;
     }
+    // Roster hover changes can make its original any-key exit ignore Escape.
+    // Its Done control exits regardless of that hover latch. Preserve tab handoff.
+    if ((a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) && g_kind == RP_ROSTER)
+      a = (RpAction){RP_A_CLICK, 754 | (570 << 16)};
     // the land map has no Esc of its own: its leave control is the check button (golf's right click also leaves)
     if (a.kind == RP_A_CLOSE && g_kind == RP_TRACTS) a = (RpAction){RP_A_CLICK, 688 | (560 << 16)};
     if (a.kind == RP_A_CLOSE && g_kind == RP_PHOTO) a = (RpAction){RP_A_CLICK, 400 | (300 << 16)};   // golf waits for a click
@@ -1034,7 +1178,7 @@ static void rp_frame_body(int present) {
     } else if (a.kind == RP_A_CLICK || a.kind == RP_A_RCLICK) {
       int btn = a.kind == RP_A_RCLICK ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
       if (!g_inj) inj_start(a.arg, btn);
-      else if (g_kind >= RP_PROFILE && g_iqn < 8) {
+      else if ((g_kind >= RP_PROFILE || g_kind == RP_ROSTER) && g_iqn < 8) {
         g_iq[g_iqn] = a.arg, g_iq_btn[g_iqn] = btn, g_iqn++;
         if (g_log_on()) fprintf(stderr, "reports: click at %d,%d queued (%d waiting)\n", a.arg & 0xffff, (a.arg >> 16) & 0xffff, g_iqn);
       } else if (g_log_on())
@@ -1046,8 +1190,8 @@ static void rp_frame_body(int present) {
   capture_art();
   // The land map and accomplishment board draw once, then keep_restore puts the course back. Capture their photo
   // only on that draw, otherwise later frames overwrite it with the restored course. The profile still updates live.
-  if (!g_in_edit && ((g_kind != RP_TRACTS && g_kind != RP_PHOTO) || g_dirty)) capture_pics();
-  keep_restore();
+  if (!g_in_edit && g_kind != RP_ROUTING && ((g_kind != RP_TRACTS && g_kind != RP_PHOTO) || g_dirty)) capture_pics();
+  if (g_kind != RP_SHOT_ANALYSIS) keep_restore(); // retain the original analysis trajectories on the course
   // task-102c: golf drew its old screen this turn (the skill screen's arrows and ovals, the profile's buttons); the art
   // pack keeps a hi-res copy of every sprite golf draws and puts them over the picture, so they showed beside the panel
   // (SIMGOLF_REPORTS_ARTHIDE=0 shows them again, for the before and after pictures)
@@ -1073,8 +1217,7 @@ int rp_ds(void *w, char *s, int x, int y, char *len) {
 }
 
 // A report golf draws every frame of its main loop instead of in a loop of its own (the end of month
-// ranking, screen state 8): phase 0 before golf draws it, phase 1 after. Not wired yet: that box and the
-// tournament leaderboard slide in beside the running game and keep the original look (task-28 notes). The panel stays up while the
+// ranking, screen state 8): phase 0 before golf draws it, phase 1 after. The panel stays up while the
 // frames keep coming and goes when they stop (the main loop clears the state on any key).
 void rp_ov(int kind, int phase) {
   if (phase == 0) {
@@ -1084,7 +1227,9 @@ void rp_ov(int kind, int phase) {
       keep_save();
       g_snap.n = 0;
       g_snap.title[0] = 0;
+      memset(g_snap.ranking_counts, 0, sizeof g_snap.ranking_counts);
     }
+    if (g_on) hd_art_dlg_begin();
     return;
   }
   if (!g_on || g_kind != kind) return;
@@ -1098,6 +1243,8 @@ void rp_ov(int kind, int phase) {
       }
       break;
     }
+  capture_art();
+  hd_art_hide_dialog();
   g_snap.serial = ++g_serial;
   rpf_publish(&g_snap);
   RpAction a;
@@ -1108,7 +1255,6 @@ void rp_ov(int kind, int phase) {
       push_key(SDLK_ESCAPE, 1);
       push_key(SDLK_ESCAPE, 0);
     }
-  capture_art();
   keep_restore();
 }
 
@@ -1161,6 +1307,11 @@ void rp_done(void) {
     fprintf(stderr, "reports: pairing cancel returned with no golfers selected\n");
   if (g_on) {
     if (g_log) fprintf(stderr, "reports: closed %d (%d texts)\n", g_kind, g_snap.n);
+    if (g_log && g_kind == RP_MONTH)
+      for (int row = 0; row < 10; row++)
+        fprintf(stderr, "reports: ranking row %d counts %d,%d,%d,%d,%d\n", row + 1,
+                g_snap.ranking_counts[row][0], g_snap.ranking_counts[row][1], g_snap.ranking_counts[row][2],
+                g_snap.ranking_counts[row][3], g_snap.ranking_counts[row][4]);
     if (g_log > 0 && getenv("SIMGOLF_REPORTS_DUMP"))
       for (int i = 0; i < g_snap.n; i++)
         fprintf(stderr, "reports: text %d,%d a%d c%04x '%s'\n", g_snap.it[i].x, g_snap.it[i].y, g_snap.it[i].align,
@@ -1269,4 +1420,192 @@ int rp_top_designers(void) {
   if (g_log > 0) fprintf(stderr, "reports: Top Ten Designers closed locally by %s\n", g_top_close_key ? "Escape" : "Close");
   rp_done();
   return 1;
+}
+
+// The original loader owns these strings and frees them after this modal returns.
+int rp_credits(char **lines, int count) {
+  if (!rpf_enabled_kind(RP_CREDITS)) return 0;
+  rp_begin(RP_CREDITS);
+  for (int i = 0; i < count && i < RP_ITEMS; i++) {
+    const char *text = lines[i] ? lines[i] : "";
+    // The logo marker is backed by the preceding full Bink attribution.
+    if (!strcmp(text, "$bink")) text = "Bink Video";
+    RpItem *it = slot(RP_IT_TEXT, 0, i);
+    if (it) copy_str(it->s, sizeof it->s, text, -1);
+  }
+  if (g_log > 0) fprintf(stderr, "reports: credits %d source lines, %d native lines\n", count, g_snap.n);
+  while (!g_top_local_close) {
+    g_dirty = 1;
+    rp_frame();
+    if (g_top_local_close) break;
+    FUN_0045bf80(1, 0);
+    FUN_0045c030();
+    if (FUN_0045ae70()) {
+      int key = FUN_0045ae30();
+      if (key == 0x1b || key == 0x0d || key == 0x20) {
+        FUN_00483d30();
+        g_top_local_close = 1;
+      }
+    }
+  }
+  rp_done();
+  return 1;
+}
+
+// showRoutingMapScreen (0x00456be0) also draws the land-sale minimap. That
+// nested draw must keep its parent's snapshot and return path intact.
+void rp_route_enter(void) {
+  if (G32(0x822b80) != 0) { rp_map_begin(); return; }
+  rp_begin(RP_ROUTING);
+}
+
+void rp_route_reset(void) {
+  if (!g_on || g_kind != RP_ROUTING) return;
+  rp_map_begin();
+  g_snap.n = 0;
+  g_snap.title[0] = 0;
+  g_route_drawing = 1;
+  // A keyed backdrop lets the native panel surround the game's map geometry.
+  FUN_00480b00((void *)0x519a60, 0, 0, 800, 600, 0x80007c1f);
+}
+
+void rp_route_leave(void) {
+  if (g_kind == RP_ROUTING) rp_done();
+  g_route_drawing = 0;
+}
+
+void rp_route_selected(int hole, int staff_count, int staff_offset) {
+  if (!g_on || g_kind != RP_ROUTING) return;
+  if (g_snap.ext[1] != hole && g_log)
+    fprintf(stderr, "reports: routing selected hole %d\n", hole);
+  g_snap.ext[1] = hole;
+  if ((g_snap.ext[3] != staff_offset || g_snap.ext[2] != staff_count) && g_log)
+    fprintf(stderr, "reports: routing staff offset %d of %d\n", staff_offset, staff_count);
+  g_snap.ext[2] = staff_count; g_snap.ext[3] = staff_offset;
+}
+
+void rp_route_poll(void) {
+  if (!g_on || g_kind != RP_ROUTING || !g_inj || g_inj_stage < 2) return;
+  if (g_inj_btn == SDL_BUTTON_RIGHT) FUN_00465840(g_inj_x, g_inj_y);
+  else FUN_004657e0(g_inj_x, g_inj_y);
+  g_inj = 0;
+  if (g_log_on()) fprintf(stderr, "reports: routing input idle\n");
+  if (g_iqn) {
+    int arg = g_iq[0], btn = g_iq_btn[0];
+    memmove(g_iq, g_iq + 1, sizeof g_iq[0] * (size_t)(g_iqn - 1));
+    memmove(g_iq_btn, g_iq_btn + 1, sizeof g_iq_btn[0] * (size_t)(g_iqn - 1));
+    g_iqn--;
+    inj_start(arg, btn);
+  }
+}
+
+// showMembershipRoster (0x00454c50) clears mouse clicks after redraw.
+// Deliver one original event after its poll, once its own hover code is ready.
+void rp_roster_poll(int hover) {
+  if (!g_on || g_kind != RP_ROSTER || !g_inj || g_inj_stage < 2) return;
+  int expected = g_inj_x == 780 ? (g_inj_y < 200 ? 1 : 2) : 0;
+  if (hover != expected) return;
+  FUN_004657e0(g_inj_x, g_inj_y);
+  if (g_log_on()) fprintf(stderr,"reports: roster native input hover %d at %d,%d\n",hover,g_inj_x,g_inj_y);
+  g_inj = 0;
+  if (g_iqn) {
+    int arg=g_iq[0],btn=g_iq_btn[0];
+    memmove(g_iq,g_iq+1,sizeof g_iq[0]*(size_t)(g_iqn-1));
+    memmove(g_iq_btn,g_iq_btn+1,sizeof g_iq_btn[0]*(size_t)(g_iqn-1));
+    g_iqn--;inj_start(arg,btn);
+  }
+}
+
+int rp_route_sprite(void *sprite, int target, int x, int y, int clip) {
+  if (g_on && g_kind == RP_ROUTING) return 0; // old frame, tab discs and compass
+  return FUN_00473e60(sprite, target, x, y, clip);
+}
+
+int rp_tract_sprite(void *sprite, int target, int x, int y, int clip) {
+  if (g_on && g_kind == RP_TRACTS) {
+    if ((uintptr_t)sprite == 0x8227b4) {
+      FUN_00480b00((void *)0x519a60, 0, 0, 800, 600, 0x80007c1f);
+      return 0;
+    }
+    if ((uintptr_t)sprite == 0x822b50 || (uintptr_t)sprite == 0x822b24) return 0;
+  }
+  return FUN_00473e60(sprite, target, x, y, clip);
+}
+
+int rp_route_tc(int fn, char *s, int x, int y, uint32_t col) {
+  if (!g_on || g_kind != RP_ROUTING) return rp_tc_original(fn, s, x, y, col);
+  RpItem *it = record(s, -1, x, y, fn < 2 ? RP_AL_CENTRE : RP_AL_LEFT, 0);
+  if (it) it->col = (uint16_t)col;
+  return 0;
+}
+
+void rp_route_rect(void *page, int x, int y, int w, int h, uint32_t col) {
+  if (!g_on || g_kind != RP_ROUTING) {
+    FUN_00480b00(page, x, y, w, h, col);
+    return;
+  }
+  RpItem *it = slot(RP_IT_RECT, x, y);
+  if (it) it->w = (int16_t)w, it->h = (int16_t)h;
+}
+
+// Snapshot the live map without interpreting the heat-map formula twice.
+// FUN_00456be0 already computes each tile's exact map value. Terrain and path
+// planes use grid_translate so enlarged courses have their current bindings.
+static void rp_map_begin(void) {
+  if (!g_on || (g_kind != RP_ROUTING && g_kind != RP_TRACTS)) return;
+  UiCourseMap *m = &g_snap.map;
+  if (MAP_W < 1 || MAP_H < 1 || MAP_W > UI_MAP_SIDE || MAP_H > UI_MAP_SIDE) return;
+  {
+    memset(m, 0, sizeof *m);
+    m->valid = 1; m->width = MAP_W; m->height = MAP_H;
+    m->mode = g_kind == RP_TRACTS ? -1 : G32(0x4d20dc);
+    for (int i = 0; i < 18; i++) {
+      uintptr_t p = 0x575ab0 + (uintptr_t)(i + 1) * 0x208;
+      if (!*(volatile int8_t *)p) continue;
+      m->hole[i].active = 1;
+      m->hole[i].x[0] = G32(p + 8); m->hole[i].y[0] = G32(p + 12);
+      m->hole[i].n = 1;
+      uintptr_t plan = 0x59ae80 + (uintptr_t)(i + 1) * 24;
+      for (int j = 1; j >= 0; j--) {
+        int px = G32(plan + 8 + j * 8), py = G32(plan + 12 + j * 8);
+        if (px < 0 || py < 0 || px >= MAP_W * 1024 || py >= MAP_H * 1024) continue;
+        int n = m->hole[i].n++;
+        m->hole[i].x[n] = px / 1024.0f; m->hole[i].y[n] = py / 1024.0f;
+        break;
+      }
+      int n = m->hole[i].n++;
+      m->hole[i].x[n] = G32(p + 24); m->hole[i].y[n] = G32(p + 28);
+    }
+  }
+  const uint8_t *tiles = (const uint8_t *)grid_translate(0x5722e8);
+  const uint16_t *flags = (const uint16_t *)grid_translate(0x53caf0);
+  for (int i = 0; i < m->width * m->height; i++) {
+    m->terrain[i] = tiles[i];
+    m->path[i] = (flags[i] & 0x20) != 0;
+  }
+}
+
+void rp_map_tile(int x, int y, unsigned color) {
+  if (!g_on || (g_kind != RP_ROUTING && g_kind != RP_TRACTS)) return;
+  UiCourseMap *m = &g_snap.map;
+  if (!m->valid || x < 0 || y < 0 || x >= m->width || y >= m->height) return;
+  int i = x * m->height + y;
+  m->heat[i] = (uint16_t)color;
+}
+
+int FUN_00478530(void *page, char *text, int x, int y, int width);
+int rp_route_wrap(void *page, char *text, int x, int y, int width) {
+  if (!g_on || g_kind != RP_ROUTING) return FUN_00478530(page, text, x, y, width);
+  int columns = width / 6;
+  if (columns < 8) columns = 8;
+  if (columns >= RP_TEXT) columns = RP_TEXT - 1;
+  while (*text) {
+    while (*text == ' ') ++text;
+    int n = 0; while (text[n] && n < columns) ++n;
+    if (text[n]) { int cut = n; while (cut > 0 && text[cut] != ' ') --cut; if (cut) n = cut; }
+    if (!n) break;
+    record(text, n, x, y, RP_AL_LEFT, 0);
+    text += n; y += 15;
+  }
+  return y;
 }

@@ -6,6 +6,30 @@
 
 #ifdef __EMSCRIPTEN__
 
+void rp_route_enter(void) {}
+void rp_route_reset(void) {}
+int rp_profile_preview(void) { return 0; }
+void rp_profile_outfit(unsigned group) {}
+int rp_analysis_on(void) { return 0; }
+void rp_analysis_tick(void) {}
+void rp_snapshot_begin(int x, int y, int w, int h) {}
+void rp_snapshot_ready(void) {}
+void rp_snapshot_end(void) {}
+void rp_route_selected(int hole, int staff_count, int staff_offset) { (void)hole; (void)staff_count; (void)staff_offset; }
+void rp_route_poll(void) {}
+void rp_roster_poll(int hover) { (void)hover; }
+void rp_route_leave(void) {}
+void rp_map_tile(int x,int y,unsigned color) { (void)x;(void)y;(void)color; }
+int rp_route_wrap(void *p,char *s,int x,int y,int width) { return FUN_00478530(p,s,x,y,width); }
+int rp_route_sprite(void *p, int target, int x, int y, int clip) { return FUN_00473e60(p, target, x, y, clip); }
+int rp_tract_sprite(void *p, int target, int x, int y, int clip) { return FUN_00473e60(p, target, x, y, clip); }
+int rp_route_tc(int fn, char *s, int x, int y, unsigned col) {
+  if (fn == 0) return FUN_00404b70(s, x, y, col);
+  if (fn == 1) return FUN_00404bc0(s, x, y, col);
+  return FUN_004049d0(s, x, y, col);
+}
+void rp_route_rect(void *p, int x, int y, int w, int h, unsigned col) { FUN_00480b00(p, x, y, w, h, col); }
+
 void rp_tick(void) {}
 void rp_begin(int kind) { (void)kind; }
 void rp_frame(void) {}
@@ -54,6 +78,7 @@ int rp_photo_limit(int vertical) { return vertical ? 440 : 600; }
 void rp_board_wait(int n) { FUN_0045bf80(n, 0); }
 void rp_year_continue(int y) { (void)y; }
 int rp_top_designers(void) { return 0; }
+int rp_credits(char **lines, int count) { (void)lines; (void)count; return 0; }
 void rp_pair_row(int index) { (void)index; }
 void rp_pair_state(unsigned selected, int cursor, int count, int picked, int style) {
   (void)selected, (void)cursor, (void)count, (void)picked, (void)style;

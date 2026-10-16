@@ -42,6 +42,10 @@
 #include <string.h>
 
 #include "port/golf/hd_ui.h"
+#ifndef __EMSCRIPTEN__
+#include "mods/mods.h"
+#endif
+#include "port/golf/camera_input.h"
 #include "port/grid.h"
 #include "port/win32.h"
 
@@ -183,6 +187,12 @@ static void overscan_begin(void) {
   hd_os_l = hd_os_r = w;
   hd_os_t = w / 4;
   hd_os_b = w * 2;
+#ifndef __EMSCRIPTEN__
+  if (g_os_tiles && mods_get_int("fixes.drag_scroll", 1)) {
+    hd_os_l = hd_os_r = win_screen_w;
+    hd_os_t = hd_os_b = win_screen_h;
+  }
+#endif
 }
 
 void hd_ui_frame_camera(void) {
@@ -202,6 +212,7 @@ void hd_ui_frame_camera(void) {
   axes(&c->ax, &c->ay, &c->bx, &c->by);
   c->ox = hd_cam_ox;
   c->oy = hd_cam_oy;
+  c->drag_serial = camera_input_drag_serial();
   c->serial++;
 }
 

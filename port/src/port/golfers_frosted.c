@@ -307,6 +307,9 @@ static void draw(const HdUiFrame *f, void *user) {
                 L->btn[0].x + L->btn[0].w / 2, L->btn[0].y + L->btn[0].h / 2, L->btn[2].x + L->btn[2].w / 2,
                 L->btn[2].y + L->btn[2].h / 2, L->btn[3].x + L->btn[3].w / 2, L->btn[3].y + L->btn[3].h / 2,
                 L->btn[1].x + L->btn[1].w / 2, L->btn[1].y + L->btn[1].h / 2, w, h);
+        if (L->diary.w > 0)
+          fprintf(stderr, "golfers: club diary centre %.0f %.0f layout %d\n",
+                  L->diary.x + L->diary.w / 2, L->diary.y + L->diary.h / 2, n->card.layout);
       }
     }
     if (na) {

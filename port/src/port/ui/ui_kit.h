@@ -69,6 +69,7 @@ double ui_now(const UiCtx *c);
 int ui_is_hot(const UiCtx *c, uint32_t id);
 int ui_is_active(const UiCtx *c, uint32_t id);
 int ui_clicked(const UiCtx *c, uint32_t id);
+int ui_right_clicked(const UiCtx *c, uint32_t id);
 float ui_wheel(const UiCtx *c, uint32_t id);  // wheel notches over a UI_HIT_WHEEL region this frame
 UiDraw *ui_drawer(UiCtx *c);
 UiText *ui_texter(UiCtx *c);

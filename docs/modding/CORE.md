@@ -314,3 +314,32 @@ prints JSON (see the top of `port/src/mods/tool/modctl_core.c`).
 
 `tests/mods/ab_original.sh OLD_GOLF_EXE` is the A/B against a build from
 before the mod platform with every mod off (evidence/mods-ab-*.txt).
+
+## Optional additions in 0.1.17
+
+Player settings in `mods.ini` override mod defaults and survive updates.
+
+| Addition | Independent switch | Default |
+|---|---|---|
+| Authored roster and portraits | `gameplay.new_roster` | 1, original progression |
+| Authored ordinary visitor arrival skills | `gameplay.authored_visitor_skills` | 0 |
+| Living Club dialogue, memories and stories | `mods.living_club` or `golfers.living` | 1 in the default profile |
+| Living Club mood reactions | `golfers.reactions` | 0 |
+| Lighting and weather presentation | `environment.enabled` | 0 |
+| Weather effects on rolls and arrival mood | `environment.gameplay` | 0 |
+| Approved Parkland clubhouse | `art.clubhouse` | 1; Original textures retain original art |
+| Optional Terrain Mod | `art.terrain` | Active only when its separate pack is installed; 0 disables it |
+
+Set an independent switch to 0 to retain its original behavior. The vanilla
+profile remains empty. Saves retain the mod record and bound companions;
+loading an original save remains supported. Manual par and drag-to-build are
+unimplemented and have no effect on scoring or progression.
+
+The existing size/CRC-bound `.sve.mods.toml` companion also records a versioned
+`[rules]` table for authored visitor skills, Living Club reactions and weather
+gameplay. These values document the rules at save time; loading does not
+silently change the player's current settings. Older readers ignore the table.
+
+For updates started by0.1.16, missing new optional data can load from
+`data/tables/_release/`. Existing root data and explicit custom paths retain
+priority. The table loader skips this compatibility folder.

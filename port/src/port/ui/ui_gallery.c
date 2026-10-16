@@ -446,6 +446,8 @@ static int page_golfers(Page *p, const char *out) {
   snprintf(g->name, sizeof g->name, "Ann Birdie (Surfer)");
   snprintf(g->line1, sizeof g->line1, "Single, age 29");
   snprintf(g->line2, sizeof g->line2, "Outgoing, Active and Nice");
+  snprintf(g->line2, sizeof g->line2, "Outgoing, Active and Nice | The Social Butterfly | Visit 12 | Confidence 72");
+  snprintf(g->club_story, sizeof g->club_story, "A familiar pairing: progress. Visit 12: We are building a collection of golfing memories.");
   snprintf(g->skills, sizeof g->skills, "length, accuracy, imagination+");
   snprintf(g->quote, sizeof g->quote, "'This is the best course I've ever played.'");
   static const char *const lab[GW_METERS] = {"Fun", "Attitude", "Energy", "Hunger", "Thirst"};
@@ -501,9 +503,10 @@ static int page_golfers(Page *p, const char *out) {
   // click-through: a press and release on Snapshot, then on the close button, must come back as actions
   int fails = 0;
   const GwLayout *L = ui_golfers_layout();
-  struct { UiRect r; int kind, id; const char *what; } clicks[2] = {
-      {L->btn[2], GW_ACT_BUTTON, 2, "Snapshot"}, {L->close, GW_ACT_CLOSE, 4, "close"}};
-  for (int i = 0; i < 2; i++) {
+  struct { UiRect r; int kind, id; const char *what; } clicks[3] = {
+      {L->btn[2], GW_ACT_BUTTON, 2, "Snapshot"}, {L->close, GW_ACT_CLOSE, 4, "close"},
+      {L->diary, GW_ACT_DIARY, 0, "Club diary"}};
+  for (int i = 0; i < 3; i++) {
     UiRect r = clicks[i].r;
     if (r.w <= 0) {
       printf("FAIL golfer card: no %s button\n", clicks[i].what);
@@ -531,6 +534,17 @@ static int page_golfers(Page *p, const char *out) {
     printf("%s golfer card: click on %s -> %d action(s), kind %d id %d\n", ok ? "ok  " : "FAIL", clicks[i].what, got, kind, id);
     fails += !ok;
   }
+  g->layout = 2;
+  g->n_story = 5;
+  for (int i = 0; i < 5; i++)
+    snprintf(g->story[i], sizeof g->story[i], "Visit %d: Another good moment to share with a familiar playing partner.", 12 - i);
+  for (int f = 0; f < 4; f++) {
+    paint_backdrop(p);
+    ui_begin(p->ui, p->canvas, p->w, p->h, p->scale, p->canvas, 60000.0 + f * 400);
+    ui_golfers_draw_card(p->ui, &n, art, 0, 0, k, 0, 0, acts, 4);
+    ui_end(p->ui);
+  }
+  save_page(p, out, "living-club-diary");
   ui_destroy(wc);
   if (art[GW_ART_PORTRAIT]) SDL_DestroyTexture(art[GW_ART_PORTRAIT]);
   return fails;
@@ -1404,6 +1418,7 @@ static const char *g_mods_dir = "mods";
 static int g_only_mods;   // --only mods: just the Mods pages
 static int g_only_updates;   // --only updates: focused wheel and click checks
 static int g_only_pages;     // --only pages: focused modal-page rendering
+static int g_only_golfers;   // --only golfers: native card, diary and click checks
 
 static int page_mods(Page *p, const char *out) {
   const char *running[16];
@@ -1494,6 +1509,7 @@ int main(int argc, char **argv) {
       g_only_mods = !strcmp(argv[i + 1], "mods");
       g_only_updates = !strcmp(argv[i + 1], "updates");
       g_only_pages = !strcmp(argv[i + 1], "pages");
+      g_only_golfers = !strcmp(argv[i + 1], "golfers");
     }
     else if (!strcmp(argv[i], "--art")) artdir = argv[i + 1];   // art_<slot>.bmp from SIMGOLF_UI_DUMP_ART
   }
@@ -1574,7 +1590,9 @@ int main(int argc, char **argv) {
       p.art[i] = at;
     }
     printf("gallery %dx%d on %s, UI scale %.2f\n", w, h, info.name, p.scale);
-    if (g_only_pages) {
+    if (g_only_golfers) {
+      fails += page_golfers(&p, out);
+    } else if (g_only_pages) {
       fails += page_pages(&p, out);
     } else if (g_only_updates) {
       static FeSnap snap;
@@ -1599,12 +1617,13 @@ int main(int argc, char **argv) {
       fails += page_dialogs(&p, out);
       fails += page_pages(&p, out);
     }
-    if (!g_only_updates && !g_only_pages) fails += page_mods(&p, out);
+    if (!g_only_updates && !g_only_pages && !g_only_golfers) fails += page_mods(&p, out);
     ui_destroy(p.ui);
     for (int i = 0; i < HUD_ART_MAX; i++)
       if (p.art[i]) SDL_DestroyTexture(p.art[i]);
     SDL_DestroyTexture(p.canvas);
     SDL_DestroyTexture(p.course);
+    ui_course_map_clear(r);
     SDL_DestroyRenderer(r);
     if (surf) SDL_FreeSurface(surf);
     if (win) SDL_DestroyWindow(win);

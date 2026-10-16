@@ -5,4 +5,4 @@
 active = "default"
 
 [profiles.default]
-mods = ["hd_presentation", "camera_controls", "ui_font", "ui_hud", "ui_golfers", "ui_paths", "ui_place", "ui_frontend", "ui_dialogs", "ui_reports", "ui_ball", "bridge"]
+mods = ["hd_presentation", "camera_controls", "ui_font", "ui_hud", "ui_golfers", "ui_paths", "ui_place", "ui_frontend", "ui_dialogs", "ui_reports", "ui_ball", "bridge", "cut_content", "living_club"]

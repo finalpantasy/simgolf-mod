@@ -2,7 +2,14 @@
   "comment": "task-32 (UI-6 front end): translator patches for the Frosted Mint start menu, difficulty pick and the other front-end screens. Merged into golf.json's patches (translate.py, <stem>.<topic>.json). Every hook is in port/src/port/frontend_game.c (native) and golf/frontend_hooks.c (browser build: no-ops). The original loops keep running; with ui.frontend=original the hooks do nothing.",
   "patches": {
     "FUN_004724c0": [
-      ["a0 = &DAT_0080b194;", "a0 = (byte *)&DAT_0080b130;"]
+      [
+        "a0 = &DAT_0080b194;",
+        "a0 = (byte *)&DAT_0080b130;"
+      ],
+      [
+        "return local_4;",
+        "fe_theme_restore(local_4);\n  return local_4;"
+      ]
     ],
     "FUN_0040f5c0": [
       [
@@ -15,16 +22,34 @@
       ]
     ],
     "FUN_0046f550": [
-      ["return -1;", "fe_world_end();\n          return -1;"],
-      ["return iVar5;", "fe_world_end();\n  return iVar5;"],
+      [
+        "return -1;",
+        "fe_world_end();\n          return -1;"
+      ],
+      [
+        "return iVar5;",
+        "fe_world_end();\n  return iVar5;"
+      ],
       [
         "FUN_00475c90(local_2c4,0x519cd4,0,0,800,600);",
         "FUN_00475c90(local_2c4,0x519cd4,0,0,800,600);\n      fe_base(3);"
       ],
-      ["FUN_00404b70(", "fe_text(0,(int)local_4e0,"],
-      ["FUN_00404bc0(", "fe_text(1,(int)local_4e0,"],
-      ["FUN_004049d0(", "fe_text(2,(int)local_4e0,"],
-      ["FUN_00404ad0(", "fe_text(3,(int)local_4e0,"],
+      [
+        "FUN_00404b70(",
+        "fe_text(0,(int)local_4e0,"
+      ],
+      [
+        "FUN_00404bc0(",
+        "fe_text(1,(int)local_4e0,"
+      ],
+      [
+        "FUN_004049d0(",
+        "fe_text(2,(int)local_4e0,"
+      ],
+      [
+        "FUN_00404ad0(",
+        "fe_text(3,(int)local_4e0,"
+      ],
       [
         "local_4e0 = 0xf;",
         "local_4e0 = 0xf;\n      fe_world_loop(1);"
@@ -51,12 +76,30 @@
         "FUN_00475c60(local_72c,0x519cd4,0,0,0,0,800,600);",
         "FUN_00475c60(local_72c,0x519cd4,0,0,0,0,800,600);\n    fe_base(4);"
       ],
-      ["FUN_00404b70(", "fe_text(0,0,"],
-      ["FUN_00404bc0(", "fe_text(1,0,"],
-      ["FUN_004049d0(", "fe_text(2,0,"],
-      ["FUN_00404ad0(", "fe_text(3,0,"],
-      ["FUN_00480b00(&DAT_00519a60,", "fe_rect("],
-      ["FUN_00473f60(", "fe_sprite3("],
+      [
+        "FUN_00404b70(",
+        "fe_text(0,0,"
+      ],
+      [
+        "FUN_00404bc0(",
+        "fe_text(1,0,"
+      ],
+      [
+        "FUN_004049d0(",
+        "fe_text(2,0,"
+      ],
+      [
+        "FUN_00404ad0(",
+        "fe_text(3,0,"
+      ],
+      [
+        "FUN_00480b00(&DAT_00519a60,",
+        "fe_rect("
+      ],
+      [
+        "FUN_00473f60(",
+        "fe_sprite3("
+      ],
       [
         "FUN_0045bf80(2,0);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_9f8,&local_9fc);",
         "FUN_0045bf80(2,0);\n      fe_list_vars((int)iVar3,(int *)&local_a0c,(int)local_a08,param_1,param_2);\n      fe_frame(4);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_9f8,&local_9fc);"
@@ -71,12 +114,30 @@
         "FUN_00475c60(local_344,0x519cd4,0,0,0,0,800,600);",
         "FUN_00475c60(local_344,0x519cd4,0,0,0,0,800,600);\n    fe_base(5);"
       ],
-      ["FUN_00404b70(", "fe_text(0,0,"],
-      ["FUN_00404bc0(", "fe_text(1,0,"],
-      ["FUN_004049d0(", "fe_text(2,0,"],
-      ["FUN_00404ad0(", "fe_text(3,0,"],
-      ["FUN_00480b00(&DAT_00519a60,", "fe_rect("],
-      ["FUN_00473cb0(", "fe_sprite_b("],
+      [
+        "FUN_00404b70(",
+        "fe_text(0,0,"
+      ],
+      [
+        "FUN_00404bc0(",
+        "fe_text(1,0,"
+      ],
+      [
+        "FUN_004049d0(",
+        "fe_text(2,0,"
+      ],
+      [
+        "FUN_00404ad0(",
+        "fe_text(3,0,"
+      ],
+      [
+        "FUN_00480b00(&DAT_00519a60,",
+        "fe_rect("
+      ],
+      [
+        "FUN_00473cb0(",
+        "fe_sprite_b("
+      ],
       [
         "FUN_0045bf80(2,0);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_60c,&local_610);",
         "FUN_0045bf80(2,0);\n      fe_list_vars((int)local_608,(int *)&local_61c,(int)local_618,1,0);\n      fe_frame(5);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_60c,&local_610);"
@@ -87,18 +148,37 @@
       ]
     ],
     "FUN_004725b0": [
-      ["iVar7 = FUN_0045ae70();", "iVar7 = fe_theme_key_ready();"],
+      [
+        "iVar7 = FUN_0045ae70();",
+        "iVar7 = fe_theme_key_ready();"
+      ],
       [
         "FUN_00475c60(local_404,0x519cd4,0,0,0,0,800,600);",
         "FUN_00475c60(local_404,0x519cd4,0,0,0,0,800,600);\n    fe_base(6);"
       ],
-      ["FUN_00404b70(", "fe_text(0,0,"],
-      ["FUN_00404bc0(", "fe_text(1,0,"],
-      ["FUN_004049d0(", "fe_text(2,0,"],
-      ["FUN_00404ad0(", "fe_text(3,0,"],
+      [
+        "FUN_00404b70(",
+        "fe_text(0,0,"
+      ],
+      [
+        "FUN_00404bc0(",
+        "fe_text(1,0,"
+      ],
+      [
+        "FUN_004049d0(",
+        "fe_text(2,0,"
+      ],
+      [
+        "FUN_00404ad0(",
+        "fe_text(3,0,"
+      ],
       [
         "FUN_0045bf80(2,0);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&iStack_748,&iStack_740);",
         "FUN_0045bf80(2,0);\n      fe_theme_vars((int)local_744,(const unsigned char *)abStack_678,(int)iStack_738);\n      fe_frame(6);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&iStack_748,&iStack_740);"
+      ],
+      [
+        "return extraout_EAX;",
+        "fe_theme_remember();\n  return extraout_EAX;"
       ]
     ],
     "FUN_00406250": [
@@ -123,6 +203,11 @@
     ]
   },
   "required_patch_counts": {
-    "FUN_004724c0": [["a0 = &DAT_0080b194;", 1]]
+    "FUN_004724c0": [
+      [
+        "a0 = &DAT_0080b194;",
+        1
+      ]
+    ]
   }
 }

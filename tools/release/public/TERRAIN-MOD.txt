@@ -1,0 +1,16 @@
+SimGolf Remastered for Windows: optional Terrain Mod
+
+Experimental authored ground textures, packaged separately from the program update.
+No original game files are included. Appearance and feel remain open for player feedback.
+
+Close the game. Open this archive and copy its ui folder into your SimGolf Remastered
+installation, beside Sim Golf Remastered.exe. Merge the ui folders. This adds ui/terrain;
+it does not replace your saves, settings, other HD art or original game files.
+
+With HD textures selected, the game uses this pack when present. To disable just this
+mod, set terrain=0 in the [art] section of mods.ini. Set terrain=1 to enable it again.
+The Original texture setting also retains the original picture.
+
+This mod changes presentation only. It does not change scores, golfer skills or needs,
+prices, placement costs, energy, mood or weeds. The approved clubhouse is included with
+the main Windows download and does not require this optional pack.

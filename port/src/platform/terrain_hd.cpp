@@ -17,6 +17,7 @@
 
 #include "platform/terrain.h"
 #include "platform/terrain_gl.h"
+#include "platform/terrain_lighting.h"
 #include "platform/terrain_port.h"
 
 namespace {
@@ -28,13 +29,16 @@ struct Batch {
   int32_t tex, serial, flags;
 };
 
-bool g_dirty, g_seen;
+bool g_dirty, g_seen, g_scroll_padding;
 Tile *g_centre;
 float g_rot;
 std::vector<tgl::RecordedVertex> g_verts;
 std::vector<Batch> g_batches;
 std::vector<const tgl::Texture *> g_batchTex;
 std::vector<float> g_world;   // task-78: x, y, z per vertex, before the modelview
+std::vector<float> g_normals;
+TerrainLightingModel g_light_model;
+float g_height_pixels;
 float g_eye[3] = {0, 1, 0}, g_sun[3] = {0, 1, 0};   // world-space toward-viewer and toward-light directions
 
 // Golf's water textures (WaterShallow, WaterMiddle, WaterDeep, WaterShallowDesert): task-78 draws over them.
@@ -56,6 +60,7 @@ void norm3(float v[3]) {
 // The eye's +z and light 0 (eye space) in world space, from the modelview in effect.
 void noteView() {
   tgl::Context &gl = terrain_gl();
+  g_height_pixels=gl.heightPixels();
   const float *m = gl.modelview().m;   // column-major: row r of the 3x3 is m[r], m[4 + r], m[8 + r]
   float e[3] = {m[2], m[6], m[10]};
   norm3(e);
@@ -65,9 +70,22 @@ void noteView() {
   norm3(l);
   memcpy(g_eye, e, sizeof e);
   memcpy(g_sun, l, sizeof l);
+  memcpy(g_light_model.eye, e, sizeof e);
+  g_light_model.shininess = gl.matShininess;
+  for (int i = 0; i < 3; i++) {
+    g_light_model.ambient[i] = gl.matAmbient[i] * gl.globalAmbient[i];
+    g_light_model.diffuse[i] = g_light_model.specular[i] = 0;
+    for (const tgl::Light &light : gl.lights) {
+      if (!light.enabled) continue;
+      g_light_model.ambient[i] += gl.matAmbient[i] * light.ambient[i];
+      g_light_model.diffuse[i] += gl.matDiffuse[i] * light.diffuse[i];
+      g_light_model.specular[i] += gl.matSpecular[i] * light.specular[i];
+    }
+  }
 }
 
-void record(void *, const tgl::RecordedVertex v[3], const tgl::Texture *tex, bool blend, const float world[9]) {
+void record(void *, const tgl::RecordedVertex v[3], const tgl::Texture *tex, bool blend,
+            const float world[9], const float normals[9]) {
   int flags = (blend ? kBlend : 0) | (tex ? kTextured | (tex->hasAlpha ? kTexAlpha : 0) : 0) | (isWater(tex) ? kWater : 0);
   if (g_verts.empty()) noteView();
   int serial = tex ? (int)tex->serial : 0;
@@ -77,6 +95,7 @@ void record(void *, const tgl::RecordedVertex v[3], const tgl::Texture *tex, boo
   }
   g_verts.insert(g_verts.end(), v, v + 3);
   g_world.insert(g_world.end(), world, world + 9);
+  g_normals.insert(g_normals.end(), normals, normals + 9);
   g_batches.back().count += 3;
 }
 
@@ -98,6 +117,11 @@ void terrain_hd_invalidate(void) { g_dirty = true; }
 // terrain cache holds no course).
 int terrain_hd_seen(void) { return g_seen; }
 
+void terrain_hd_scroll_padding(int on) {
+  if (g_scroll_padding != (on != 0)) g_dirty = true;
+  g_scroll_padding = on != 0;
+}
+
 // Re-records the visible terrain if anything was drawn since the last call.
 // Returns 1 when there's a new frame to replay.
 int terrain_hd_build(void) {
@@ -105,12 +129,16 @@ int terrain_hd_build(void) {
   g_dirty = false;
   g_verts.clear();
   g_world.clear();
+  g_normals.clear();
   g_batches.clear();
   g_batchTex.clear();
   tgl::Context &gl = terrain_gl();
+  gl.record_pad_x = g_scroll_padding ? gl.targetWidth() : 0;
+  gl.record_pad_y = g_scroll_padding ? gl.targetHeight() : 0;
   gl.setRecorder(record, nullptr, false);
   Terrain::getInstance()->render(g_centre, g_rot);
   gl.setRecorder(nullptr, nullptr, true);
+  gl.record_pad_x = gl.record_pad_y = 0;
   return 1;
 }
 
@@ -125,6 +153,9 @@ const int32_t *terrain_hd_batches(void) { return (const int32_t *)g_batches.data
 // own units: 100 per tile, y up), and the view: out[0..2] the world direction
 // toward the viewer, out[3..5] toward the light.
 const float *terrain_hd_world(void) { return g_world.data(); }
+const float *terrain_hd_normals(void) { return g_normals.data(); }
+void terrain_hd_light_model(TerrainLightingModel *out) { if (out) *out = g_light_model; }
+float terrain_hd_height_pixels(void) { return g_height_pixels; }
 void terrain_hd_view(float out[6]) {
   memcpy(out, g_eye, sizeof g_eye);
   memcpy(out + 3, g_sun, sizeof g_sun);

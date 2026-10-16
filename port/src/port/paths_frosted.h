@@ -6,7 +6,7 @@
 //                     it into a PvNote (ui/ui_paths.h) and hands it to the presenter on the second note
 //                     channel (hd_ui_note2_set). It only reads: the rule itself is the original's.
 //   paths_frosted.c   render thread: two native UI layers (hd_native.h): the world layer under the HUD (the
-//                     path view's tint, the "No path" markers) and the top layer over it (the button, the
+//                     path view's tint, the "No path" markers) and the top layer over it (the
 //                     legend, the hover card), plus the key that toggles the view.
 // Switch: ui.paths = frosted_mint | original (mods store; the built-in mod ui_paths sets frosted_mint).
 // docs/ui/KIT.md.
@@ -15,6 +15,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+int pvf_view_available(void); // configured path overlay is available to the HUD
 
 // game thread
 int pvf_enabled(void);        // ui.paths=frosted_mint and the world layer is up (registers it on first call)

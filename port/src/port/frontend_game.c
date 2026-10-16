@@ -54,6 +54,7 @@ int FUN_00404ad0(char *s, int x, int y, uint32_t col);
 int FUN_0045ae70(void);   // a key is waiting
 int FUN_0045ae30(void);   // takes the special key (VK code)
 int FUN_0045ae50(void);   // takes the character key
+int FUN_004724c0(void);   // discovers installed theme directories
 
 #define PROPERTY_TABLE 0x4e3dc0   // the 16 emblem positions of the property screen (short x, short y)
 #define SPRITE_EMBLEM 0x53c570    // golf's property emblems: sprite (theme * 4 + state), 0x2c each
@@ -289,10 +290,14 @@ void fe_world_end(void) {
     while (fef_take_action(&q)) {}
     return;
   }
-  g_snap.screen = FE_NONE;
-  g_snap.magic = FE_MAGIC;
-  g_snap.serial = ++g_serial;
-  fef_publish(&g_snap);   // modal exit must remove the renderer's last map snapshot immediately
+  if (G32(IN_GAME)) {
+    g_snap.screen = FE_NONE;
+    g_snap.magic = FE_MAGIC;
+    g_snap.serial = ++g_serial;
+    fef_publish(&g_snap); // an in-game map returns directly to the course
+  }
+  // At the title, retain the native map until the next front-end snapshot.
+  // Clearing it here exposed the original map during the return transition.
   FeAction stale;
   while (fef_take_action(&stale)) {}   // a queued map hover/click must not reopen it over a report
 }
@@ -842,6 +847,25 @@ static void read_pro(void) {
 static int g_th_n, g_th_sel;
 static unsigned char g_th_mask[FE_THEMES];
 
+// listThemes (004724c0) has just built 50-byte names and reset THEME_NAME.
+// Only restore a directory the actual game loader discovered this session.
+void fe_theme_restore(int count) {
+  const char *saved = mods_get("ui.active_theme");
+  if (!saved || !*saved) return;
+  for (int i = 0; i < count && i < FE_THEMES; i++) {
+    const char *name = (const char *)(uintptr_t)(0x56e928u + (unsigned)i * 50u);
+    if (!strncasecmp(saved, name, 50) && strlen(saved) < 50) {
+      copy_str((char *)(uintptr_t)THEME_NAME, 50, name);
+      return;
+    }
+  }
+}
+
+void fe_theme_remember(void) {
+  const char *name = (const char *)(uintptr_t)THEME_NAME;
+  if (*name && strlen(name) < 50) mods_option_set("ui.active_theme", name);
+}
+
 void fe_theme_vars(int n, const unsigned char *mask, int sel) {
   g_th_n = n > FE_THEMES ? FE_THEMES : n;
   g_th_sel = sel;
@@ -1066,6 +1090,12 @@ void fe_base(int screen) {
 }
 
 void fe_frame(int screen) {
+  static int theme_started;
+  if (screen == FE_TITLE && !theme_started) {
+    theme_started = 1;
+    const char *saved = mods_get("ui.active_theme");
+    if (saved && *saved) FUN_004724c0();
+  }
   if (g_log < 0) g_log = getenv("SIMGOLF_FRONTEND_LOG") != NULL;
   if (screen == FE_WORLD && !g_world_active) {
     g_world_active = 1;

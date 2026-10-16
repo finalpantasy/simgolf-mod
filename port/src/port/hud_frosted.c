@@ -15,6 +15,7 @@
 #include "mods/mods.h"
 #include "port/dialogs_frosted.h"
 #include "port/reports_frosted.h"
+#include "port/paths_frosted.h"
 #include "port/golfers_frosted.h"
 #include "port/hd_native.h"
 #include "port/hd_art.h"
@@ -30,6 +31,9 @@ enum { HUD_MODE_OFF, HUD_MODE_FROSTED, HUD_MODE_ORIGINAL_ROTATE };
 
 static SDL_mutex *g_lock;
 static HudSnap g_snap;
+static int g_weather_show, g_weather_kind, g_weather_night;
+static int g_weather_air_valid,g_weather_fahrenheit;
+static double g_weather_c,g_weather_rh;
 static double g_snap_t = -1e9;
 static HudAction g_q[QMAX];
 static int g_qn;
@@ -85,7 +89,23 @@ static void refresh_mode(void) {
 void hudf_publish(const HudSnap *s) {
   lock();
   g_snap = *s;
+  g_snap.weather_report=g_weather_show;
+  g_snap.weather_kind=g_weather_kind;
+  g_snap.weather_night=g_weather_night;
+  g_snap.weather_air_valid=g_weather_air_valid;g_snap.weather_fahrenheit=g_weather_fahrenheit;
+  g_snap.weather_c=g_weather_c;g_snap.weather_rh=g_weather_rh;
   g_snap_t = host_now_ms();
+  unlock();
+}
+
+void hudf_publish_weather(int show,int kind,int night,int air_valid,double c,double rh,int fahrenheit) {
+  lock();
+  g_snap.weather_report=g_weather_show=show!=0;
+  g_snap.weather_kind=g_weather_kind=kind>=0&&kind<=5?kind:0;
+  g_snap.weather_night=g_weather_night=night!=0;
+  g_snap.weather_air_valid=g_weather_air_valid=air_valid!=0;
+  g_snap.weather_fahrenheit=g_weather_fahrenheit=fahrenheit!=0;
+  g_snap.weather_c=g_weather_c=c;g_snap.weather_rh=g_weather_rh=rh;
   unlock();
 }
 
@@ -369,6 +389,8 @@ static void draw(const HdUiFrame *f, void *user) {
     }
   }
   ui_begin(g_ui, f->target, w, h, hud_scale(h), f->target, now);
+  s.paths_available = pvf_view_available();
+  s.paths_on = pvf_view_user();
   HudAction acts[16];
   // Reports draw before the HUD layer. Hide only the transient message card while a report owns this
   // frame (including a handoff gap); use copies so its open state and unread message return on close.
@@ -444,7 +466,10 @@ static void draw(const HdUiFrame *f, void *user) {
   log_coverage(&s);
   if (n) {
     lock();
-    for (int i = 0; i < n && g_qn < QMAX; i++) g_q[g_qn++] = acts[i];
+    for (int i = 0; i < n; i++) {
+      if (acts[i].kind == HUD_ACT_PATH_VIEW) pvf_set_view(!pvf_view_user());
+      else if (g_qn < QMAX) g_q[g_qn++] = acts[i];
+    }
     unlock();
   }
 }
@@ -533,14 +558,21 @@ static int input(SDL_Event *e, int course, void *user) {
 
 // ------------------------------------------------------------------ switch
 
+void hudf_early(void) {
+  if (!g_lock) g_lock = SDL_CreateMutex();
+  if (!g_registered) {
+    g_registered = hd_ui_add_layer(draw, NULL) && hd_ui_add_input(input, NULL);
+    if (!g_registered) g_failed = 1;
+  }
+}
+
 int hudf_enabled(void) {
   refresh_mode();
   int mode = SDL_AtomicGet(&g_mode);
   if (!g_lock) g_lock = SDL_CreateMutex();
   if (mode != HUD_MODE_OFF && !g_registered) {
     // registered once; with ui.hud switched off later the layer draws nothing
-    g_registered = hd_ui_add_layer(draw, NULL) && hd_ui_add_input(input, NULL);
-    if (!g_registered) g_failed = 1;
+    hudf_early();
   }
   // Only once the presenter has run the layer: with hd=0 (the original 800x600
   // window) nothing would draw the new HUD, so the original one stays.

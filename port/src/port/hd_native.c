@@ -68,6 +68,7 @@
 //   fpslog=path   one line per presented frame (time, frame ms, game frames)
 
 #define WIN32_LEAN_AND_MEAN
+#include "port/release_data.h"
 #include <windows.h>
 
 #include <SDL.h>
@@ -82,11 +83,21 @@
 #include "port/hd_art.h"
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
+#include "port/ui/ui_course_map.h"
 #include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
 #include "port/frontend_frosted.h"
 #include "port/reports_frosted.h"
 #include "port/options_frosted.h"
+#include "port/environment.h"
+#include "port/environment_view.h"
+#include "port/weather_state.h"
+#include "port/weather_climate.h"
+#include "port/environment_fx.h"
+#include "port/environment_receiver.h"
+#include "port/weather_audio.h"
+#include "port/golf/weather_game.h"
+#include "platform/terrain_lighting.h"
 #include "port/hd_zoom.h"
 #include "port/hdball_render.h"
 #include "port/water_native.h"
@@ -111,14 +122,30 @@ typedef struct {
   int layers, smooth, ui_probe;
   int smooth_zoom, zoom_ms;   // task-56
   int overscan, edge_fix;     // task-68
-  int fix_zoom_clock;
+  int fix_zoom_clock, fix_present_pacing;
+  int fix_drag_scroll;
+  int camera_glide;
 } Cfg;
 
-static Cfg g_cfg = {1, 1, 0, 0, F_SHARP, 1, 0, 0, 0, 1, 0, 0, "", 0, 1, 1, 0, 1, 200, 2, 1, 1};
+static Cfg g_cfg = {1, 1, 0, 0, F_SHARP, 1, 0, 0, 0, 1, 0, 0, "", 0, 1, 1, 0, 1, 200, 2, 1, 1, 1, 1, 0};
 static double g_ui_px = 1;            // the scale in use: output px per canvas px (course view)
 static int g_active;                  // the render thread presents
 static int g_mod_on = 1;              // mods.ini hd_presentation (0: the original throughout)
 static SDL_Window *g_window;
+static int g_start_w, g_start_h;
+static unsigned g_start_flags;
+
+// SDL's window event watcher resizes the D3D swap chain synchronously.
+// The window owner must also own rendering, so maximize/restore cannot
+// change GPU targets while the presenter is drawing them.
+int hd_native_poll_event(SDL_Event *event) {
+  return g_active ? SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) > 0
+                  : SDL_PollEvent(event);
+}
+
+void hd_native_pump_events(void) {
+  if (!g_active) SDL_PumpEvents();
+}
 
 // Frame hand-over (game thread -> render thread).
 static CRITICAL_SECTION g_lock;
@@ -141,6 +168,38 @@ static int g_note3_pending_size;
 static uint8_t g_note2_pending[HD_NOTE_MAX];
 static int g_note2_pending_size;
 static HdBallFrame g_frame_ball;            // the balls of that frame (task-41)
+static EnvironmentConfig g_frame_environment;
+static double g_environment_seconds;
+static WeatherClimateTable g_climate_table;
+static WeatherClimate g_climate;
+static WeatherAirTable g_air_table;
+static WeatherAir g_air;
+static WeatherSurfaceTuning g_surface_tuning;
+static AtmosphereTuning g_atmosphere_tuning;
+
+static WeatherState sample_weather(const EnvironmentConfig *c, int course, double seconds, double hour) {
+  WeatherState w = weather_state_sample(course && c->enabled,
+    c->regional_weather ? 3 : c->weather, c->regional_weather ? c->regional_storm : c->rain_strength,
+    seconds, hour, 0x53474f4cU);
+  w.black_background = c->black_background;
+  w.wildlife_legacy=!c->weather_wildlife;
+  w.edge_aa=c->edge_aa;
+  w.cloud_seed = c->cloud_seed;
+  if (c->regional_weather && w.enabled) {
+    w.rain = c->regional_rain; w.cloud = c->regional_cloud;
+    w.wind = .08 + .22 * w.cloud + .2 * w.rain + .4 * w.storm;
+    double angle = .3 + .18 * sin(seconds * .025);
+    w.wind_x = cos(angle) * w.wind; w.wind_z = sin(angle) * w.wind;
+  }
+  AtmosphereSample a=atmosphere_sample(&c->atmosphere,seconds,hour,c->celsius,c->humidity,w.cloud,w.rain,w.wind,c->cloud_seed);
+  if(c->gusts){double base=w.wind;w.wind=fmin(1,base*a.gust);w.wind_x=cos(.3)*w.wind;w.wind_z=sin(.3)*w.wind;
+    w.wind_drift_x=base*cos(.3)*a.drift;w.wind_drift_z=base*sin(.3)*a.drift;w.wind_advection=1;}
+  w.mist=c->mist&&c->air_valid?a.mist:0;w.haze=c->haze?a.haze:0;w.golden=c->golden_hour?a.golden:0;
+  w.distant_thunder=c->distant_thunder&&c->regional_weather&&c->approaching_storm>.1&&w.storm<.12?c->atmosphere.distant_gain:0;
+  w.distant_event_id=c->approach_id|0x80000000u;w.distant_age=c->approach_age-2.5;
+  return w;
+}
+static int g_environment_running;
 static volatile LONG g_frame_serial, g_game_frames;
 
 // Course snapshot (game thread only): the back buffer when golf finished the
@@ -260,6 +319,7 @@ static void read_settings(void) {
     const char *v = mods_get(key);
     if (v && *v) set_key(k_store_keys[i], v);
   }
+  g_cfg.camera_glide = mods_get_int("camera.glide", 0) != 0;
   hd_art_read_store();
   const char *env = getenv("SIMGOLF_DISPLAY");
   if (env && *env) {
@@ -339,7 +399,26 @@ typedef struct {
   const uint8_t *cut, *cut_ui;   // hd_art_cut_mask() for the overlay and golf's UI layer
   int terrain_on;       // the terrain layer draws under the overlay
   HdBallFrame ball;   // the balls of the latest game frame (hdball_render.c)
+  EnvironmentConfig environment;
+  EnvironmentRenderer environment_renderer;
+  EnvironmentFxState *environment_fx;
+  uint8_t *weather_receiver, *weather_basins;
+  LONG weather_basin_serial, weather_basin_map_serial;
+  int *weather_flood;
+  size_t weather_receiver_count;
+  LONG weather_receiver_serial;
+  double environment_seconds, environment_frame_time;
+  int environment_running;
+  uint64_t environment_cache_key;
+  int weather_backend;
+  CourseRelief relief;
+  uint8_t *weather_features;
+  WeatherSurfaceState surface;
+  double surface_time;
+  double surface_log_time;
   HANDLE timer;
+  int profile;
+  double profile_terrain,profile_shadow,profile_fx;
   // smooth scrolling (canvas pixels): course[cur] is drawn at off * (1 - a),
   // a going 0 -> 1 over off_dur ms from off_t0; course[!cur] at that + prev_d.
   HdUiCamera cam;
@@ -438,6 +517,10 @@ static void upload(Rt *t, double now) {
   t->note3_size = t->layered && t->course_view ? g_frame_note3_size : 0;
   if (t->note3_size > 0) memcpy(t->note3, g_frame_note3, (size_t)t->note3_size);
   memcpy(&t->ball, &g_frame_ball, sizeof t->ball);
+  t->environment = g_frame_environment;
+  t->environment_seconds = g_environment_seconds;
+  t->environment_running = g_environment_running;
+  t->environment_frame_time = now;
   serial = g_frame_serial;
   LeaveCriticalSection(&g_lock);
   hd_art_prepare(t->r, 1);
@@ -445,6 +528,9 @@ static void upload(Rt *t, double now) {
   // Smooth scrolling: a camera step of a few tiles at the same zoom and
   // rotation becomes a slide from where the course is on screen now.
   int layered = t->layered && t->course_view;
+  // Pause and modal redraws can briefly publish an unlayered frame. Moisture
+  // belongs to the weather session and must survive those presentation changes.
+  if (!t->environment.enabled) { memset(&t->surface, 0, sizeof t->surface); t->surface_time = 0; }
   hdball_ingest(&t->ball, &t->cam, layered, now);   // task-41: the round ball's positions
   double cx, cy;
   slide_offset(t, now, &cx, &cy);
@@ -457,11 +543,19 @@ static void upload(Rt *t, double now) {
   }
   // the sub-tile camera's offset moves the content as well (task-37)
   int mx = t->cam.x - before.x, my = t->cam.y - before.y, mo = t->cam.ox != before.ox || t->cam.oy != before.oy;
+  double dx = mx * t->cam.ax + my * t->cam.bx + (t->cam.ox - before.ox),
+         dy = mx * t->cam.ay + my * t->cam.by + (t->cam.oy - before.oy);
+  // Manual drags can cross many tiles in either direction between game
+  // frames. Keep the displayed camera continuous while the views overlap.
+  // The compositor replays the guard band in disoccluded corners, so a
+  // diagonal must not cancel a slide.
+  int manual = g_cfg.fix_drag_scroll && t->cam.drag_serial != before.drag_serial;
+  int nearby = abs(mx) <= 4 && abs(my) <= 4;
+  if (manual && !nearby)
+    nearby = fabs(cx - dx) < FRAME_W && fabs(cy - dy) < FRAME_H;
   int slide = g_cfg.smooth && layered && was_layered && t->cam.zoom == before.zoom && t->cam.rot == before.rot &&
-              (mx || my || mo) && abs(mx) <= 4 && abs(my) <= 4;
+              (mx || my || mo) && nearby;
   if (slide) {
-    double dx = mx * t->cam.ax + my * t->cam.bx + (t->cam.ox - before.ox),   // content shift
-           dy = mx * t->cam.ay + my * t->cam.by + (t->cam.oy - before.oy);
     t->cur ^= 1;   // the course on screen becomes the one sliding out
     t->have_prev = 1;
     t->off_x = cx - dx;
@@ -469,9 +563,10 @@ static void upload(Rt *t, double now) {
     t->prev_dx = dx;
     t->prev_dy = dy;
     t->off_t0 = now;
-    // a little longer than a game frame, so the next step arrives mid-slide and
-    // carries on from there instead of the course stopping between steps
-    t->off_dur = 1.2 * (t->interval > 0 ? t->interval : 87);
+    // Direct dragging catches up within one game frame. The optional glide
+    // retains the accepted softer trail. Other camera movement is unchanged.
+    t->off_dur = t->interval > 0 ? t->interval : 87;
+    if (!manual || g_cfg.camera_glide) t->off_dur *= 1.2;
   } else if (layered && was_layered && g_cfg.smooth && t->cam.zoom == before.zoom && t->cam.rot == before.rot &&
              !mx && !my && !mo) {
     // same camera: the new picture takes the old one's place mid-slide
@@ -575,8 +670,37 @@ static Rect moved(Rect d, double dx, double dy) {
 // The live course picture (course layer, terrain at full resolution, hi-res
 // sprites, the round ball) with canvas pixel p at screen s * p + (x, y) (canvas
 // px, relative to d), d being its place at rest.
+static double environment_time(const Rt *t, double now) {
+  return t->environment_seconds + (t->environment_running ? fmin(0.25, fmax(0, (now - t->environment_frame_time) / 1000)) : 0);
+}
+
+static void draw_cast_shadows(Rt *t, SDL_Rect clip, double x, double y, double scale,
+                              int terrain, double now, int snapshot) {
+  double started=t->profile?host_now_ms():0;
+  EnvironmentSample sun = environment_sample(&t->environment, environment_light_seconds(&t->environment,environment_time(t, now)));
+  double dx = 0, dy = 0;
+  int visible = environment_shadow_slope(&sun, t->cam.ax, t->cam.ay, t->cam.bx, t->cam.by, &dx, &dy);
+  int enabled = t->layered && t->course_view && terrain && t->environment.enabled && t->environment.cast_shadows;
+  // Snapshots retain a clean base. At night replacement stays enabled so
+  // the art's fixed midday shadows cannot reappear as the sun fades away.
+  double opacity = visible && !snapshot ? t->environment.atmosphere.shadow_opacity * sun.sun_strength * environment_shadow_transmission(&t->environment,&sun) : 0;
+  double ground_width = hypot(t->cam.ax, t->cam.bx);
+  double ground_aspect = ground_width > 1e-9 ? hypot(t->cam.ay, t->cam.by) / ground_width : 0.5;
+  hd_art_lighting(&t->environment,&sun,t->cam.ax,t->cam.ay,t->cam.bx,t->cam.by);
+  WeatherState wind=sample_weather(&t->environment,1,environment_time(t,now),sun.hour);
+  hd_art_wind(wind.enabled&&t->environment.gusts,wind.seconds,wind.wind_x);
+  int cast_count=hd_art_draw_shadows(t->r, clip, x, y, scale, t->mask, FRAME_W, FRAME_H,
+                      enabled, dx, dy, opacity, ground_aspect);
+  if(getenv("SIMGOLF_ATMOSPHERE_LOG")){
+    static double last_cast_log;
+    if(now-last_cast_log>1000){last_cast_log=now;fprintf(stderr,"weather: solar shadows enabled %d drawn %d slope %.3f %.3f opacity %.3f\n",enabled,cast_count,dx,dy,opacity);}
+  }
+  if(!snapshot)hd_art_enclosure_ground(t->r,t->mask,FRAME_W,FRAME_H,x,y,scale);
+  if(t->profile)t->profile_shadow+=host_now_ms()-started;
+}
+
 static void draw_live(Rt *t, SDL_Texture *target, Rect d, double s, double x, double y, int sw, int sh,
-                      SDL_Texture *terrain, double now) {
+                      SDL_Texture *terrain, double now, int snapshot) {
   double k = (double)d.w / sw, kk = k * s;
   Rect cd = {d.x + (int)lround(x * k), d.y + (int)lround(y * k), (int)lround(d.w * s), (int)lround(d.h * s)};
   draw_layer_ref(t, &t->course[t->cur], target, cd, sw, sh, SDL_BLENDMODE_NONE, d.w);
@@ -585,6 +709,8 @@ static void draw_live(Rt *t, SDL_Texture *target, Rect d, double s, double x, do
     SDL_RenderCopy(t->r, terrain, NULL, &dst);
     water_draw(t->r, dst.x, dst.y, dst.w, dst.h, now);   // task-78: the water over the ground, under golf's sprites
   }
+  SDL_Rect shadow_clip = {d.x, d.y, d.w, d.h};
+  draw_cast_shadows(t, shadow_clip, cd.x, cd.y, kk, terrain != NULL, now, snapshot);
   if (t->art_main >= 0) hd_art_draw(t->art_main, t->r, cd.x, cd.y, kk);
   if (terrain || t->art_main >= 0) draw_layer_ref(t, &t->overlay, target, cd, sw, sh, t->premul, d.w);
   if (t->course_view) {
@@ -616,7 +742,7 @@ static int snapshot_course(Rt *t, double now) {
   SDL_SetRenderDrawColor(t->r, 0, 0, 0, 255);
   SDL_RenderClear(t->r);
   Rect z = {0, 0, d.w, d.h};
-  draw_live(t, t->zsnap, z, 1, 0, 0, sw, sh, terrain, now);
+  draw_live(t, t->zsnap, z, 1, 0, 0, sw, sh, terrain, now, 1);
   SDL_RenderSetClipRect(t->r, NULL);
   SDL_SetRenderTarget(t->r, was);
   t->zsnap_zoom = t->cam.zoom;
@@ -636,12 +762,15 @@ static void glide_course(Rt *t, SDL_Texture *target, Rect d, int sw, int sh, SDL
   t->zs = s, t->zx = x, t->zy = y;
   SDL_Rect clip = {d.x, d.y, d.w, d.h};
   SDL_RenderSetClipRect(t->r, &clip);
-  int back = t->zsnap_ok && t->zsnap && t->zsnap_zoom != t->cam.zoom;
+  // A clean snapshot cannot cover the live cast pass. With dynamic shadows
+  // the current scene alone follows the same glide transform.
+  int back = t->zsnap_ok && t->zsnap && t->zsnap_zoom != t->cam.zoom &&
+             !(t->environment.enabled && t->environment.cast_shadows);
   double sb = 0, xb = 0, yb = 0;
   if (back) hdz_xform(&t->zg, t->zg.last_t, t->zsnap_zoom, t->zsnap_cx, t->zsnap_cy, &sb, &xb, &yb);
   SDL_Rect bd = {d.x + (int)lround(xb * k), d.y + (int)lround(yb * k), (int)lround(d.w * sb), (int)lround(d.h * sb)};
   if (back && sb > s) SDL_RenderCopy(t->r, t->zsnap, NULL, &bd);
-  draw_live(t, target, d, s, x, y, sw, sh, terrain, now);
+  draw_live(t, target, d, s, x, y, sw, sh, terrain, now, 0);
   if (back && sb <= s) SDL_RenderCopy(t->r, t->zsnap, NULL, &bd);
   SDL_RenderSetClipRect(t->r, NULL);
 }
@@ -834,10 +963,82 @@ static void keep_course(Rt *t, SDL_Texture *target, Rect d, double ox, double oy
 // golf's UI layer and the native UI layers. While scrolling smoothly the
 // course parts sit at the slide offset and the course before them fills the
 // edge they uncover.
+static int weather_receiver(Rt *t) {
+  size_t count = (size_t)FRAME_W * FRAME_H;
+  if (!count || count > 4u * 1024u * 1024u) return 0;
+  if (!t->weather_receiver || !t->weather_flood || !t->weather_basins || t->weather_receiver_count != count) {
+    free(t->weather_receiver); free(t->weather_flood); free(t->weather_basins);free(t->weather_features);
+    t->weather_receiver = malloc(count);
+    t->weather_basins = malloc(count);
+    t->weather_basin_serial = t->weather_basin_map_serial = -1;
+    t->weather_flood = malloc(count * sizeof(int));
+    t->weather_features=malloc(count*3);
+    t->weather_receiver_serial = -1;
+    if (!t->weather_receiver || !t->weather_flood || !t->weather_basins) return 0;
+    t->weather_receiver_count = count;
+  }
+  if (t->weather_receiver_serial == t->shown_serial) return 1;
+  if (!environment_receiver_build(t->weather_receiver, t->weather_flood, FRAME_W, FRAME_H,
+                                  t->local, t->mask)) return 0;
+  HdtScene scene;
+  if(g_cfg.terrain&&hdt_scene(&scene)&&scene.serial<=t->shown_serial){
+    if(t->weather_basin_serial!=scene.serial||t->weather_basin_map_serial!=scene.map_serial){
+      int nv=0;for(int i=0;i<scene.nbatches;i++){int end=scene.batches[i*5]+scene.batches[i*5+1];if(end>nv)nv=end;}
+      memset(t->weather_basins,127,count);
+      atmosphere_receivers(t->weather_basins,FRAME_W,FRAME_H,scene.verts,scene.world,
+        scene.batches,scene.nbatches,nv,scene.tw,scene.th,scene.wheight,scene.map_w,scene.map_h);
+      t->weather_basin_serial=scene.serial;t->weather_basin_map_serial=scene.map_serial;
+    }
+    // Sprite motion only reclassifies receivers. Static terrain retention is reused.
+    for(size_t p=0;p<count;p++)if(t->weather_receiver[p]==127)t->weather_receiver[p]=t->weather_basins[p];
+  }
+  if(t->weather_features&&t->relief.features&&t->relief.width==FRAME_W&&t->relief.height==FRAME_H){
+    memcpy(t->weather_features,t->relief.features,count*3);
+    hd_art_fog_features(t->weather_features,FRAME_W,FRAME_H,t->relief.height_pixels*28);
+  }
+  t->weather_receiver_serial = t->shown_serial;
+  return 1;
+}
+
 static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh, double now) {
+  t->profile_terrain=t->profile_shadow=t->profile_fx=0;
+  EnvironmentSample sun = environment_sample(&t->environment, environment_light_seconds(&t->environment,environment_time(t, now)));
+  int lighting = t->course_view && t->layered && t->environment.enabled && t->environment.lighting;
+  terrain_lighting_sky((float)sun.daylight);
+  terrain_lighting_ambient((float)t->environment.ambient_fill);
+  terrain_lighting_linear(t->environment.linear_light);
+  terrain_lighting_set(lighting, t->environment.terrain_shadows, t->environment.occlusion, t->environment.quality,
+                        (float)sun.sun_x, (float)sun.sun_y, (float)sun.sun_z, (float)(sun.sun_strength*(t->environment.weather_shadows?environment_shadow_transmission(&t->environment,&sun):1)));
+  uint64_t key = t->environment.enabled ? 1u + (unsigned)(sun.hour * 12) * 512u + (t->environment.linear_light?256u:0u) +
+    (unsigned)(t->environment.weather & 3) * 64u + (unsigned)(t->environment.quality & 3) * 16u +
+    t->environment.cast_shadows + t->environment.lighting * 2 + t->environment.terrain_shadows * 4 + t->environment.occlusion * 8 : 0;
+  if(t->environment.enabled){
+    double enclosure=isfinite(t->environment.enclosure_shade)?fmax(0,fmin(1,t->environment.enclosure_shade)):0;
+    double material=isfinite(t->environment.material_wetness)?fmax(0,fmin(1,t->environment.material_wetness)):0;
+    double mist=isfinite(t->environment.valley_mist)?fmax(0,fmin(1,t->environment.valley_mist)):0;
+    key|=(uint64_t)(t->environment.relief_shadows!=0)<<24|(uint64_t)(t->environment.weather_shadows!=0)<<25|
+      (uint64_t)lround(enclosure*255)<<26|(uint64_t)lround(material*255)<<34|(uint64_t)lround(mist*255)<<42;
+  }
+  if (key != t->environment_cache_key) {
+    t->environment_cache_key = key;
+    t->slast_ok = t->zsnap_ok = 0;
+  }
   source_size(t->course_view, sw, sh);
   Rect d = fit(cw, ch, *sw, *sh, g_cfg.filter);
+  double terrain_started=t->profile?host_now_ms():0;
   SDL_Texture *terrain = t->course_view && g_cfg.terrain ? hdt_render(t->r, d.w, d.h, g_cfg.edge_fix ? t->shown_serial : LONG_MAX) : NULL;
+  HdtScene relief_scene;
+  int geometry=t->environment.enabled&&terrain&&hdt_scene(&relief_scene);
+  if(geometry&&(t->environment.relief_shadows||t->environment.material_wetness>0||t->environment.valley_mist>0)){
+    if(!course_relief_build(&t->relief,&relief_scene,FRAME_W,FRAME_H))course_relief_destroy(&t->relief);
+  }
+  hd_art_relief(geometry?&t->relief:NULL,t->environment.relief_shadows);
+  if(getenv("SIMGOLF_DEPTH_LOG")&&geometry){static double last;
+    if(now-last>1000){last=now;fprintf(stderr,"depth: scene %ld pixels_per_y %.6f relief %.4f active %d enclosure %.3f material %.3f valley %.3f shadow_softness %.3f transmission %.4f\n",
+      t->relief.serial,t->relief.height_pixels,t->relief.max_lift,t->environment.relief_shadows,t->environment.enclosure_shade,t->environment.material_wetness,t->environment.valley_mist,
+      environment_shadow_softness(&t->environment,&sun),environment_shadow_transmission(&t->environment,&sun));}
+  }
+  if(t->profile)t->profile_terrain=host_now_ms()-terrain_started;
   SDL_SetRenderTarget(t->r, target);
   SDL_SetRenderDrawColor(t->r, 0, 0, 0, 255);
   SDL_RenderClear(t->r);
@@ -881,8 +1082,20 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
   if (sliding) {
     SDL_Rect clip = {d.x, d.y, d.w, d.h};
     SDL_RenderSetClipRect(t->r, &clip);
-    // the picture of the last frame, moved by as much as the course moved since
-    // (its course layer is this one, or the one before when a game frame landed)
+    // Draw the recorded guard band at the displayed camera before the cropped
+    // pictures. Opposite diagonal corners now have real world-aligned pixels.
+    if (g_cfg.fix_drag_scroll && g_cfg.terrain) {
+      SDL_Texture *guard = hdt_render_guard(t->r, g_cfg.edge_fix ? t->shown_serial : LONG_MAX);
+      SDL_SetRenderTarget(t->r, dest);
+      SDL_RenderSetScale(t->r, pg ? 1.0f / pg : 1.0f, pg ? 1.0f / pg : 1.0f);
+      SDL_RenderSetClipRect(t->r, &clip);
+      if (guard) {
+        SDL_Rect padded = {d.x + (int)lround((ox - *sw) * k),
+                           d.y + (int)lround((oy - *sh) * k), d.w * 3, d.h * 3};
+        SDL_RenderCopy(t->r, guard, NULL, &padded);
+      }
+    }
+    // Move the previous composed picture with the same world displacement.
     int same = g_cfg.edge_fix && t->slast_ok && t->slast_serial == t->course[t->cur].serial;
     int before = g_cfg.edge_fix && t->slast_ok && t->have_prev && t->slast_serial == t->course[!t->cur].serial;
     if (same || before) {
@@ -900,6 +1113,8 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     SDL_RenderCopy(t->r, terrain, NULL, &dst);
     water_draw(t->r, dst.x, dst.y, dst.w, dst.h, now);   // task-78: the water over the ground, under golf's sprites
   }
+  SDL_Rect shadow_clip = {d.x, d.y, d.w, d.h};
+  draw_cast_shadows(t, shadow_clip, cd.x, cd.y, k, terrain != NULL, now, 0);
   if (art >= 0) hd_art_draw(art, t->r, cd.x, cd.y, k);   // hi-res sprites (hd_art.c), in golf's order
   if (terrain || art >= 0) draw_layer(t, &t->overlay, dest, cd, *sw, *sh, t->premul);
   if (sliding) SDL_RenderSetClipRect(t->r, NULL);
@@ -919,7 +1134,89 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     if (layered && g_cfg.smooth && g_cfg.edge_fix) keep_course(t, target, d, ox, oy);
     else t->slast_ok = 0;
   }
-  if (layered && (g_dump_on || t->dump_f)) dump_course(t, target, d, ox, oy, now);   // task-68 measure
+  if (layered && t->course_view) {
+    SDL_Rect course = {d.x, d.y, d.w, d.h};
+    EnvironmentView view = environment_view_camera(&t->cam, *sw, *sh, k,
+      glide ? t->zs : 1, glide ? t->zx : (cd.x - d.x) / k,
+      glide ? t->zy : (cd.y - d.y) / k);
+    double seconds = t->environment_seconds + (t->environment_running ? fmin(0.25, fmax(0, (now - t->environment_frame_time) / 1000)) : 0);
+    // Global colour grading stays shared with the existing renderer. The
+    // richer atmosphere handles clouds/rain in a separate GPU/fallback pass.
+    EnvironmentConfig grade = t->environment;
+    int fx_ready = t->environment.enabled && weather_receiver(t);
+    if (fx_ready || t->environment.black_background) {
+      grade.overlay_suppressed = 1;
+    }
+    environment_draw(&t->environment_renderer, t->r, course, &grade,
+                     seconds, view.x, view.y, view.scale);
+    if (fx_ready) {
+      WeatherState weather = sample_weather(&t->environment, 1, seconds, sun.hour);
+        weather.cloud = sun.cloud;
+      weather.material_wetness=t->environment.material_wetness;weather.valley_mist=t->environment.valley_mist;
+      weather.light[0]=sun.sun_x;weather.light[1]=sun.sun_y;weather.light[2]=sun.sun_z;weather.light_strength=sun.sun_strength;
+      if(geometry)for(int i=0;i<3;i++)weather.eye[i]=relief_scene.view[i];
+      if(pg)weather.edge_aa=0; // Preserve the deliberately chosen Pixel HD grid.
+      if(getenv("SIMGOLF_RENDER_FIDELITY_LOG")){
+        static int last_pg=-1,last_linear=-1;static double last_requested=-1;
+        if(last_pg!=pg||last_linear!=t->environment.linear_light||last_requested!=t->environment.edge_aa){
+          last_pg=pg;last_linear=t->environment.linear_light;last_requested=t->environment.edge_aa;
+          fprintf(stderr,"render fidelity: pixel_grid %d linear %d requested_aa %.3f effective_aa %.3f\n",pg,last_linear,last_requested,weather.edge_aa);
+        }
+      }
+      WeatherSurfaceTuning tuning = g_surface_tuning;
+      tuning.wet_seconds = t->environment.wet_seconds;
+      tuning.dry_seconds = t->environment.dry_seconds;
+      tuning.puddle_drain=t->environment.atmosphere.puddle_drain;
+      for(int i=0;i<4;i++){weather.material_gloss[i]=tuning.material_gloss[i];weather.material_power[i]=tuning.material_power[i];weather.material_absorb[i]=tuning.material_absorb[i];}
+      weather.material_tuning_valid=1;
+      double dt = t->surface_time > 0 ? fmin(.25, fmax(0, seconds - t->surface_time)) : 0;
+      t->surface_time = seconds;
+      if (t->environment.wet_surfaces) weather_surface_update(&t->surface, &tuning,
+        weather.rain, weather.cloud, weather.night, weather.wind, dt);
+      else memset(&t->surface, 0, sizeof t->surface);
+      weather.wetness = t->surface.wetness; weather.puddles = t->surface.puddles;
+      weather.evaporation = t->surface.evaporation;
+      weather.impact_strength = t->environment.splashes ? tuning.splash_strength : 0;
+      weather.flash_gain = tuning.flash_gain;
+      weather.cloud_size = tuning.cloud_size;
+      weather.cloud_shade = tuning.cloud_shade;
+      weather.cloud_feather = tuning.cloud_feather;
+      weather.cloud_morph_seconds = tuning.cloud_morph_seconds;
+      if(getenv("SIMGOLF_ATMOSPHERE_LOG")&&now-t->surface_log_time>1000)
+        fprintf(stderr,"weather: atmosphere seconds %.3f hour %.2f mist %.4f haze %.4f gust %.4f drift %.3f golden %.4f air %.2f %.2f\n",seconds,sun.hour,weather.mist,weather.haze,weather.wind,weather.wind_drift_x,weather.golden,t->environment.celsius,t->environment.humidity);
+      if (getenv("SIMGOLF_WEATHER_SURFACE_LOG") && now-t->surface_log_time>1000) {
+        t->surface_log_time=now;int water_pixels=0;
+        for(size_t p=0;p<t->weather_receiver_count;++p)water_pixels+=t->weather_receiver[p]==160;
+        fprintf(stderr,"weather: surface host_ms %.3f seconds %.4f rain %.3f wet %.4f pool %.4f evaporation %.4f water_pixels %d\n",
+          now,seconds,weather.rain,weather.wetness,weather.puddles,weather.evaporation,water_pixels);
+      }
+      if (!t->environment.lightning) weather.lightning = 0;
+      double receiver_scale = glide ? k * t->zs : k;
+      double receiver_x = glide ? d.x + t->zx * k : cd.x;
+      double receiver_y = glide ? d.y + t->zy * k : cd.y;
+      EnvironmentFxReceiver receiver = {t->weather_receiver, FRAME_W, FRAME_H, FRAME_W,
+        (uint64_t)t->weather_receiver_serial, receiver_x, receiver_y, receiver_scale,
+        geometry&&t->relief.features?t->weather_features:NULL};
+      double fx_started=t->profile?host_now_ms():0;
+      environment_fx_draw(&t->environment_fx, t->r, course, &receiver, &weather,
+        view.x, view.y, view.scale, t->environment.quality, t->environment.glowbugs,
+        t->environment.night_sky, t->environment.reduced_flashes, t->environment.shader);
+      if(t->profile)t->profile_fx=host_now_ms()-fx_started;
+      if(getenv("SIMGOLF_WILDLIFE_LOG")){
+        static double last; if(now-last>1000){last=now;fprintf(stderr,"weather: wildlife seconds %.3f night %.3f rain %.3f storm %.3f wind %.3f activity %.5f legacy %d\n",seconds,weather.night,weather.rain,weather.storm,weather.wind,weather_night_activity(&weather),weather.wildlife_legacy);}
+      }
+      EnvironmentFxStatus status;
+      environment_fx_get_status(t->environment_fx, &status);
+      if (status.backend != t->weather_backend) {
+        t->weather_backend = status.backend;
+        fprintf(stderr, "weather: backend %d shader_compiled %d receiver %d (%s)\n",
+          status.backend, status.shader_compiled, status.receiver_uploaded, status.detail);
+      }
+    } else {
+      environment_fx_destroy(&t->environment_fx);
+    }
+  }
+  if (layered && (g_dump_on || t->dump_f)) dump_course(t, target, d, ox, oy, now);   // complete course, before UI
   if (layered && g_show_golf_ui) {
     if (t->art_ui) hd_art_draw(HD_ART_TOP, t->r, d.x, d.y, k);   // golf's UI art in hi-res, under the rest of its UI
     draw_layer(t, &t->ui, target, d, *sw, *sh, t->premul);
@@ -1095,9 +1392,25 @@ static void stats_add(Stats *s, double now, double ms, int cw, int ch, const cha
   s->game0 = games;
 }
 
+static double render_cpu_ms(void){
+  FILETIME created,exited,kernel,user;
+  if(!GetThreadTimes(GetCurrentThread(),&created,&exited,&kernel,&user))return 0;
+  ULARGE_INTEGER k,u;k.LowPart=kernel.dwLowDateTime;k.HighPart=kernel.dwHighDateTime;
+  u.LowPart=user.dwLowDateTime;u.HighPart=user.dwHighDateTime;
+  return (double)(k.QuadPart+u.QuadPart)/10000.0;
+}
 static DWORD WINAPI render_main(void *arg) {
   (void)arg;
+  g_window = SDL_CreateWindow("SimGolf", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                              g_start_w, g_start_h, g_start_flags);
+  if (!g_window) {
+    fprintf(stderr, "hd: no window (%s)\n", SDL_GetError());
+    g_start_ok = 0;
+    SetEvent(g_ready);
+    return 0;
+  }
   Rt *t = calloc(1, sizeof *t);
+  t->profile=getenv("SIMGOLF_RENDER_PROFILE")!=NULL;
   t->local = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->local_ui = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->mask = calloc((size_t)FRAME_W * FRAME_H, 1);
@@ -1115,7 +1428,9 @@ static DWORD WINAPI render_main(void *arg) {
   }
   if (!t->r || made < 4) {
     fprintf(stderr, "hd: no renderer (%s); the original presentation takes over\n", SDL_GetError());
-    if (t->r) SDL_DestroyRenderer(t->r);
+    if (t->r) { ui_course_map_clear(t->r); SDL_DestroyRenderer(t->r); }
+    SDL_DestroyWindow(g_window);
+    g_window = NULL;
     g_start_ok = 0;
     SetEvent(g_ready);
     return 0;
@@ -1134,7 +1449,7 @@ static DWORD WINAPI render_main(void *arg) {
                                          SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
   t->timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
   FILE *fpslog = g_cfg.fpslog[0] ? fopen(g_cfg.fpslog, "w") : NULL;
-  if (fpslog) fprintf(fpslog, "t_ms,frame_ms,game_frames,course_dx,course_dy,cam_x,cam_y,cam_ox,cam_oy,zoom_on,zoom_view,zoom_s,zoom_x,zoom_y,live_zoom,t_draw\n");
+  if (fpslog) fprintf(fpslog, "t_ms,frame_ms,game_frames,course_dx,course_dy,cam_x,cam_y,cam_ox,cam_oy,zoom_on,zoom_view,zoom_s,zoom_x,zoom_y,live_zoom,t_draw%s\n",t->profile?",prepare_ms,compose_ms,submit_ms,present_ms,cpu_ms,terrain_ms,shadow_ms,fx_ms":"");
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
   g_start_ok = 1;
   SetEvent(g_ready);
@@ -1144,7 +1459,14 @@ static DWORD WINAPI render_main(void *arg) {
   Stats st = {0};
   st.t0 = host_now_ms();
   double last = st.t0, next = st.t0;
+  double last_fps_flush=st.t0;
+  if(t->profile)fprintf(stderr,"render profile: thread %lu\n",GetCurrentThreadId());
   for (;;) {
+    double frame_started=t->profile?host_now_ms():0;
+    double cpu_started=t->profile?render_cpu_ms():0;
+    // Dispatch native window messages and SDL resize watchers between frames,
+    // on the same thread that owns the window and its renderer.
+    SDL_PumpEvents();
     if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MINIMIZED) {
       Sleep(20);
       last = next = host_now_ms();
@@ -1163,7 +1485,7 @@ static DWORD WINAPI render_main(void *arg) {
     SDL_Texture *target = NULL;
     if (g_cfg.render_w || g_n_ui_layers) {   // task-26: native UI layers frost the picture, so it must be a texture
       if (!t->canvas || t->canvas_w != cw || t->canvas_h != ch) {
-        if (t->canvas) SDL_DestroyTexture(t->canvas);
+        if (t->canvas) { environment_fx_destroy(&t->environment_fx); SDL_DestroyTexture(t->canvas); }
         t->canvas = SDL_CreateTexture(t->r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, cw, ch);
         t->canvas_w = cw;
         t->canvas_h = ch;
@@ -1179,6 +1501,7 @@ static DWORD WINAPI render_main(void *arg) {
     t->th = ch;
     if (t->layered && t->course_view && !t->zon) slide_offset(t, t_draw, &slide_x, &slide_y);
     Rect d = compose(t, target, cw, ch, &sw, &sh, t_draw);
+    double composed=t->profile?host_now_ms():0;
     if (g_shot_pending) take_shot(t, cw, ch);
     water_after_frame(t->r, cw, ch);   // task-78: look-test clips (water.clip)
     Rect w = {0, 0, cw, ch};   // the canvas inside the window
@@ -1212,24 +1535,36 @@ static DWORD WINAPI render_main(void *arg) {
     if (flipped && flips++ < 40) fprintf(stderr, "hd: %.1f s: mouse maps to %dx%d of the frame (%s)\n", now_s(), sw, sh, t->course_view ? "course" : "page");
 
     frame_log(t, ow, oh, host_now_ms());
+    double submit_finished=t->profile?host_now_ms():0;
+    if (g_cfg.fps > 0 && g_cfg.fix_present_pacing) {
+      next = hd_present_deadline(next, host_now_ms(), 1000.0 / g_cfg.fps);
+      wait_until(t, next);
+    }
+    double submitted=t->profile?host_now_ms():0;
     SDL_RenderPresent(t->r);
     double now = host_now_ms();
+    double cpu_used=t->profile?render_cpu_ms()-cpu_started:0;
     double ms = now - last;
     last = now;
     stats_add(&st, now, ms, cw, ch, info.name, g_cfg.filter == F_SHARP ? t->course[t->cur].pre_k : 1);
     if (fpslog) {
       double zv = t->cam.zoom, zcx, zcy;
       if (t->zon) hdz_view(&t->zg, t->zg.last_t, &zv, &zcx, &zcy);
-      fprintf(fpslog, "%.3f,%.3f,%ld,%.2f,%.2f,%d,%d,%d,%d,%d,%.4f,%.4f,%.2f,%.2f,%d,%.3f\n", now, ms, (long)g_game_frames, slide_x,
+      fprintf(fpslog, "%.3f,%.3f,%ld,%.2f,%.2f,%d,%d,%d,%d,%d,%.4f,%.4f,%.2f,%.2f,%d,%.3f", now, ms, (long)g_game_frames, slide_x,
               slide_y, t->cam.x, t->cam.y, t->cam.ox, t->cam.oy, t->zon, zv, t->zon ? t->zs : 1.0, t->zon ? t->zx : 0.0,
               t->zon ? t->zy : 0.0, t->cam.zoom, t_draw);   // t_draw: the time the picture's positions are for (task-68)
+      if(t->profile)fprintf(fpslog,",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",t_draw-frame_started,composed-t_draw,submit_finished-composed,now-submitted,cpu_used,t->profile_terrain,t->profile_shadow,t->profile_fx);
+      fputc('\n',fpslog);
+      // The native process can exit without a render-thread CRT shutdown.
+      // Keep complete profiling rows durable beyond the bounded one-second tail.
+      if(now-last_fps_flush>=1000){fflush(fpslog);last_fps_flush=now;}
     }
-    if (g_cfg.fps > 0) {
+    if (g_cfg.fps > 0 && !g_cfg.fix_present_pacing) {
       double period = 1000.0 / g_cfg.fps;
       next += period;
       if (next < now - period) next = now;   // fell behind (a stall): start over, don't race
       wait_until(t, next);
-    } else if (!g_cfg.vsync) {
+    } else if (g_cfg.fps <= 0 && !g_cfg.vsync) {
       next = now;
     }
   }
@@ -1252,6 +1587,13 @@ void hd_native_prepare(int *w, int *h, unsigned *flags) {
   InitializeCriticalSection(&g_zlock);
   g_zev_ack = CreateEventA(NULL, FALSE, FALSE, NULL);
   read_settings();
+  g_atmosphere_tuning=atmosphere_defaults();
+  char atmosphere_path[MAX_PATH];{ char release_dir[MAX_PATH];snprintf(release_dir,sizeof release_dir,"%s/data",host_exe_dir());release_data_path(atmosphere_path,sizeof atmosphere_path,release_dir,"weather-atmosphere.csv"); }
+  fprintf(stderr,"weather: atmosphere tuning %s\n",atmosphere_load(&g_atmosphere_tuning,atmosphere_path)?"loaded":"safe defaults");
+  g_surface_tuning = weather_surface_defaults();
+  char surface_path[MAX_PATH];
+  { char release_dir[MAX_PATH];snprintf(release_dir,sizeof release_dir,"%s/data",host_exe_dir());release_data_path(surface_path,sizeof surface_path,release_dir,"weather-surfaces.csv"); }
+  fprintf(stderr, "weather: surface tuning %s\n", weather_surface_load(&g_surface_tuning, surface_path) ? "loaded" : "safe defaults");
   // The mod switch (mods.ini [mods] hd_presentation=0, the "vanilla" profile)
   // turns all of it off, like golf.ini hd=0.
   int mod_on = g_mod_on = mods_enabled("hd_presentation");
@@ -1376,20 +1718,23 @@ static int zoom_map(int *x, int *y) {
   return 1;
 }
 
-// gdi.c, after the window exists: 1 when this module presents (gdi.c then
-// creates no renderer of its own), 0 for the original presentation.
-int hd_native_start(SDL_Window *window) {
-  if (!g_cfg.hd || !window) return 0;
-  g_window = window;
+// gdi.c: create the window on its render thread. NULL selects the original
+// game-thread presentation, which creates its own window and renderer.
+SDL_Window *hd_native_start(int w, int h, unsigned flags) {
+  if (!g_cfg.hd) return NULL;
+  g_start_w = w;
+  g_start_h = h;
+  g_start_flags = flags;
   opt_register();   // the Options page's top layer (card task-24)
+  hudf_early();     // hide the original HUD on the first course frame too
   fef_early();      // task-106: the front end's layer is there before the first picture
-  dlgf_early();     // ... and the dialogs' and reports' (draw order: front end, dialogs, reports)
-  rpf_early();
+  rpf_early();      // reports sit below their nested dialogs
+  dlgf_early();     // draw order: HUD, front end, reports, dialogs
   g_ready = CreateEventA(NULL, FALSE, FALSE, NULL);
   g_shot_done = CreateEventA(NULL, FALSE, FALSE, NULL);
   HANDLE th = CreateThread(NULL, 1 << 20, render_main, NULL, 0, NULL);
   if (!th) return 0;
-  WaitForSingleObject(g_ready, 10000);
+  WaitForSingleObject(g_ready, INFINITE);
   CloseHandle(th);
   if (!g_start_ok) return 0;
   SDL_AddEventWatch(map_mouse, NULL);
@@ -1399,7 +1744,7 @@ int hd_native_start(SDL_Window *window) {
     hd_ui_zoom_hook = zoom_hook;
     hd_ui_zoom_map_hook = zoom_map;
   }
-  return 1;
+  return g_window;
 }
 
 // ui_probe=1: proves the UI layer API end to end (tests read the square).
@@ -1415,12 +1760,70 @@ static void probe_layer(const HdUiFrame *f, void *user) {
 
 // gdi.c's win_present: hand the finished frame over.
 int hd_present(const uint16_t *screen) {
+  // Read settings on the game thread, then publish under g_lock. The render
+  // thread never reads the mutable mod store or live game memory.
+  EnvironmentConfig environment = environment_defaults();
+  environment.atmosphere=g_atmosphere_tuning;
+  environment.mist=mods_get_int("environment.mist",1)!=0;
+  environment.haze=mods_get_int("environment.haze",1)!=0;
+  environment.gusts=mods_get_int("environment.gusts",1)!=0;
+  environment.golden_hour=mods_get_int("environment.golden_hour",1)!=0;
+  environment.distant_thunder=mods_get_int("environment.distant_thunder",1)!=0;
+  environment.enabled = mods_get_int("environment.enabled", 0) != 0;
+  environment.day_night = mods_get_int("environment.day_night", 0) != 0;
+  environment.hour = mods_get_num("environment.hour", 14);
+  environment.cycle_minutes = mods_get_num("environment.cycle_minutes", 20);
+  // New keys avoid old two-minute preview preferences accelerating this cycle.
+  environment.day_minutes=mods_get_num("environment.day_minutes",20);
+  environment.night_minutes=mods_get_num("environment.night_minutes",10);
+  environment.moon_strength=mods_get_num("environment.moon_strength",.18);
+  environment.ambient_fill=mods_get_num("environment.ambient_fill",.7);
+  environment.surface_light=mods_get_num("environment.surface_light",.65);
+  environment.contact_shadow=mods_get_num("environment.contact_shadow",.6);
+  environment.shadow_softness=mods_get_num("environment.shadow_softness",1.8);
+  environment.night_lights=0; // the maintainer retired building lamps; ignore old preview preferences.
+  environment.light_radius=mods_get_num("environment.light_radius",22);
+  environment.cloud_strength = mods_get_num("environment.cloud_strength", 0.65);
+  environment.rain_strength = mods_get_num("environment.rain_strength", 0.65);
+  environment.lighting = mods_get_int("environment.lighting", 1) != 0;
+  environment.cast_shadows = mods_get_int("environment.cast_shadows", 1) != 0;
+  environment.terrain_shadows = mods_get_int("environment.terrain_shadows", 1) != 0;
+  environment.occlusion = mods_get_int("environment.occlusion", 1) != 0;
+  environment.quality = mods_get_int("environment.quality", 1);
+  environment.shader = mods_get_int("environment.shader", 1) != 0;
+  environment.linear_light=mods_get_int("environment.linear_light",1)!=0;
+  environment.shadow_cache=mods_get_int("environment.shadow_cache",1)!=0;
+  environment.lighting_hz=mods_get_num("environment.lighting_hz",15);
+  environment.edge_aa=mods_get_num("environment.edge_aa",.65);
+  environment.relief_shadows=mods_get_int("environment.relief_shadows",1)!=0;
+  environment.weather_shadows=mods_get_int("environment.weather_shadows",1)!=0;
+  environment.enclosure_shade=mods_get_num("environment.enclosure_shade",.55);
+  environment.material_wetness=mods_get_num("environment.material_wetness",1);
+  environment.valley_mist=mods_get_num("environment.valley_mist",1);
+  environment.weather_wildlife=mods_get_int("environment.weather_wildlife",1)!=0;
+  environment.glowbugs = mods_get_int("environment.glowbugs", 1) != 0;
+  environment.night_sky = mods_get_int("environment.night_sky", 1) != 0;
+  environment.black_background = mods_get_int("environment.black_background", 1) != 0;
+  environment.wet_surfaces = mods_get_int("environment.wet_surfaces", 1) != 0;
+  environment.splashes = mods_get_int("environment.splashes", 1) != 0;
+  environment.wet_seconds = mods_get_num("environment.wet_seconds", g_surface_tuning.wet_seconds);
+  environment.dry_seconds = mods_get_num("environment.dry_seconds", g_surface_tuning.dry_seconds);
+  environment.lightning = mods_get_int("environment.lightning", 1) != 0;
+  environment.reduced_flashes = mods_get_int("environment.reduced_flashes", 1) != 0;
+  environment.sound = mods_get_int("environment.sound", 1) != 0;
+  environment.gameplay = mods_get_int("environment.gameplay", 0) != 0;
+  environment.weather_volume = mods_get_num("environment.weather_volume", 50) / 100;
+  const char *weather = mods_get("environment.weather");
+  environment.weather = weather && !strcmp(weather, "storm") ? 3 : weather && !strcmp(weather, "rain") ? 2 : weather && !strcmp(weather, "cloudy") ? 1 : 0;
   water_poll();   // task-78: display.water, water.style, water.clip
   // display.smooth may change while the game runs (mods store, bridge)
   static unsigned seen_serial;
   if (mods_serial() != seen_serial) {
     seen_serial = mods_serial();
     g_cfg.fix_zoom_clock = mods_get_int("fixes.zoom_clock", 1) != 0;
+    g_cfg.fix_present_pacing = mods_get_int("fixes.present_pacing", 1) != 0;
+    g_cfg.fix_drag_scroll = mods_get_int("fixes.drag_scroll", 1) != 0;
+    g_cfg.camera_glide = mods_get_int("camera.glide", 0) != 0;
     const char *v = mods_get("display.smooth");
     if (v && *v && (g_cfg.layers || !g_cfg.hd)) {
       g_cfg.smooth = atoi(v) != 0;
@@ -1438,6 +1841,7 @@ int hd_present(const uint16_t *screen) {
     // Original tray handlers and the paused Options page can present partial
     // back-buffer updates. Keep the complete course publication until redraw.
     hd_art_discard_pending();
+    weather_audio_publish(NULL, 0, 0);
     return 1;
   }
   static HdBallFrame balls;
@@ -1461,6 +1865,102 @@ int hd_present(const uint16_t *screen) {
     hud_course_frame_presented();
   }
   memcpy(&g_frame_ball, &balls, sizeof balls);
+  // Freeze presentation time in game pause and away from the course.
+  // Never modify date, weather, economy or save fields.
+  static double environment_last;
+  double environment_now = host_now_ms();
+  int hud_game_paused(void);
+  if (g_environment_running && environment_last > 0)
+    g_environment_seconds += fmin(0.25, fmax(0, (environment_now - environment_last) / 1000));
+  environment_last = environment_now;
+  g_environment_running = course && environment.enabled && !hud_game_paused();
+  if (course) {
+    static uint32_t cloud_session_seed;
+    if(!cloud_session_seed) {
+      const char *seed=getenv("SIMGOLF_SEED");
+      cloud_session_seed=seed?(uint32_t)strtoul(seed,NULL,10):(uint32_t)environment_now;
+      if(!cloud_session_seed)cloud_session_seed=1;
+    }
+    // Existing course property/theme identity, presentation RNG only.
+    uint32_t property=*(const uint32_t *)(uintptr_t)0x0059bf90;
+    uint32_t theme=*(const uint8_t *)(uintptr_t)0x005a34e0;
+    environment.cloud_seed=cloud_session_seed^(property*0x85ebca6bU)^(theme*0xc2b2ae35U);
+  }
+  if (course && environment.enabled && mods_get_int("environment.regional_weather", 0)) {
+    static int climate_loaded;
+    if (!climate_loaded) {
+      char path[MAX_PATH];
+      { char release_dir[MAX_PATH];snprintf(release_dir,sizeof release_dir,"%s/data",host_exe_dir());release_data_path(path,sizeof path,release_dir,"weather-climate.csv"); }
+      const char *climate_fixture=getenv("SIMGOLF_WEATHER_CLIMATE_FILE");
+      if(climate_fixture&&*climate_fixture)snprintf(path,sizeof path,"%s",climate_fixture);
+      climate_loaded = weather_climate_load(&g_climate_table, path) ? 1 : -1;
+      fprintf(stderr, "weather: regional climate table %s\n", climate_loaded > 0 ? "loaded" : "missing or invalid; fixed weather retained");
+    }
+    if (climate_loaded > 0) {
+      // seedCourseTable 0046f2b0: region label at slot+0, property at+28, stride46.
+      // formatCourseTitle 0040daa0: current property index at0059bf90.
+      int property = *(const int *)(uintptr_t)0x0059bf90;
+      int theme = *(const uint8_t *)(uintptr_t)0x005a34e0;
+      uint32_t tick = *(const uint32_t *)(uintptr_t)0x00834170;
+      char place[25] = {0};
+      if (property >= 0 && property <= 16)
+        memcpy(place, (const void *)(uintptr_t)(0x00571fd8 + property * 46), 24);
+      g_climate.lead_seconds=g_atmosphere_tuning.front_lead;
+      weather_climate_update(&g_climate, &g_climate_table, place, theme, tick,
+        0x53474f4cU ^ (uint32_t)(property + 1), g_environment_seconds,
+        mods_get_num("environment.weather_minutes", 3));
+      environment.regional_weather = g_climate.initialized;
+      environment.regional_rain = g_climate.rain;
+      environment.regional_cloud = g_climate.cloud;
+      environment.regional_storm = g_climate.storm;
+      environment.approaching_storm=g_climate.target_storm;
+      environment.approach_age=g_environment_seconds-g_climate.front_started;
+      environment.approach_id=g_climate.identity^(g_climate.front*0x9e3779b9u);
+      static uint32_t logged_front, logged_identity;
+      if (g_climate.front != logged_front || g_climate.identity != logged_identity) {
+        logged_front = g_climate.front; logged_identity = g_climate.identity;
+        fprintf(stderr, "weather: regional front %u place \"%s\" theme %d month %u kind %d rain %.3f cloud %.3f storm %.3f seconds %.3f\n",
+          g_climate.front, place, theme, 3 + ((tick >> 10) & 7), g_climate.kind,
+          g_climate.target_rain, g_climate.target_cloud, g_climate.target_storm, g_environment_seconds);
+      }
+    }
+  } else g_climate.initialized = 0;
+  EnvironmentSample weather_sun = environment_sample(&environment, g_environment_seconds);
+  if (course && environment.enabled && environment.day_night && getenv("SIMGOLF_ATMOSPHERE_LOG")) {
+    static double logged_seconds=-1;
+    if (fabs(g_environment_seconds-logged_seconds)>=1) {
+      logged_seconds=g_environment_seconds;
+      fprintf(stderr,"weather: cycle host_ms %.3f seconds %.6f tick %u hour %.6f key %.6f daylight %.6f\n",
+        environment_now,g_environment_seconds,*(const uint32_t *)(uintptr_t)0x00834170,
+        weather_sun.hour,weather_sun.sun_strength,weather_sun.daylight);
+    }
+  }
+  WeatherState weather_state = sample_weather(&environment, course, g_environment_seconds, weather_sun.hour);
+  WeatherState report_state=weather_state;report_state.cloud=weather_sun.cloud;
+  if(course&&environment.enabled) {
+    static int air_loaded;
+    if(!air_loaded) {
+      char path[MAX_PATH];{ char release_dir[MAX_PATH];snprintf(release_dir,sizeof release_dir,"%s/data",host_exe_dir());release_data_path(path,sizeof path,release_dir,"weather-air.csv"); }
+      air_loaded=weather_air_load(&g_air_table,path)?1:-1;
+      fprintf(stderr,"weather: display air table %s\n",air_loaded>0?"loaded":"missing or invalid");
+    }
+    if(air_loaded>0) {
+      int property=*(const int *)(uintptr_t)0x0059bf90;
+      int theme=*(const uint8_t *)(uintptr_t)0x005a34e0;
+      uint32_t tick=*(const uint32_t *)(uintptr_t)0x00834170;
+      char place[25]={0};
+      if(property>=0&&property<=16)memcpy(place,(const void *)(uintptr_t)(0x00571fd8+property*46),24);
+      uint32_t front=g_climate.initialized?g_climate.front:(uint32_t)(g_environment_seconds/180);
+      weather_air_update(&g_air,&g_air_table,place,theme,tick,environment.cloud_seed,front,
+        g_environment_seconds,report_state.hour,report_state.rain,report_state.cloud);
+    }
+  } else g_air.initialized=0;
+  environment.air_valid=g_air.initialized;environment.celsius=g_air.c;environment.humidity=g_air.rh;
+  environment.season=course?(((*(const uint32_t *)(uintptr_t)0x00834170>>10)&7)<3?0:((*(const uint32_t *)(uintptr_t)0x00834170>>10)&7)<6?1:2):0;
+  weather_state=sample_weather(&environment,course,g_environment_seconds,weather_sun.hour);
+  if(weather_state.enabled&&environment.gusts)water_set_wind(atan2(weather_state.wind_z,weather_state.wind_x),(float)weather_state.wind);
+  else water_set_wind(-1000,-1);
+  g_frame_environment = environment;
   g_frame_layered = layered;
   g_frame_course = course;
   g_frame_note_size = layered ? g_note_pending_size : 0;
@@ -1476,6 +1976,27 @@ int hd_present(const uint16_t *screen) {
   hd_art_publish(layered, screen);
   InterlockedIncrement(&g_frame_serial);
   LeaveCriticalSection(&g_lock);
+  const char *temperature_units=mods_get("environment.temperature_units");
+  hudf_publish_weather(course&&environment.enabled&&mods_get_int("environment.report_icon",1),
+    weather_condition(&report_state),report_state.night>.5,g_air.initialized,g_air.c,g_air.rh,
+    !temperature_units||strcmp(temperature_units,"celsius"));
+  weather_audio_publish(&weather_state, environment.weather_volume,
+    g_environment_running && environment.sound);
+  WeatherGameConfig weather_game = {environment.gameplay && g_environment_running,
+    mods_get_int("environment.rain_roll_steps", 1), mods_get_int("environment.storm_roll_bonus", 1),
+    mods_get_int("environment.rain_mood_penalty", 1), mods_get_int("environment.storm_mood_bonus", 1)};
+  weather_game_publish(&weather_state, &weather_game);
+  static uint32_t logged_strike, logged_thunder;
+  if (weather_state.event_id && weather_state.event_id != logged_strike && weather_state.strike_age >= 0) {
+    logged_strike = weather_state.event_id;
+    fprintf(stderr, "weather: lightning event %u seconds %.3f host_ms %.3f\n",
+      weather_state.event_id, weather_state.seconds, environment_now);
+  }
+  if (weather_state.event_id && weather_state.event_id != logged_thunder && weather_state.thunder_age >= 0) {
+    logged_thunder = weather_state.event_id;
+    fprintf(stderr, "weather: thunder event %u seconds %.3f host_ms %.3f\n",
+      weather_state.event_id, weather_state.seconds, environment_now);
+  }
   InterlockedIncrement(&g_game_frames);
   return 1;
 }

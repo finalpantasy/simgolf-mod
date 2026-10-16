@@ -294,8 +294,10 @@ void fs_init(void) {
 }
 
 // DOS path -> normalized relative path (no leading slash, '/' separated).
-static void normalize(const char *dos, char *out, int outlen) {
+static int normalize(const char *dos, char *out, int outlen) {
+  if (!dos || !out || outlen <= 0) return 0;
   char tmp[512];
+  if (strlen(dos) >= sizeof tmp) return 0;
   int j = 0;
   for (const char *p = dos; *p && j < (int)sizeof tmp - 1; p++) tmp[j++] = *p == '\\' ? '/' : *p;
   tmp[j] = 0;
@@ -307,18 +309,33 @@ static void normalize(const char *dos, char *out, int outlen) {
   while (*s == '/') s++;
   int k = 0;
   while (*s && k < outlen - 1) {
-    if (s[0] == '.' && s[1] == '/') { s += 2; continue; }
+    if (s[0] == '.' && s[1] == '/' && (k == 0 || out[k - 1] == '/')) { s += 2; continue; }
     if (s[0] == '/' && k > 0 && out[k - 1] == '/') { s++; continue; }
     out[k++] = *s++;
   }
   out[k] = 0;
+  return *s == 0;
+}
+
+static int has_parent_part(const char *rel) {
+  for (const char *p = rel; *p;) {
+    const char *e = strchr(p, '/');
+    size_t n = e ? (size_t)(e - p) : strlen(p);
+    if (n == 2 && p[0] == '.' && p[1] == '.') return 1;
+    p += n;
+    if (*p == '/') p++;
+  }
+  return 0;
 }
 
 // Case-insensitive match of each path component against what's in the FS.
 static int walk_fs(const char *rel, char *out, int outlen, int allow_missing_leaf) {
+  if (!rel || !out || outlen <= 0 || has_parent_part(rel)) return 0;
   char work[512];
+  if (strlen(rel) >= sizeof work) return 0;
   snprintf(work, sizeof work, "%s", rel);
-  snprintf(out, outlen, "%s", FS_GAME_ROOT);
+  int n = snprintf(out, outlen, "%s", FS_GAME_ROOT);
+  if (n < 0 || n >= outlen) return 0;
   char *save = NULL;
   char *comp = strtok_r(work, "/", &save);
   while (comp) {
@@ -330,7 +347,8 @@ static int walk_fs(const char *rel, char *out, int outlen, int allow_missing_lea
       while ((de = readdir(d))) {
         if (!strcasecmp(de->d_name, comp)) {
           size_t l = strlen(out);
-          snprintf(out + l, outlen - l, "/%s", de->d_name);
+          n = snprintf(out + l, outlen - l, "/%s", de->d_name);
+          if (n < 0 || (size_t)n >= (size_t)outlen - l) { closedir(d); return 0; }
           found = 1;
           break;
         }
@@ -340,7 +358,8 @@ static int walk_fs(const char *rel, char *out, int outlen, int allow_missing_lea
     if (!found) {
       if (next || !allow_missing_leaf) return 0;
       size_t l = strlen(out);
-      snprintf(out + l, outlen - l, "/%s", comp);
+      n = snprintf(out + l, outlen - l, "/%s", comp);
+      if (n < 0 || (size_t)n >= (size_t)outlen - l) return 0;
     }
     comp = next;
   }
@@ -348,15 +367,16 @@ static int walk_fs(const char *rel, char *out, int outlen, int allow_missing_lea
 }
 
 int fs_resolve(const char *dospath, char *out, int outlen, int for_write) {
-  if (!dospath) return 0;
+  if (!dospath || !out || outlen <= 0) return 0;
   char rel[512];
-  normalize(dospath, rel, sizeof rel);
+  if (!normalize(dospath, rel, sizeof rel) || has_parent_part(rel)) return 0;
   char *low = lower_dup(rel);
   int i = lookup(low);
   free(low);
   if (i >= 0) {
     Entry *e = &g_entries[i];
-    snprintf(out, outlen, FS_GAME_ROOT "/%s", e->path);
+    int n = snprintf(out, outlen, FS_GAME_ROOT "/%s", e->path);
+    if (n < 0 || n >= outlen) return 0;
     if (!e->fetched) {
       struct stat st;
       if (stat(out, &st) != 0) {
@@ -388,7 +408,7 @@ static int wild_match(const char *pat, const char *s) {
 
 int fs_list(const char *dospattern, fs_list_fn fn, void *ctx) {
   char rel[512];
-  normalize(dospattern, rel, sizeof rel);
+  if (!fn || !normalize(dospattern, rel, sizeof rel) || has_parent_part(rel)) return 0;
   char *slash = strrchr(rel, '/');
   const char *pat = slash ? slash + 1 : rel;
   char dir[512] = "";

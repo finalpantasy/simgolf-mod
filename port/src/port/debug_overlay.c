@@ -1,3 +1,4 @@
+#include "port/roster.h"
 // Debug overlay (simgolf mod, task-113). Native build only.
 //
 // A Frosted Mint panel over the game that shows what the game is doing, decoded with the names the RE kit
@@ -67,7 +68,7 @@ typedef struct { short off, size; char sign; const char *name; const char *type;
 #define MAX_WATCH 24
 #define NTABS 7
 #define PRO_SKILLS 0x5a5a04
-#define PRO_NAME 0x4d6098
+#define PRO_NAME roster_address(0x4d6098)
 #define PRO_SLOT 0x5a59f8
 #define SKILL_NAME_PTRS 0x4c2c3c
 

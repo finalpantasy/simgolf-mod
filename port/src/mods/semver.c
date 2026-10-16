@@ -22,14 +22,15 @@ char *mods_strdup(const char *s) {
 char *mods_read_file(const char *path, size_t *len) {
   FILE *f = fopen(path, "rb");
   if (!f) return NULL;
-  fseek(f, 0, SEEK_END);
+  if (fseek(f, 0, SEEK_END)) { fclose(f); return NULL; }
   long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  if (n < 0) { fclose(f); return NULL; }
+  if (n < 0 || fseek(f, 0, SEEK_SET)) { fclose(f); return NULL; }
   char *buf = (char *)malloc((size_t)n + 1);
   if (!buf) { fclose(f); return NULL; }
   size_t got = fread(buf, 1, (size_t)n, f);
-  fclose(f);
+  int ok = got == (size_t)n && !ferror(f);
+  if (fclose(f)) ok = 0;
+  if (!ok) { free(buf); return NULL; }
   buf[got] = 0;
   if (len) *len = got;
   return buf;
@@ -144,6 +145,9 @@ int semver_parse(const char *s, SemVer *v) {
   int part[3], fixed;
   const char *e = parse_parts(s, part, &fixed);
   if (!e || fixed == 0) return 0;
+  // Wildcards belong to dependency ranges, not an installed mod's version.
+  if (e > s && e[-1] == '.') return 0;
+  for (const char *p = s; p < e; p++) if (*p == '*' || *p == 'x' || *p == 'X') return 0;
   v->major = part[0];
   v->minor = part[1];
   v->patch = part[2];
@@ -153,10 +157,19 @@ int semver_parse(const char *s, SemVer *v) {
     while (*e && (isalnum((unsigned char)*e) || *e == '.' || *e == '-') && n < (int)sizeof v->pre - 1)
       v->pre[n++] = *e++;
     v->pre[n] = 0;
-    if (!n) return 0;
+    if (!n || v->pre[0] == '.' || v->pre[n - 1] == '.' || strstr(v->pre, "..")) return 0;
   }
-  if (*e == '+')   // build metadata: ignored for ordering
-    while (*e && !isspace((unsigned char)*e)) e++;
+  if (*e == '+') {   // build metadata: validate, but ignore for ordering
+    const char *start = ++e;
+    int empty = 1;
+    while (*e && !isspace((unsigned char)*e)) {
+      if (*e == '.') { if (empty) return 0; empty = 1; }
+      else if (isalnum((unsigned char)*e) || *e == '-') empty = 0;
+      else return 0;
+      e++;
+    }
+    if (e == start || empty) return 0;
+  }
   while (isspace((unsigned char)*e)) e++;
   return *e == 0;
 }
@@ -175,7 +188,15 @@ static int pre_cmp(const char *a, const char *b) {
     if (*b == '.') b++;
     int da = na && strspn(ia, "0123456789") == (size_t)na, db = nb && strspn(ib, "0123456789") == (size_t)nb;
     int c;
-    if (da && db) c = (atol(ia) > atol(ib)) - (atol(ia) < atol(ib));
+    if (da && db) {
+      // Numeric identifiers have no machine-integer size limit. Compare their
+      // significant digits instead of overflowing/saturating a Windows long.
+      const char *pa = ia, *pb = ib;
+      while (*pa == '0') pa++;
+      while (*pb == '0') pb++;
+      size_t la = strlen(pa), lb = strlen(pb);
+      c = la != lb ? (la > lb ? 1 : -1) : strcmp(pa, pb);
+    }
     else if (da || db) c = da ? -1 : 1;
     else c = strcmp(ia, ib);
     if (c) return c < 0 ? -1 : 1;

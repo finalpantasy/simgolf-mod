@@ -1,0 +1,19 @@
+{
+  "comment": "Issue61: preserve text input cancel outcome and return quietly from Save without validating or writing. Empty submitted names still use original validation. fixes.save_cancel=0 restores the original error.",
+  "patches": {
+    "FUN_00405b10": [
+      [
+        "FUN_0045b2c0(s_Save_File_Name____004c3f5c,0x40,0x66,0x30);",
+        "if (save_cancel_quiet(FUN_0045b2c0(s_Save_File_Name____004c3f5c,0x40,0x66,0x30))) return 0;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00405b10": [
+      [
+        "FUN_0045b2c0(s_Save_File_Name____004c3f5c,0x40,0x66,0x30);",
+        1
+      ]
+    ]
+  }
+}

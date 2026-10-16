@@ -10,6 +10,7 @@
 #define SIMGOLF_PORT_GOLF_CAMERA_INPUT_H
 
 #include <SDL.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,9 @@ extern "C" {
 // adjust the event in place (pointer kept off the window edge).
 int camera_input_event(SDL_Event *e);
 void camera_input_tick(void);
+// Copied into a finished course frame so the presenter can distinguish a
+// fast manual drag from a game-directed camera jump, even after release.
+uint32_t camera_input_drag_serial(void);
 // The key bindings (golf/keymap.c, card task-24): 1 while the course view is in charge of the keys
 // (dialogs, menus and text entry get them as typed); the profile (camera.wasd); a pan key pressed or released
 // by its binding (dir 0 up, 1 left, 2 down, 3 right), whatever camera.wasd says.

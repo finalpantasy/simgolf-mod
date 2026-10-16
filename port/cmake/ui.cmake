@@ -9,9 +9,9 @@
 set(SIMGOLF_UI_PLAIN src/port/ui/ui_tokens.c src/port/ui/ui_layout.c src/port/ui/ui_hit.c src/port/ui/ui_icons.c src/port/ui/ui_faces.c
   src/port/ui/ui_png.c src/port/ui/ui_updates.c src/port/ui/ui_dialog_text.c)
 set(SIMGOLF_UI_SDL src/port/ui/ui_draw.c src/port/ui/ui_text.c src/port/ui/ui_kit.c src/port/ui/ui_hud.c src/port/ui/ui_golfers.c src/port/ui/ui_paths.c src/port/ui/ui_aim.c src/port/ui/ui_frontend.c src/port/ui/ui_dialogs.c
-  src/port/ui/ui_reports.c src/port/ui/ui_pages.c src/port/ui/ui_mods.c)
+  src/port/ui/ui_reports.c src/port/ui/ui_pages.c src/port/ui/ui_mods.c src/port/ui/ui_course_map.c)
 
-target_sources(golf PRIVATE ${SIMGOLF_UI_PLAIN} ${SIMGOLF_UI_SDL} src/port/hud_frosted.c src/port/hud_game.c)
+target_sources(golf PRIVATE ${SIMGOLF_UI_PLAIN} ${SIMGOLF_UI_SDL} src/port/hud_frosted.c src/port/hud_game.c src/port/ui/ui_portrait_palette.c src/port/portrait_memory.c)
 # task-31: golfers in the world (tags, thought bubbles, golfer card)
 target_sources(golf PRIVATE src/port/golfers_frosted.c src/port/golfers_game.c)
 # task-53: cart path help (path view, "No path" markers)
@@ -26,6 +26,7 @@ target_sources(golf PRIVATE src/port/dialogs_frosted.c src/port/dialogs_game.c)
 target_sources(golf PRIVATE src/port/options_frosted.c src/port/mods_frosted.c)
 # task-28: the reports (one tabbed glass panel)
 target_sources(golf PRIVATE src/port/reports_frosted.c src/port/reports_game.c)
+target_sources(golf PRIVATE src/port/portrait_game.c)
 # task-113: the debug overlay (off by default; [debug] overlay=1 or Shift+F12)
 target_sources(golf PRIVATE src/port/debug_overlay.c)
 

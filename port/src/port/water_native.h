@@ -39,6 +39,9 @@ typedef struct {
   const float *wheight;    // per map tile: centre height
   int map_w, map_h;
   long map_serial;
+  const float *normals;
+  const uint8_t *materials;
+  float height_pixels;
 } HdtScene;
 int hdt_scene(HdtScene *out);
 

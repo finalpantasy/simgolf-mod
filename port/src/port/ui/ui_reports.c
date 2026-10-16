@@ -125,185 +125,133 @@ void ui_reports_layout(RpLayout *out) { *out = g_layout; }
 
 int ui_pages_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max);   // ui_pages.c (task-73)
 
-int ui_reports_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
-  if (s->kind >= RP_PROFILE) return ui_pages_draw(c, s, art, acts, max);
+static int draw_ranking(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
   const UiTokens *t = ui_tokens(c);
   UiDraw *d = ui_drawer(c);
-  int na = 0;
   UiRect scr = ui_screen(c);
-
-  // scrim: a click beside the panel closes the report, as a click anywhere did in the original
+  float margin = ui_s(c, t->edge_margin);
+  float fit = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, 1180), (scr.h - 2 * margin) / ui_s(c, 800)));
+  if (fit < 1) ui_push_scale(c, fit);
+  UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, 1180), ui_s(c, 800)));
   uid_rrect(d, scr, 0, t->scrim);
-  uint32_t scrim_id = ui_id("reports.scrim");
-  ui_hit(c, scr, 0, scrim_id, UI_HIT_BLOCK | UI_HIT_MODAL | UI_HIT_INTERACT);
-
-  float x0, y0, x1, y1;
-  ui_reports_bounds(s, &x0, &y0, &x1, &y1);
-  float bw = fmaxf(x1 - x0, 100), bh = fmaxf(y1 - y0, 40);
-
-  float margin = ui_s(c, t->edge_margin), pad = ui_s(c, t->pad_dialog);
-  float W = fminf(ui_s(c, 1400), scr.w - 2 * margin);
-  float cw = W - 2 * pad;
-  float kx = cw / bw, ky = kx * 0.9f;
-  UiFont tf = ui_font(c, UI_TYPE_TITLE);
-  float head = tf.line + ui_s(c, 20);
-  float maxh = scr.h - 2 * margin - head - 2 * pad;
-  if (bh * ky > maxh) ky = maxh / bh;
-  float H = head + bh * ky + 2 * pad + ui_s(c, 8);
-  UiRect pr = ui_rect_round(ui_center(scr, W, H));
   ui_panel(c, pr, ui_s(c, t->radius_panel), UI_PANEL_STRONG);
-  UiRect in = ui_inset_all(pr, pad);
-
-  // title row: title, tabs, close
-  char title[80];
-  title_case(title, sizeof title, s->title[0] ? s->title : default_title(s->kind));
-  float cb = ui_s(c, 40);
-  UiRect close_r = ui_rect(in.x + in.w - cb, in.y + (tf.line - cb) / 2, cb, cb);
-  if (ui_icon_button(c, ui_id("reports.close"), close_r, UI_ICON_X, 0, "Close (Esc)") && na < max)
-    acts[na++] = (RpAction){RP_A_CLOSE, 0};
-  float segw = ui_segmented_width(c, g_tab_label, NULL, TABS);
-  float tw = ui_text_width(c, UI_TYPE_TITLE, title);
-  float seg_x = in.x + in.w - cb - ui_s(c, 12) - segw;
-  int sel = -1;
-  for (int i = 0; i < TABS; i++)
-    if (g_tab_kind[i] == s->kind) sel = i;
+  UiRect in = ui_inset_all(pr, ui_s(c, 28));
+  memset(&g_layout, 0, sizeof g_layout);
   g_layout.panel = pr;
-  g_layout.close_x = close_r.x + close_r.w / 2, g_layout.close_y = close_r.y + close_r.h / 2;
-  g_layout.ntabs = 0;
-  if (seg_x > in.x + tw + ui_s(c, 16)) {
-    UiRect sr = ui_rect(seg_x, in.y + (tf.line - ui_s(c, 38)) / 2, segw, ui_s(c, 38));
-    float x = sr.x + ui_s(c, 3);
-    for (int i = 0; i < TABS; i++) {
-      float w1 = ui_segmented_width(c, &g_tab_label[i], NULL, 1) - ui_s(c, 6);
-      g_layout.tab_x[i] = x + w1 / 2;
-      x += w1 + ui_s(c, 2);
+  int na = 0;
+  float cb = ui_s(c, 40);
+  UiRect close = ui_rect(in.x + in.w - cb, in.y, cb, cb);
+  g_layout.close_x = close.x + cb / 2;
+  g_layout.close_y = close.y + cb / 2;
+  if (ui_icon_button(c, ui_id("ranking.close"), close, UI_ICON_X, 0, "Close (Esc)") && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  ui_text_fit(c, ui_rect(in.x, in.y, in.w - cb, cb), UI_TYPE_TITLE, t->text_primary, "Top 10 Golf Courses", 0);
+  ui_text_fit(c, ui_rect(in.x, in.y + ui_s(c, 48), in.w, ui_s(c, 24)), UI_TYPE_LABEL, t->accent_soft_text,
+              "COURSE RANKINGS", 0);
+  float row_y = in.y + ui_s(c, 140), row_h = ui_s(c, 48);
+  float name_x = in.x + ui_s(c, 64), values_x = in.x + ui_s(c, 510), cell_w = ui_s(c, 100);
+  ui_text_in(c, ui_rect(name_x, row_y - ui_s(c, 42), ui_s(c, 420), ui_s(c, 30)), UI_TYPE_LABEL, t->text_tertiary, "COURSE", 0);
+  for (int col = 0; col < 5; col++) {
+    SDL_Texture *tx = NULL;
+    for (int i = 0; art && i < s->n && !tx; i++) {
+      const RpItem *it = &s->it[i];
+      if (it->type == RP_IT_CHIP && it->group == col && it->art) tx = art[it->art - 1];
     }
-    g_layout.ntabs = TABS;
-    g_layout.tab_y = sr.y + sr.h / 2;
-    int was = sel;
-    if (ui_segmented(c, ui_id("reports.tabs"), sr, g_tab_label, NULL, TABS, &sel) && sel != was && sel >= 0 && na < max)
-      acts[na++] = (RpAction){RP_A_TAB, g_tab_kind[sel]};
+    UiRect cell = ui_rect(values_x + col * cell_w, row_y - ui_s(c, 42), cell_w, ui_s(c, 30));
+    if (col == 4) {
+      ui_text_fit(c, cell, UI_TYPE_LABEL, t->text_tertiary, "STORIES", 0.5f);
+    } else if (tx) {
+      float side = ui_s(c, 24);
+      UiRect icon = ui_center(cell, side, side);
+      uid_rrect(d, ui_inset_all(icon, -ui_s(c, 4)), ui_s(c, 6), uid_alpha(t->text_primary, 0.65f));
+      uid_image(d, tx, NULL, icon, 0, (UiColor){255, 255, 255, 255});
+    }
   }
-  ui_text_fit(c, ui_rect(in.x, in.y, fmaxf(seg_x - in.x - ui_s(c, 16), tw * 0.5f), tf.line), UI_TYPE_TITLE,
-              t->text_primary, title, 0);
-
-  // body: golf's text at its places
-  UiRect body = ui_rect(in.x, in.y + head, in.w, bh * ky + ui_s(c, 8));
-  float cx0 = body.x, cy0 = body.y + ui_s(c, 4);
-  float row_h = fmaxf(ui_font(c, UI_TYPE_BODY).line, 14 * ky);
-
-  // rows: distinct y values; rows with three or more strings are table rows
-  int ry[ROWS], rn[ROWS], nr = 0;
-  for (int i = 0; i < s->n; i++) {
+  ui_text_fit(c, ui_rect(values_x + 5 * cell_w, row_y - ui_s(c, 42), cell_w, ui_s(c, 30)),
+              UI_TYPE_LABEL, t->text_tertiary, "TOTAL", 0.5f);
+  for (int row = 0; row < 10; row++) {
+    const RpItem *name = NULL;
+    for (int i = 0; i < s->n; i++)
+      if (s->it[i].type == RP_IT_TEXT && s->it[i].align == RP_AL_LEFT && s->it[i].y == 50 + 14 * row) name = &s->it[i];
+    if (!name) continue;
+    int current = name->col == 0x7c1f;
+    UiRect rr = ui_rect(in.x, row_y + row * row_h, in.w, row_h - ui_s(c, 3));
+    uid_rrect(d, rr, ui_s(c, t->radius_control), uid_alpha(current ? t->accent_soft : t->surface_inset, current ? 0.72f : 0.35f));
+    char text[RP_TEXT];
+    snprintf(text, sizeof text, "%d", row + 1);
+    ui_text_fit(c, ui_rect(in.x, rr.y, ui_s(c, 52), rr.h), UI_TYPE_HEADING, t->text_secondary, text, 0.5f);
+    fix_text(text, sizeof text, name->s);
+    ui_text_fit(c, ui_rect(name_x, rr.y, values_x - name_x - ui_s(c, 20), rr.h), UI_TYPE_HEADING,
+                current ? t->accent_soft_text : t->text_primary, text, 0);
+    int64_t total = 0;
+    for (int col = 0; col < 6; col++) {
+      int64_t count = col < 5 ? s->ranking_counts[row][col] : total;
+      if (col < 5) total += count;
+      snprintf(text, sizeof text, "%lld", (long long)count);
+      ui_text_fit(c, ui_rect(values_x + col * cell_w, rr.y, cell_w, rr.h), col == 5 ? UI_TYPE_HEADING : UI_TYPE_BODY,
+                  col == 5 ? t->accent_soft_text : t->text_secondary, text, 0.5f);
+    }
+  }
+  int footer = 0;
+  for (int i = 0; i < s->n && footer < 2; i++) {
     const RpItem *it = &s->it[i];
-    if (it->type != RP_IT_TEXT || !it->s[0]) continue;
-    int j = 0;
-    while (j < nr && abs(ry[j] - it->y) > 3) j++;
-    if (j == nr) {
-      if (nr == ROWS) continue;
-      ry[nr] = it->y, rn[nr] = 0, nr++;
-    }
-    rn[j]++;
+    if (it->type != RP_IT_TEXT || it->align != RP_AL_CENTRE || it->y <= 190) continue;
+    char text[RP_TEXT];
+    fix_text(text, sizeof text, it->s);
+    ui_text_fit(c, ui_rect(in.x, row_y + 10 * row_h + ui_s(c, 18 + footer++ * 26), in.w, ui_s(c, 26)),
+                UI_TYPE_BODY, t->text_secondary, text, 0.5f);
   }
-  for (int a = 1; a < nr; a++)   // sort by y
-    for (int b = a; b > 0 && ry[b - 1] > ry[b]; b--) {
-      int ty = ry[b], tn = rn[b];
-      ry[b] = ry[b - 1], rn[b] = rn[b - 1], ry[b - 1] = ty, rn[b - 1] = tn;
-    }
-  // the header: the first table row when a wider gap than the rows' own spacing follows it
-  int tr[ROWS], nt = 0;
-  for (int j = 0; j < nr; j++)
-    if (rn[j] >= 3) tr[nt++] = j;
-  int header_row = -1, stripe = 0;
-  if (nt >= 3) {
-    int gap0 = ry[tr[1]] - ry[tr[0]], pitch = ry[tr[2]] - ry[tr[1]];
-    for (int k = 3; k < nt; k++) pitch = abs(ry[tr[k]] - ry[tr[k - 1]]) < pitch ? abs(ry[tr[k]] - ry[tr[k - 1]]) : pitch;
-    if (gap0 * 4 > pitch * 5) header_row = tr[0];
-  }
-  for (int k = 0; k < nt; k++) {
-    int j = tr[k];
-    float y = cy0 + (ry[j] - y0) * ky + (14 * ky - row_h) / 2;
-    UiRect band = ui_rect(body.x - ui_s(c, 8), y - ui_s(c, 3), body.w + ui_s(c, 16), row_h + ui_s(c, 6));
-    if (j == header_row) uid_rrect(d, band, ui_s(c, 10), t->surface_inset);
-    else if (stripe++ & 1) uid_rrect(d, band, ui_s(c, 10), uid_alpha(t->surface_inset, 0.45f));
-  }
-
-  // golf's shapes: cells, boxes, curves
-  for (int i = 0; i < s->n; i++) {
-    const RpItem *it = &s->it[i];
-    float x = cx0 + (it->x - x0) * kx, y = cy0 + (it->y - y0) * ky;
-    if (it->type == RP_IT_CHIP && it->big) {   // golf's flat highlight box: a soft tinted chip
-      UiRect r = ui_rect(x - ui_s(c, 2), y + ui_s(c, 1), it->w * kx + ui_s(c, 4), it->h * ky - ui_s(c, 2));
-      UiColor tc = rgb565(it->col, 1), tint = uid_alpha(tc, 0.3f);
-      if (tc.r > tc.g + 60) tint = uid_alpha(t->danger, 0.24f);
-      else if (tc.g > tc.r + 60) tint = uid_alpha(t->accent, 0.24f);
-      uid_rrect(d, r, ui_s(c, 8), tint);
-    } else if (it->type == RP_IT_CHIP) {   // golf's own pictogram, kept to its aspect
-      SDL_Texture *tx = art && it->art ? art[it->art - 1] : NULL;
-      if (!tx) continue;
-      float k = fminf(kx, ky), w = it->w * k, h = it->h * k;
-      UiRect r = ui_rect(x + (it->w * kx - w) / 2, y + (it->h * ky - h) / 2, w, h);
-      uid_image(d, tx, NULL, r, 0, (UiColor){255, 255, 255, 255});
-    } else if (it->type == RP_IT_RECT) {
-      UiRect r = ui_rect(x, y, fmaxf(it->w * kx, ui_s(c, 3)), fmaxf(it->h * ky, ui_s(c, 3)));
-      float rad = fminf(r.w, r.h) / 2;
-      if (it->w <= 3 && it->h <= 3) {   // a dot on a curve: a round marker
-        float dd = ui_s(c, 7);
-        r = ui_rect(x + it->w * kx / 2 - dd / 2, y + it->h * ky / 2 - dd / 2, dd, dd), rad = dd / 2;
-      }
-      uid_rrect(d, r, rad, rgb565(it->col, 1.6f));
-    } else if (it->type == RP_IT_LINE) {
-      float x1 = cx0 + (it->w - x0) * kx, y1 = cy0 + (it->h - y0) * ky;
-      uid_line(d, x, y, x1, y1, ui_s(c, 2.5f), rgb565(it->col, 1.6f));
-    }
-  }
-
-  for (int i = 0; i < s->n; i++) {
-    const RpItem *it = &s->it[i];
-    if (it->type != RP_IT_TEXT || !it->s[0]) continue;
-    char txt[RP_TEXT];
-    fix_text(txt, sizeof txt, it->s);
-    if (s->title[0] && same_text(it->s, s->title)) continue;   // the board repeats its title: the panel has it
-    int hdr = header_row >= 0 && abs(it->y - ry[header_row]) <= 3;
-    int style = hdr ? UI_TYPE_LABEL : UI_TYPE_BODY;
-    UiColor col = hdr ? t->text_secondary : text_colour(t, it->col);
-    float w = ui_text_width(c, style, txt);
-    float x = cx0 + (it->x - x0) * kx;
-    float y = cy0 + (it->y - y0) * ky + (14 * ky - row_h) / 2;
-    UiRect r = ui_rect(x, y, w + 2, row_h);
-    float al = 0;
-    if (it->align == RP_AL_CENTRE) r.x = x - w / 2 - 1, al = 0.5f;
-    else if (it->align == RP_AL_RIGHT) r.x = x - w - 2, al = 1;
-    ui_text_in(c, r, style, col, txt, al);
-  }
-
-  // the roster's own controls (scroll arrows, sort) take clicks at their place in golf's page
-  if (s->kind == RP_ROSTER) {
-    uint32_t bid = ui_id("reports.body");
-    ui_hit(c, body, 0, bid, UI_HIT_BLOCK | UI_HIT_INTERACT | UI_HIT_WHEEL);
-    float px, py;
-    if (ui_clicked(c, bid) && ui_pointer(c, &px, &py) && na < max) {
-      int ox = (int)lroundf(x0 + (px - cx0) / kx), oy = (int)lroundf(y0 + (py - cy0) / ky);
-      acts[na++] = (RpAction){RP_A_CLICK, (ox & 0xffff) | (oy << 16)};
-    }
-    // task-94: golf's scroll hot spots (0x2ff, 0x50..0x74 up, 0x2ff, 0x1ea..0x20e down) as visible arrows, and the wheel
-    static const int spot_y[2] = {0x62, 0x1fc};
-    for (int k = 0; k < 2; k++) {
-      float bs = ui_s(c, 34);
-      float ax = cx0 + (0x2ff + 8 - x0) * kx - bs / 2, ay = cy0 + (spot_y[k] - y0) * ky - bs / 2;
-      ax = fminf(fmaxf(ax, body.x), body.x + body.w - bs);
-      ay = fminf(fmaxf(ay, body.y), body.y + body.h - bs);
-      UiRect ar = ui_rect(ax, ay, bs, bs);
-      if (ui_icon_button(c, ui_idi(ui_id("reports.roster.arrow"), k), ar, k ? UI_ICON_DOWN : UI_ICON_UP, UI_COMPACT,
-                         k ? "Scroll down (or the mouse wheel)" : "Scroll up (or the mouse wheel)") && na < max)
-        acts[na++] = (RpAction){RP_A_CLICK, (0x30c & 0xffff) | (spot_y[k] << 16)};
-    }
-    float wh = ui_wheel(c, bid);
-    if (wh != 0 && na < max) {
-      int k = wh > 0 ? 0 : 1;
-      acts[na++] = (RpAction){RP_A_CLICK, (0x30c & 0xffff) | (spot_y[k] << 16)};
-    }
-  }
-  if (ui_clicked(c, scrim_id) && na < max) acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  if (fit < 1) ui_pop_scale(c);
   return na;
+}
+
+static int draw_leaderboard(UiCtx *c, const RpSnap *s) {
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  UiRect scr = ui_screen(c);
+  float margin = ui_s(c, t->edge_margin), width = ui_s(c, 380), row_h = ui_s(c, 34);
+  float top = margin + ui_s(c, 110);
+  const RpItem *rows[48];
+  int n = 0;
+  for (int i = 0; i < s->n && n < 48; i++)
+    if (s->it[i].type == RP_IT_TEXT && s->it[i].align == RP_AL_LEFT && s->it[i].y >= 45) rows[n++] = &s->it[i];
+  float header = ui_s(c, 140);
+  float height = fminf(header + n * row_h + ui_s(c, 24), fminf(ui_s(c, 650), scr.h - top - margin));
+  UiRect panel = ui_rect_round(ui_rect(scr.x + margin, top, width, height));
+  memset(&g_layout, 0, sizeof g_layout);
+  g_layout.panel = panel;
+  ui_panel(c, panel, ui_s(c, t->radius_panel), UI_PANEL_STRONG);
+  ui_hit(c, panel, ui_s(c, t->radius_panel), ui_id("leaderboard.panel"), UI_HIT_BLOCK);
+  UiRect in = ui_inset_all(panel, ui_s(c, 18));
+  ui_text_fit(c, ui_rect(in.x, in.y, in.w, ui_s(c, 32)), UI_TYPE_HEADING, t->text_primary, "Tournament leaderboard", 0);
+  int line = 0;
+  for (int i = 0; i < s->n && line < 2; i++) {
+    const RpItem *it = &s->it[i];
+    if (it->type != RP_IT_TEXT || it->align != RP_AL_CENTRE || it->y < 20 || it->y > 33) continue;
+    char text[RP_TEXT]; fix_text(text, sizeof text, it->s);
+    ui_text_fit(c, ui_rect(in.x, in.y + ui_s(c, 36 + 24 * line++), in.w, ui_s(c, 24)), UI_TYPE_CAPTION,
+                t->text_secondary, text, 0);
+  }
+  UiRect view = ui_rect(in.x, panel.y + header, in.w, panel.h - header - ui_s(c, 18));
+  float off = ui_vscroll_begin(c, ui_id("leaderboard.scroll"), view, n * row_h, row_h * 3);
+  for (int i = 0; i < n; i++) {
+    UiRect r = ui_rect(view.x, view.y + off + i * row_h, view.w, row_h - ui_s(c, 2));
+    if (r.y + r.h <= view.y || r.y >= view.y + view.h) continue;
+    uid_rrect(d, r, ui_s(c, t->radius_control), uid_alpha(t->surface_inset, i & 1 ? 0.2f : 0.4f));
+    char text[RP_TEXT]; fix_text(text, sizeof text, rows[i]->s);
+    ui_text_fit(c, ui_inset_all(r, ui_s(c, 4)), UI_TYPE_BODY,
+                rows[i]->col == 0x23e8 ? t->accent_soft_text : t->text_primary, text, 0);
+  }
+  ui_vscroll_end(c);
+  return 0;
+}
+
+#include "ui_report_layouts.inc"
+
+int ui_reports_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
+  if (s->kind == RP_LEADERBOARD) return draw_leaderboard(c, s);
+  if (s->kind == RP_MONTH) return draw_ranking(c, s, art, acts, max);
+  if (s->kind >= RP_PROFILE) return ui_pages_draw(c, s, art, acts, max);
+  if (s->kind != RP_NONE) return draw_organized_report(c, s, art, acts, max);
+  return 0;
 }

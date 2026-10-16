@@ -2,10 +2,22 @@
   "comment": "task-98: preserve the original club, attitude, distance and lie formatters, publishing their text to a readable native HUD card.",
   "patches": {
     "FUN_0040f5c0": [
-      ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x21e + HD_UI_DY,0x80000018);", "shot_readout_text(0,(char *)&DAT_0051a068,0x196,0x21e + HD_UI_DY,0x80000018);"],
-      ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);", "shot_readout_text(1,(char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);"],
-      ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);", "shot_readout_text(2,(char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);"],
-      ["FUN_00404b70((char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);", "shot_readout_text(3,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);" ]
+      [
+        "gw_popover_text(0,(char *)&DAT_0051a068,0x196,0x21e + HD_UI_DY,0x80000018);",
+        "shot_readout_text(0,(char *)&DAT_0051a068,0x196,0x21e + HD_UI_DY,0x80000018);"
+      ],
+      [
+        "gw_popover_text(0,(char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);",
+        "shot_readout_text(1,(char *)&DAT_0051a068,0x196,0x22c + HD_UI_DY,0x80000018);"
+      ],
+      [
+        "gw_popover_text(0,(char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);",
+        "shot_readout_text(2,(char *)&DAT_0051a068,0x196,0x23a + HD_UI_DY,0x80000018);"
+      ],
+      [
+        "gw_popover_text(0,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);",
+        "shot_readout_text(3,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);"
+      ]
     ]
   }
 }

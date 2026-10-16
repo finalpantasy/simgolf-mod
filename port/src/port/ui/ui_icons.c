@@ -50,6 +50,12 @@ static const struct { const char *name, *src; } k_icons[UI_ICON_COUNT] = {
     [UI_ICON_UP] = {"up", "M5 15l7-7 7 7"},
     [UI_ICON_DOWN] = {"down", "M5 9l7 7 7-7"},
     [UI_ICON_TRASH] ={"trash", "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"},
+    [UI_ICON_WEATHER_SUN] = {"weather_sun", "O12 12 4;M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"},
+    [UI_ICON_WEATHER_MOON] = {"weather_moon", "M20 14a8.5 8.5 0 0 1-10-10A8.5 8.5 0 1 0 20 14z"},
+    [UI_ICON_WEATHER_PARTLY] = {"weather_partly", "O8 8 3;M8 1v1M1 8h1M3 3l1 1M13 3l-1 1M6 20a4 4 0 0 1-1-8 6 6 0 0 1 11-1 4.5 4.5 0 1 1 2 9z"},
+    [UI_ICON_WEATHER_CLOUD] = {"weather_cloud", "M6 19a4 4 0 0 1-1-8 6 6 0 0 1 11-1 4.5 4.5 0 1 1 2 9z"},
+    [UI_ICON_WEATHER_RAIN] = {"weather_rain", "M5 15a3.5 3.5 0 0 1 0-7 5.5 5.5 0 0 1 10-1 4 4 0 0 1 4 8M7 18l-1 3M12 17l-1 3M17 18l-1 3"},
+    [UI_ICON_WEATHER_STORM] = {"weather_storm", "M5 15a3.5 3.5 0 0 1 0-7 5.5 5.5 0 0 1 10-1 4 4 0 0 1 4 8M13 12l-4 6h4l-2 5 7-8h-5z"},
 };
 
 const char *ui_icon_name(UiIcon i) { return i >= 0 && i < UI_ICON_COUNT ? k_icons[i].name : "none"; }

@@ -21,6 +21,7 @@ typedef struct {
   double ax, ay, bx, by;
   uint32_t serial;
   int ox, oy;
+  uint32_t drag_serial;
 } HdUiCamera;
 
 // Draw golf's 800x600-laid-out UI at (dx, dy) of the back buffer until

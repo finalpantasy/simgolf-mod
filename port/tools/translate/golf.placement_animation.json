@@ -1,0 +1,15 @@
+{
+  "comment": "Issue59: preserve the float opacity bits when buildSceneSprites FUN_00463180 forwards a construction fade to Surface_drawSprite FUN_00474440. Its jgld target FUN_10018920 consumes a float, while the wrapper carries an untyped word. Numeric conversion hid every frame below opacity1. Keep original offsets, frame counters, palettes and timing. fixes.placement_animation=0 retains the previous port conversion.",
+  "patches": {
+    "FUN_00463180": [
+      ["param_4 + (local_40 + -0x1c) * 5,fVar16,(int)puVar17,1)", "param_4 + (local_40 + -0x1c) * 5,placement_animation_alpha(fVar16),(int)puVar17,1)"],
+      ["param_4 + (local_40 + -0x30) * 5,(float)param_2 * 0.05,", "param_4 + (local_40 + -0x30) * 5,placement_animation_alpha((float)param_2 * 0.05),"]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00463180": [
+      ["param_4 + (local_40 + -0x1c) * 5,fVar16,(int)puVar17,1)", 1],
+      ["param_4 + (local_40 + -0x30) * 5,(float)param_2 * 0.05,", 2]
+    ]
+  }
+}

@@ -43,6 +43,8 @@ int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5) {
 int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d) { return FUN_00473cb0(self, target, x, y, a, b, c, d); }
 void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) { (void)count, (void)scroll, (void)sel, (void)p1, (void)p2; }
 void fe_theme_vars(int n, const unsigned char *mask, int sel) { (void)n, (void)mask, (void)sel; }
+void fe_theme_restore(int count) { (void)count; }
+void fe_theme_remember(void) {}
 void fe_loading_pic(void *sprite) { (void)sprite; }
 void fe_loading(int pct, const char *quote) { (void)pct, (void)quote; }
 void fe_loading_progress(int assets) { (void)assets; }

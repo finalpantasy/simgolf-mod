@@ -89,7 +89,7 @@ static const Row k_gameplay[] = {
     {.type = OT_HEAD, .label = "Pace"},
     {.type = OT_SEG, .label = "Game speed", .key = "gameplay.speed", .def = "1",
      .desc = "Runs the whole game clock faster: seasons, golfers and money. Pause still stops it.",
-     .n = 5, .vals = {"1", "2", "3", "5", "10"}, .names = {"1x", "2x", "3x", "5x", "10x"}},
+     .n = 6, .vals = {"1", "2", "3", "4", "5", "10"}, .names = {"1x", "2x", "3x", "4x", "5x", "10x"}},
     {.type = OT_SLIDER, .label = "Staff you can hire", .key = "gameplay.staff_max", .def = "20",
      .desc = "Hire up to this many staff. Lowering it keeps everyone already hired.",
      .lo = 1, .hi = STAFF_HIRE_MAX, .step = 1},
@@ -195,6 +195,8 @@ static const Row k_controls[] = {
     {.type = OT_SEG, .label = "Drag to pan with", .key = "camera.drag_button", .def = "middle",
      .desc = "Hold this mouse button and drag to move the course. A right click that does not move stays a right click.",
      .n = 4, .vals = {"middle", "right", "middle,right", "none"}, .names = {"Middle", "Right", "Both", "Off"}},
+    {.type = OT_TOGGLE, .label = "Camera glide", .key = "camera.glide", .def = "0",
+     .desc = "Adds a softer trailing motion when dragging. Off keeps dragging more responsive."},
     {.type = OT_TOGGLE, .label = "Mouse wheel zooms", .key = "camera.wheel_zoom", .def = "1",
      .desc = "Turn the wheel to zoom the course in and out."},
     {.type = OT_SEG, .label = "Wheel zooms toward", .key = "camera.zoom_anchor", .def = "pointer",
@@ -214,11 +216,73 @@ typedef struct {
   int n;
   int keys;   // the key bindings follow the rows (every action of keymap.c, two keys each)
 } Page;
+static const Row k_weather[] = {
+    {.type = OT_TOGGLE, .label = "Current weather display", .key = "environment.report_icon", .def = "1",
+     .desc = "Show current weather, temperature and humidity beside the status bar."},
+    {.type = OT_SEG, .label = "Temperature units", .key = "environment.temperature_units", .def = "fahrenheit",
+     .n = 2, .vals = {"fahrenheit", "celsius"}, .names = {"Fahrenheit", "Celsius"},
+     .desc = "Units for the course's simulated current temperature."},
+    {.type = OT_HEAD, .label = "Course atmosphere"},
+    {.type = OT_TOGGLE, .label = "Lighting and weather", .key = "environment.enabled", .def = "0",
+     .desc = "Turn on enhanced sunlight, shadows and course weather."},
+    {.type = OT_SEG, .label = "Fixed weather", .key = "environment.weather", .def = "clear",
+     .n = 4, .vals = {"clear", "cloudy", "rain", "storm"}, .names = {"Clear", "Cloudy", "Rain", "Storm"},
+     .desc = "Choose the weather when Regional weather is off."},
+    {.type = OT_TOGGLE, .label = "Regional weather", .key = "environment.regional_weather", .def = "0",
+     .desc = "Changing weather follows this course's location and season, including sunny breaks."},
+    {.type = OT_SEG, .label = "Weather spell length", .key = "environment.weather_minutes", .def = "3",
+     .n = 3, .vals = {"2", "3", "5"}, .names = {"Brief", "Normal", "Long"},
+     .desc = "Normal spells last roughly two to four active minutes. Season and location set the odds."},
+    {.type = OT_SEG, .label = "Rain amount", .key = "environment.rain_strength", .def = "0.65",
+     .n = 4, .vals = {"0", "0.25", "0.65", "1"}, .names = {"Off", "Light", "Steady", "Downpour"},
+     .desc = "Changes droplet density, splashes and recorded rain ambience."},
+    {.type = OT_SEG, .label = "Cloud cover", .key = "environment.cloud_strength", .def = "0.65",
+     .n = 4, .vals = {"0", "0.35", "0.65", "1"}, .names = {"Off", "Scattered", "Cloudy", "Overcast"},
+     .desc = "Moving clouds and soft cloud shadows across the course."},
+    {.type = OT_SEG, .label = "Time of day", .key = "environment.hour", .def = "14",
+     .n = 4, .vals = {"8", "14", "17", "0"}, .names = {"Morning", "Day", "Evening", "Night"},
+     .desc = "Fixed time when the day and night cycle is off."},
+    {.type = OT_TOGGLE, .label = "Day and night cycle", .key = "environment.day_night", .def = "0",
+     .desc = "30 minutes of playing time: 20 minutes day, 10 minutes night. Pause holds the light; game speed does not change it."},
+    {.type = OT_TOGGLE, .label = "Morning mist", .key = "environment.mist", .def = "1",
+     .desc = "Patchy mist on cool humid mornings, clearing as the day warms."},
+    {.type = OT_TOGGLE, .label = "Atmospheric haze", .key = "environment.haze", .def = "1",
+     .desc = "A light seasonal veil over the course, keeping the background black."},
+    {.type = OT_TOGGLE, .label = "Wind gusts", .key = "environment.gusts", .def = "1",
+     .desc = "Coordinated gusts move rain, flag cloth and enhanced water."},
+    {.type = OT_TOGGLE, .label = "Golden-hour light", .key = "environment.golden_hour", .def = "1",
+     .desc = "Warmer low sunlight at dawn and late afternoon."},
+    {.type = OT_TOGGLE, .label = "Distant storms", .key = "environment.distant_thunder", .def = "1",
+     .desc = "Quiet distant thunder as storm clouds gather before rain."},
+    {.type = OT_HEAD, .label = "Lighting and night"},
+    {.type = OT_TOGGLE, .label = "Terrain lighting", .key = "environment.lighting", .def = "1",
+     .desc = "Light the slopes and shadows of the course."},
+    {.type = OT_TOGGLE, .label = "Tree and golfer shadows", .key = "environment.cast_shadows", .def = "1",
+     .desc = "Soft shadows follow the sun. Buildings keep their painted shadows."},
+    {.type = OT_TOGGLE, .label = "Black background", .key = "environment.black_background", .def = "1",
+     .desc = "Keep the space beyond the course black, including during lightning."},
+    {.type = OT_TOGGLE, .label = "Glowbugs", .key = "environment.glowbugs", .def = "1",
+     .desc = "Small drifting lights over the ground at night."},
+    {.type = OT_TOGGLE, .label = "Lightning", .key = "environment.lightning", .def = "1",
+     .desc = "Storm flashes. Thunder can still be heard when flashes are off."},
+    {.type = OT_TOGGLE, .label = "Reduced flashes", .key = "environment.reduced_flashes", .def = "1",
+     .desc = "Keep lightning subtle. Turn Lightning off to remove flashes completely."},
+    {.type = OT_HEAD, .label = "Golfers and sound"},
+    {.type = OT_TOGGLE, .label = "Weather affects golfers", .key = "environment.gameplay", .def = "0",
+     .desc = "Rain softens ball roll and affects the mood of arriving golfers."},
+    {.type = OT_TOGGLE, .label = "Weather sound", .key = "environment.sound", .def = "1",
+     .desc = "Rain, wind, night insects and delayed thunder. Uses your sound-effects volume."},
+    {.type = OT_SLIDER, .label = "Weather volume", .key = "environment.weather_volume", .def = "50",
+     .lo = 0, .hi = 100, .step = 5, .unit = "%", .desc = "Balance weather against the rest of the game."},
+    {.type = OT_TOGGLE, .label = "Enhanced atmosphere", .key = "environment.shader", .def = "1",
+     .desc = "Detailed moving clouds and rain. Turn off for simpler effects."},
+};
 static const Page k_pages[] = {
     {"Graphics", UI_ICON_PALETTE, k_graphics, (int)(sizeof k_graphics / sizeof k_graphics[0])},
     {"Gameplay", UI_ICON_FLAG, k_gameplay, (int)(sizeof k_gameplay / sizeof k_gameplay[0])},
     {"Controls", UI_ICON_GEAR, k_controls, (int)(sizeof k_controls / sizeof k_controls[0]), 1},
     {"Audio", UI_ICON_BELL, k_audio, (int)(sizeof k_audio / sizeof k_audio[0])},
+    {"Weather", UI_ICON_PALETTE, k_weather, (int)(sizeof k_weather / sizeof k_weather[0])},
 };
 #define NPAGES ((int)(sizeof k_pages / sizeof k_pages[0]))
 
@@ -245,7 +309,7 @@ static UiCtx *g_ui;
 static int g_failed;
 static volatile float g_view_x, g_view_y, g_view_px = 1;
 static volatile int g_seen_draw;
-static char g_initial[4][40][48];   // each row's value when the page was first drawn (restart notes)
+static char g_initial[NPAGES][40][48];   // each row's value when the page was first drawn (restart notes)
 static int g_initial_done;
 static UiRect g_ctl_log[24][8];   // each logged row's control pieces (segments, the switch), for the layout log
 static int g_ctl_n[24];

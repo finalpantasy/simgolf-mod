@@ -1,0 +1,19 @@
+{
+  "comment": "Portrait prototype: after the original palette routine resolves defaults and stored fields, restore its defined body-color range using typed palette calls. See golf/palette_fix.c and original instructions 0x462020..0x4627c6. Required count prevents a silently missing hook.",
+  "patches": {
+    "FUN_00462020": [
+      [
+        "return uVar9;",
+        "golfer_palette_finish(param_1);\n  return uVar9;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_00462020": [
+      [
+        "return uVar9;",
+        2
+      ]
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SimGolf Living Club authored content",
+  "type": "object",
+  "required": ["version", "tuning", "event_groups", "personalities", "stories", "traits", "context"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"const": 1},
+    "tuning": {
+      "type": "object",
+      "required": ["seed", "trait_affinity", "initial_confidence", "initial_resolve", "confidence_step", "story_rest_visits", "story_min_visits", "setback_after", "nemesis_after", "familiar_after"],
+      "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1000000}
+    },
+    "event_groups": {"type": "object", "propertyNames": {"pattern": "^[0-9]+$"}, "additionalProperties": {"enum": ["good", "bad", "hazard", "scenery", "delay", "needs", "comfort", "strategy", "social", "practice"]}},
+    "personalities": {"type": "array", "minItems": 25, "maxItems": 25, "items": {"$ref": "#/$defs/personality"}},
+    "stories": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/story"}},
+    "traits": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "object", "required": ["id", "set", "clear"], "properties": {"id": {"type": "string"}, "set": {"$ref": "#/$defs/bank"}, "clear": {"$ref": "#/$defs/bank"}}, "additionalProperties": false}},
+    "context": {"type": "object", "required": ["redemption", "nemesis", "familiar", "rival"], "additionalProperties": {"$ref": "#/$defs/bank"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 32},
+    "bank": {"type": "array", "minItems": 3, "maxItems": 128, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 110, "pattern": "^[ -~]+$"}},
+    "personality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "trait_mask", "reactions", "story_weights", "lines"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "name": {"type": "string", "minLength": 1, "maxLength": 34},
+        "trait_mask": {"type": "integer", "minimum": 0, "maximum": 31},
+        "reactions": {"type": "object", "required": ["good", "bad", "hazard", "scenery", "delay", "needs", "comfort", "strategy", "social", "practice", "arrival", "return"], "additionalProperties": {"type": "integer", "minimum": -2, "maximum": 2}},
+        "story_weights": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "integer", "minimum": 1, "maximum": 100}},
+        "lines": {"type": "object", "required": ["good", "bad", "hazard", "scenery", "delay", "needs", "comfort", "strategy", "social", "practice", "arrival", "return"], "additionalProperties": {"$ref": "#/$defs/bank"}}
+      }
+    },
+    "story": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "trigger", "goal", "opening", "return", "progress", "success", "setback", "closure"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "title": {"type": "string", "minLength": 1, "maxLength": 80},
+        "trigger": {"enum": ["trouble", "partner", "scenery", "practice", "strategy", "patience", "comfort", "success", "regular", "nemesis"]},
+        "goal": {"type": "integer", "minimum": 1, "maximum": 100},
+        "opening": {"$ref": "#/$defs/bank"}, "return": {"$ref": "#/$defs/bank"}, "progress": {"$ref": "#/$defs/bank"}, "success": {"$ref": "#/$defs/bank"}, "setback": {"$ref": "#/$defs/bank"}, "closure": {"$ref": "#/$defs/bank"}
+      }
+    }
+  }
+}

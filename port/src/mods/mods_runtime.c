@@ -429,6 +429,16 @@ void mods_save_written(const char *path) {
   snprintf(side, sizeof side, "%s.mods.toml", path);
   snprintf(tmp, sizeof tmp, "%s.tmp", side);
   if (!saverec_format(&rec, text, sizeof text)) return;
+  // Optional balance rules share the existing size/CRC-bound companion.
+  // Older readers ignore this table; the original save bytes stay unchanged.
+  size_t used = strlen(text);
+  int rules = snprintf(text + used, sizeof text - used,
+                       "\n[rules]\nversion = 1\nauthored_visitor_skills = %d\n"
+                       "living_reactions = %d\nweather_gameplay = %d\n",
+                       mods_get_int("gameplay.authored_visitor_skills", 0) != 0,
+                       mods_get_int("golfers.reactions", 0) != 0,
+                       mods_get_int("environment.gameplay", 0) != 0);
+  if (rules < 0 || (size_t)rules >= sizeof text - used) return;
   FILE *f = fopen(tmp, "wb");
   if (!f) {
     fprintf(stderr, "mods: save %s: cannot write the mod record\n", base_name(path));

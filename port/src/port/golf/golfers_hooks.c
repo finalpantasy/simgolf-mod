@@ -42,6 +42,7 @@ void gw_course_done(void) {}
 void gw_seen(int slot, int x, int y) { (void)slot, (void)x, (void)y; }
 int gw_name(int slot, const char *text, int x, int y, int mood) { return (void)slot, (void)text, (void)x, (void)y, (void)mood, 0; }
 int gw_active(void) { return 0; }
+int gw_tutorial(const char *text, int x, int y) { (void)text; (void)x; (void)y; return 0; }
 void gw_thought_begin(int type, int state) { (void)type, (void)state; }
 void gw_face(int idx) { (void)idx; }
 void gw_thought_end(int slot, int x, int y, const char *text, unsigned colour) { (void)slot, (void)x, (void)y, (void)text, (void)colour; }

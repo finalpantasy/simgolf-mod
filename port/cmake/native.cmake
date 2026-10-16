@@ -50,6 +50,27 @@ add_executable(golf WIN32
 
 # task-3: sharp scaling, borderless full screen, render thread (any resolution, any frame rate)
 target_sources(golf PRIVATE src/port/hd_native.c src/port/hd_terrain_native.c)
+target_sources(golf PRIVATE src/port/environment.c src/port/weather_state.c src/port/weather_audio.c)
+target_sources(golf PRIVATE src/port/weather_climate.c src/port/atmosphere.c)
+add_custom_target(weather_climate_files ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/data"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/lighting-windows.csv" "${CMAKE_BINARY_DIR}/data/lighting-windows.csv"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/data"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/weather-atmosphere.csv" "${CMAKE_BINARY_DIR}/data/weather-atmosphere.csv"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/data"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/weather-climate.csv" "${CMAKE_BINARY_DIR}/data/weather-climate.csv"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/weather-surfaces.csv" "${CMAKE_BINARY_DIR}/data/weather-surfaces.csv"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/weather-air.csv" "${CMAKE_BINARY_DIR}/data/weather-air.csv"
+  VERBATIM)
+target_sources(golf PRIVATE src/port/environment_fx.cpp)
+target_sources(golf PRIVATE src/port/environment_receiver.c)
+set_property(SOURCE src/port/environment_fx.cpp APPEND PROPERTY COMPILE_OPTIONS /EHsc)
+target_sources(golf PRIVATE src/port/course_relief.c src/port/course_light.c src/port/cast_shadow.c src/platform/terrain_lighting.cpp)
+set_property(SOURCE src/platform/terrain_lighting.cpp APPEND PROPERTY COMPILE_OPTIONS /EHsc)
+add_executable(environment_tests "${CMAKE_SOURCE_DIR}/../tests/native/test_environment.c" src/port/environment.c src/port/atmosphere.c)
+target_include_directories(environment_tests PRIVATE src "${SIMGOLF_SDL2}/include")
+target_compile_options(environment_tests PRIVATE /clang:-std=gnu11)
+target_link_libraries(environment_tests PRIVATE "${SIMGOLF_SDL2}/lib/x86/SDL2.lib")
 # task-56: smooth zoom (the glide between golf's zoom levels)
 target_sources(golf PRIVATE src/port/hd_zoom.c)
 # task-17: the art pack (4x upscaled art at screen resolution; PNGs through WIC)
@@ -73,6 +94,9 @@ target_compile_definitions(golf PRIVATE SIMGOLF_PORT_FS _CRT_SECURE_NO_WARNINGS 
   "SIMGOLF_DEFAULT_GAME=\"${SIMGOLF_GAME}\"" "SIMGOLF_DEFAULT_ART_DIR=\"${SIMGOLF_ART}\""
   "SIMGOLF_VERSION=\"${SIMGOLF_VERSION}\"")
 target_include_directories(golf PRIVATE src third_party/stb src/compat/msvc "${SIMGOLF_SDL2}/include")
+add_executable(roster_tests ../tests/native/test_roster.c src/port/golf/roster.c)
+target_include_directories(roster_tests PRIVATE src)
+target_compile_definitions(roster_tests PRIVATE _CRT_SECURE_NO_WARNINGS ROSTER_TEST_IMAGE)
 # Mod platform (task-11): sources, defaults and the modctl_core / mods_tests tools.
 include(cmake/mods.cmake)
 # Frosted Mint UI kit and course HUD (task-26/30): kit sources, ui_tests, ui_gallery.
@@ -120,6 +144,12 @@ add_custom_command(TARGET golf POST_BUILD
 # task-25: Plus Jakarta Sans (static cuts, OFL) and its face map next to the exe, for
 # ui.font=plus_jakarta. A target of its own so editing data/ui/font_map.txt re-copies it.
 set(_pj "${CMAKE_SOURCE_DIR}/../data/fonts/plus-jakarta-sans")
+if(EXISTS "${CMAKE_SOURCE_DIR}/../art_local/weather/rain-light.wav")
+  add_custom_target(weather_audio_files ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${CMAKE_SOURCE_DIR}/../art_local/weather"
+      "$<TARGET_FILE_DIR:golf>/audio/weather")
+endif()
 add_custom_target(ui_font_files ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/fonts/plus-jakarta-sans"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different

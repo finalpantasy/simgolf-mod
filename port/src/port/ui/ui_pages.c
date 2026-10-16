@@ -305,6 +305,7 @@ static int draw_profile(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
     for (int i = 0; i < 3; i++) {
       char key[16];
       snprintf(key, sizeof key, "pf.row%d", i);
+      pf_ctl(key + 3, ui_rect(ax, ay, aw, rh));
       if (field_row(c, ui_id(key), ui_rect(ax, ay, aw, rh), lab[i], val[i][0] ? val[i] : "-", editing) && na < max)
         acts[na++] = (RpAction){RP_A_CLICK, CLICK(154, 34 + 20 * (i + 1))};
       ay += rh + ui_s(c, 4);
@@ -1149,6 +1150,134 @@ static int draw_pairing(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
 // ------------------------------------------------------------------ dispatch
 
 #include "ui_tracts.inc"
+#include "ui_routing.inc"
+
+static int draw_credits(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  // Credits can start after the original title renderer has gone stale. Give
+  // this page its own opaque backdrop instead of exposing that saved bitmap.
+  UiColor top = t->world_bg_top, mid = t->world_bg_mid, bottom = t->world_bg_bottom;
+  top.a = mid.a = bottom.a = 255;
+  uid_rect_vgrad3(ui_drawer(c), scr, top, mid, bottom);
+  float margin = ui_s(c, t->edge_margin), pad = ui_s(c, 28);
+  UiRect panel = ui_rect_round(ui_center(scr, fminf(ui_s(c, 980), scr.w - 2 * margin), scr.h - 2 * margin));
+  uid_rrect(ui_drawer(c), scr, 0, t->scrim);
+  ui_hit(c, scr, 0, ui_id("credits.scrim"), UI_HIT_BLOCK | UI_HIT_MODAL);
+  // The shared blur cache was captured before this page's native backdrop.
+  // A solid mint panel prevents that cached original title from returning.
+  ui_panel(c, panel, ui_s(c, t->radius_panel), UI_PANEL_STRONG | UI_PANEL_SOLID);
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = panel;
+  UiRect in = ui_inset_all(panel, pad);
+  float cb = ui_s(c, 40);
+  UiRect close = ui_rect(in.x + in.w - cb, in.y, cb, cb);
+  g_pf_layout.close_x = close.x + cb / 2; g_pf_layout.close_y = close.y + cb / 2;
+  int na = 0;
+  if (ui_icon_button(c, ui_id("credits.close"), close, UI_ICON_X, 0, "Close (Esc)") && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  ui_text_in(c, ui_rect(in.x, in.y, in.w - cb, cb), UI_TYPE_TITLE, t->text_primary, "Credits", 0);
+  ui_text_in(c, ui_rect(in.x, in.y + ui_s(c, 46), in.w, ui_s(c, 28)), UI_TYPE_BODY, t->text_secondary, "Sid Meier's SimGolf", 0);
+  float rh = ui_s(c, 30);
+  UiRect view = ui_rect(in.x, in.y + ui_s(c, 94), in.w, in.h - ui_s(c, 132));
+  float off = ui_vscroll_begin(c, ui_id("credits.scroll"), view, s->n * rh, rh * 5);
+  for (int i = 0; i < s->n; i++) {
+    UiRect row = ui_rect(view.x, view.y + off + i * rh, view.w - ui_s(c, 14), rh);
+    if (row.y + row.h <= view.y || row.y >= view.y + view.h) continue;
+    char text[RP_TEXT]; fix_text(text, sizeof text, s->it[i].s);
+    int heading = text[0] != 0;
+    for (const char *p = text; *p; p++) if (*p >= 'a' && *p <= 'z') heading = 0;
+    ui_text_fit(c, row, heading ? UI_TYPE_HEADING : UI_TYPE_BODY, heading ? t->accent_soft_text : t->text_primary, text, 0.5f);
+  }
+  ui_vscroll_end(c);
+  ui_text_in(c, ui_rect(in.x, in.y + in.h - ui_s(c, 28), in.w, ui_s(c, 28)), UI_TYPE_CAPTION, t->text_tertiary,
+             "Scroll to read the full credits. Close or press Esc to continue.", 0.5f);
+  return na;
+}
+
+static int draw_snapshot(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  float pad = ui_s(c, 24), head = ui_s(c, 54), foot = ui_s(c, 78);
+  const RpItem *photo = NULL;
+  int captions = 0;
+  for (int i = 0; i < s->n; i++) {
+    if (s->it[i].type == RP_IT_PIC) photo = &s->it[i];
+    else if (s->it[i].type == RP_IT_TEXT && strcmp(s->it[i].s, "SimFoto")) captions++;
+  }
+  UiRect panel = ui_center(scr, fminf(ui_s(c, 960), scr.w - 2 * pad), fminf(ui_s(c, 780), scr.h - 2 * pad));
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = panel;
+  ui_panel(c, panel, ui_s(c, 26), 0);
+  UiRect in = ui_inset_all(panel, pad), close = ui_rect(in.x + in.w - head, in.y, head, head);
+  g_pf_layout.close_x = close.x + close.w / 2; g_pf_layout.close_y = close.y + close.h / 2;
+  int na = 0;
+  if (ui_icon_button(c, ui_id("snapshot.close"), close, UI_ICON_X, 0, "Close (Esc)") && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  ui_text_in(c, ui_rect(in.x, in.y, in.w - head, head), UI_TYPE_TITLE, t->text_primary, "SimFoto", 0);
+  UiRect view = ui_rect(in.x, in.y + head + ui_s(c, 8), in.w, in.h - head - foot);
+  uid_rrect(ui_drawer(c), view, ui_s(c, 12), t->surface_inset);
+  SDL_Texture *tex = art && photo && photo->art > 0 ? art[photo->art - 1] : NULL;
+  if (tex && photo->w > 0 && photo->h > 0) {
+    float k = fminf(view.w / photo->w, view.h / photo->h);
+    uid_image(ui_drawer(c), tex, NULL, ui_center(view, photo->w * k, photo->h * k), 0, (UiColor){255,255,255,255});
+  }
+  float y = view.y + view.h + ui_s(c, 12), row = ui_font(c, UI_TYPE_BODY).line;
+  for (int i = 0; i < s->n; i++) if (s->it[i].type == RP_IT_TEXT && strcmp(s->it[i].s, "SimFoto")) {
+    ui_text_fit(c, ui_rect(in.x, y, in.w, row), UI_TYPE_BODY, t->text_primary, s->it[i].s, 0);
+    y += row;
+  }
+  if (!captions) y += row;
+  ui_text_fit(c, ui_rect(in.x, y, in.w, row), UI_TYPE_CAPTION, t->text_secondary, "Close or press any key to continue.", 0);
+  return na;
+}
+
+static int draw_analysis(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
+  const UiTokens *t = ui_tokens(c);
+  UiRect scr = ui_screen(c);
+  float pad = ui_s(c, 22), row = fmaxf(ui_s(c, 42), ui_font(c, UI_TYPE_BODY).line + ui_s(c, 12));
+  float head = ui_s(c, 48), sub = ui_font(c, UI_TYPE_BODY).line + ui_s(c, 10);
+  float width = fminf(ui_s(c, 620), scr.w - 2 * ui_s(c, 20));
+  UiRect panel = ui_rect(scr.x + ui_s(c, 20), scr.y + ui_s(c, 80), width, 2 * pad + head + sub + 4 * row + ui_s(c, 36));
+  memset(&g_pf_layout, 0, sizeof g_pf_layout);
+  g_pf_layout.panel = panel;
+  ui_panel(c, panel, ui_s(c, 22), 0);
+  UiRect in = ui_inset_all(panel, pad);
+  float close_w = ui_s(c, 36);
+  UiRect close = ui_rect(in.x + in.w - close_w, in.y, close_w, close_w);
+  g_pf_layout.close_x = close.x + close.w / 2; g_pf_layout.close_y = close.y + close.h / 2;
+  int na = 0;
+  if (ui_icon_button(c, ui_id("analysis.close"), close, UI_ICON_X, 0, "Close (Esc)") && na < max)
+    acts[na++] = (RpAction){RP_A_CLOSE, 0};
+  ui_text_in(c, ui_rect(in.x, in.y, in.w - close_w, head), UI_TYPE_TITLE, t->text_primary, "Shot analysis", 0);
+  const RpItem *subtitle = NULL;
+  for (int i = 0; i < s->n; i++) if (s->it[i].type == RP_IT_TEXT && s->it[i].y == 0x32) subtitle = &s->it[i];
+  ui_text_fit(c, ui_rect(in.x, in.y + head, in.w, sub), UI_TYPE_BODY, t->text_secondary,
+              subtitle ? subtitle->s : "Comparing golf skills...", 0);
+  float y = in.y + head + sub, value_w = ui_s(c, 100);
+  for (int r = 0; r < 4; r++) {
+    int source_y = 0x54 + r * 0x14;
+    const RpItem *label = NULL, *value = NULL;
+    for (int i = 0; i < s->n; i++) {
+      const RpItem *it = &s->it[i];
+      if (it->type != RP_IT_TEXT) continue;
+      if (it->x == 0x128 && it->y == source_y) label = it;
+      if (it->x == 0x1ea && it->y == source_y + 3) value = it;
+    }
+    UiRect rr = ui_rect(in.x, y + r * row, in.w, row - ui_s(c, 4));
+    uid_rrect(ui_drawer(c), rr, ui_s(c, 10), uid_alpha(t->surface_inset, 0.45f));
+    UiColor tone = label ? text_colour(t, label->col) : t->text_secondary;
+    if (label && label->col == 0x421f) tone = (UiColor){87,65,142,255};
+    if (label && label->col == 0x7ff0) tone = (UiColor){123,84,0,255};
+    ui_text_fit(c, ui_rect(rr.x + ui_s(c, 10), rr.y, rr.w - value_w - ui_s(c, 18), rr.h), UI_TYPE_BODY,
+                tone, label ? label->s : "Calculating...", 0);
+    ui_text_fit(c, ui_rect(rr.x + rr.w - value_w - ui_s(c, 10), rr.y, value_w, rr.h), UI_TYPE_NUMBER,
+                tone, value ? value->s : "", 1);
+  }
+  ui_text_fit(c, ui_rect(in.x, y + 4 * row + ui_s(c, 6), in.w, ui_s(c, 30)), UI_TYPE_CAPTION,
+              t->text_secondary, "Close or press any key to return to the course.", 0);
+  return na;
+}
 
 int ui_pages_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
   switch (s->kind) {
@@ -1159,6 +1288,10 @@ int ui_pages_draw(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *
     case RP_END_YEAR: return draw_year(c, s, acts, max);
     case RP_TOP_DESIGNERS: return draw_designers(c, s, acts, max);
     case RP_PAIRING: return draw_pairing(c, s, acts, max);
+    case RP_ROUTING: return draw_routing(c, s, art, acts, max);
+    case RP_CREDITS: return draw_credits(c, s, acts, max);
+    case RP_SHOT_ANALYSIS: return draw_analysis(c, s, acts, max);
+    case RP_SNAPSHOT: return draw_snapshot(c, s, art, acts, max);
     default: return 0;
   }
 }

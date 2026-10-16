@@ -122,6 +122,7 @@ if(EXISTS "${SIMGOLF_GEN}/golf/golf_protos.h")
     src/platform/terrain_hd.cpp
     src/platform/sound.cpp
     ${SIMGOLF_GEN_SRC} ${SIMGOLF_GOLF_OVERRIDES} ${SIMGOLF_JGLD_OVERRIDES})
+  target_sources(golf PRIVATE src/port/ui/ui_portrait_palette.c)
   target_compile_definitions(golf PRIVATE SIMGOLF_PORT_FS)
   target_include_directories(golf PRIVATE src third_party/stb)
   # Each module's generated files see only their own Ghidra headers.

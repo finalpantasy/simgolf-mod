@@ -44,8 +44,10 @@ enum {   // art slots (game sprites read back with alpha)
 // One game message (task-62): what the game's news strip said, kept for the HUD's history.
 #define HUD_MSG_MAX 50
 enum { HUD_SHOW_NONE = 0, HUD_SHOW_GOLFER = 1, HUD_SHOW_HOLE = 2, HUD_SHOW_BUILDING = 3, HUD_SHOW_STAFF = 4 };   // BUILDING (task-53): target is the building's record number
+#define HUD_NEWS_TEXT 1024
+
 typedef struct HudMsg {
-  char text[400];
+  char text[HUD_NEWS_TEXT];
   char date[24];     // the game's date when it came
   double t_ms;       // host clock when it came (the HUD says "2 min ago")
   int seq;           // 1, 2, 3 ... in order of arrival
@@ -69,9 +71,12 @@ typedef struct HudSnap {
   int dock_mode, amenities_on, elevation_on, employee_overlay;
   int terrain_tool, build_tool, elevation_tool;
   int paused, fast, zoom, rotation, theme, difficulty;
+  double game_speed;      // player multiplier, shared with Options
+  int speed_button_off;   // ui.speed_button=0 restores the previous transport controls
   int unlock, next_hole, building_level[9];
+  int paths_available, paths_on; // cart path view control in the build toolbar
   int news_on;
-  char news[400];
+  char news[HUD_NEWS_TEXT];
   uint32_t art_serial;    // bumps when hud_hooks re-read the art
   int elev_edit;          // flags & 2: an elevation tool is armed
   char terrain_name[16][24];
@@ -116,13 +121,18 @@ typedef struct HudSnap {
   int staff_sel;          // record of the selected employee, -1 none
   int staff_moving;       // record being moved (the next click on the course places them), -1 none
   int staff_fire_cost;    // dollars a Fire costs
+  int weather_report, weather_kind, weather_night; // Optional current condition only.
+  int weather_air_valid, weather_fahrenheit;
+  double weather_c, weather_rh;
 } HudSnap;
 
 enum { HUD_ACT_CLICK = 1, HUD_ACT_KEY = 2, HUD_ACT_VKEY = 3, HUD_ACT_GOAL = 4,
        HUD_ACT_SHOW = 5,     // SHOW: x = HUD_SHOW_*, y = golfer slot or hole number (camera jump, as the game's own clicks and keys)
        HUD_ACT_PRO = 6,      // task-92: x = HUD_PRO_*
        HUD_ACT_DESIGN = 7,   // task-96: x = amenity build tool (1 bench, 2 flower, 4 landmark, 16 tree, 19 bridge), y = design
-       HUD_ACT_STAFF = 8 };  // task-94: x = HUD_STAFF_*, y = employee record (SELECT)
+       HUD_ACT_STAFF = 8,   // task-94: x = HUD_STAFF_*, y = employee record (SELECT)
+       HUD_ACT_PATH_VIEW = 9, // render-side cart path view toggle
+       HUD_ACT_SPEED = 10 }; // x = player multiplier (1 through 4)
 enum { HUD_STAFF_SELECT = 1, HUD_STAFF_FIRE = 2, HUD_STAFF_MOVE = 3, HUD_STAFF_RENAME = 4, HUD_STAFF_SCROLL = 5 };
 enum { HUD_PRO_SKILLS = 1,   // the skill dialog: the first setup (10 points, 3 more per accomplishment) or the skills with OK
        HUD_PRO_PROFILE = 2,  // the pro's profile page (name, look, bio)
@@ -142,9 +152,11 @@ typedef struct {
 // render side (hud_frosted.c), called from the game thread
 int hudf_history_visible(void);               // drawn history panel; does not change the HUD
 int hudf_enabled(void);                       // ui.hud=frosted_mint and the native layer is up
+void hudf_early(void);                        // register before the first course frame
 int hudf_original_rotate_enabled(void);       // ui.hud=original and its optional Rotate pill is enabled
 void hud_home_site_capture_value(int row, int dollars); // game thread: values from golf's placement calculation
 void hudf_publish(const HudSnap *s);
+void hudf_publish_weather(int show,int kind,int night,int air_valid,double c,double rh,int fahrenheit);
 int hudf_take_action(HudAction *a);           // next queued action, 1 if any
 void hudf_publish_art(int slot, const uint32_t *argb, int w, int h);   // NULL clears
 void hudf_set_injecting(int on);              // the game thread is feeding it a click

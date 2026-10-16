@@ -1,0 +1,25 @@
+{
+  "comment": "task-lighting-weather: apply bounded rain/storm drag only in the existing grounded-ball branch, and apply a one-time comfort mood adjustment to the initial mood of a newly arriving golfer. Both helpers pass through when environment gameplay is off. Do not edit generated source.",
+  "patches": {
+    "FUN_004289e0": [
+      [
+        "if (iVar18 < 5) {",
+        "iVar18 = weather_game_roll_friction(iVar18, local_6c, uStack_68);\n                  if (iVar18 < 5) {"
+      ]
+    ],
+    "FUN_00421bc0": [
+      [
+        "if (DAT_00543ccc != 0) {",
+        "(&DAT_0057955c)[uVar11 * 0x80] = (short)weather_game_arrival_mood((int)(short)(&DAT_0057955c)[uVar11 * 0x80], (int)uVar11);\n        if (DAT_00543ccc != 0) {"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_004289e0": [
+      ["if (iVar18 < 5) {", 1]
+    ],
+    "FUN_00421bc0": [
+      ["if (DAT_00543ccc != 0) {", 1]
+    ]
+  }
+}

@@ -7,6 +7,7 @@
 // rewrote later is never matched with a stale record.
 
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,11 +35,15 @@ int mods_file_crc(const char *path, uint32_t *size, uint32_t *crc) {
   unsigned char buf[65536];
   size_t n;
   uint32_t c = 0, total = 0;
+  int ok = 1;
   while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
+    if (n > UINT32_MAX - total) { ok = 0; break; }
     c = mods_crc32(c, buf, n);
     total += (uint32_t)n;
   }
-  fclose(f);
+  if (ferror(f)) ok = 0;
+  if (fclose(f)) ok = 0;
+  if (!ok) return 0;
   *size = total;
   *crc = c;
   return 1;
@@ -72,17 +77,23 @@ int saverec_parse(ModSaveRec *rec, char *text) {
   if (fmt.ok) free(fmt.u.s);
   toml_datum_t ver = toml_int_in(t, "format_version");
   // Newer formats keep these fields; anything we do not know is ignored.
-  rec->format = ver.ok ? (int)ver.u.i : 0;
+  rec->format = ver.ok && ver.u.i >= 1 && ver.u.i <= INT_MAX ? (int)ver.u.i : 0;
   if (rec->format < 1) ok = 0;
   toml_datum_t d = toml_string_in(t, "platform");
   if (d.ok) { snprintf(rec->platform, sizeof rec->platform, "%s", d.u.s); free(d.u.s); }
   d = toml_string_in(t, "profile");
   if (d.ok) { snprintf(rec->profile, sizeof rec->profile, "%s", d.u.s); free(d.u.s); }
   d = toml_int_in(t, "save_size");
-  if (d.ok) rec->save_size = (uint32_t)d.u.i;
+  if (d.ok && d.u.i >= 0 && (uint64_t)d.u.i <= UINT32_MAX) rec->save_size = (uint32_t)d.u.i;
   else ok = 0;
   d = toml_string_in(t, "save_crc32");
-  if (d.ok) { rec->save_crc = (uint32_t)strtoul(d.u.s, NULL, 16); free(d.u.s); }
+  if (d.ok) {
+    size_t n = strlen(d.u.s);
+    if (n >= 1 && n <= 8 && strspn(d.u.s, "0123456789abcdefABCDEF") == n)
+      rec->save_crc = (uint32_t)strtoul(d.u.s, NULL, 16);
+    else ok = 0;
+    free(d.u.s);
+  }
   else ok = 0;
   toml_array_t *mods = toml_array_in(t, "mods");
   for (int i = 0; mods && i < toml_array_nelem(mods) && rec->n < 64; i++) {

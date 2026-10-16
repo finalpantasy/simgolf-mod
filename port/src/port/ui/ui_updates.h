@@ -25,6 +25,8 @@ typedef struct UpdState {
   char zip_url[512], sha_url[512];
   volatile int busy;         // 0 idle, 1 downloading/installing, 2 failed (status_text says why)
   char status_text[120];
+  volatile int download_per_mille; // -1 when the server has no content length
+  volatile int download_kb, download_total_kb;
 } UpdState;
 
 // 1 when version b is newer than a, 0 when equal, -1 when older ("v" prefix and missing parts allowed)

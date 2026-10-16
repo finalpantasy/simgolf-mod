@@ -36,9 +36,9 @@ typedef struct GwTag {
 typedef struct GwBubble {
   int16_t slot, tone;  // tone: -1 bad, 0 neutral, 1 good (golf's own colour of the line)
   int32_t x, y;        // where golf drew the line (centred on x), canvas px: just above the head
-  int16_t kind;        // 0: a thought (icon is the golfer's mood), 1: speech with the speaker's face
+  int16_t kind;        // 0: thought, 1: speech, 2: persistent tutorial guidance
   int16_t art;         // GW_ART_* key of the icon
-  char text[120];
+  char text[512];
 } GwBubble;
 
 enum { GW_METERS = 5, GW_HOLES = 18 };
@@ -51,6 +51,7 @@ typedef struct GwCard {
   char line2[200];     // traits
   char skills[160];    // what the golfer wants more of
   char quote[220];     // the golfer's line
+  char club_story[240]; // persistent Living Club story, separate from original pair stories
   char label[GW_METERS][20];
   int16_t meter[GW_METERS];   // 0..1000, full = well
   int16_t warn[GW_METERS];    // golf's own red (low need)
@@ -111,7 +112,7 @@ void ui_golfers_opts_default(GwOpts *o);
 void ui_golfers_set_opts(const GwOpts *o);
 void ui_golfers_reset(void);   // forget remembered fades and bubble timers
 
-enum { GW_ACT_BUTTON = 1, GW_ACT_CLOSE = 2 };
+enum { GW_ACT_BUTTON = 1, GW_ACT_CLOSE = 2, GW_ACT_DIARY = 3 };
 typedef struct GwAction {
   int kind;
   int id;       // golf's card hit id (0 profile, 1 move / eject, 2 snapshot, 3 story, 5 next chapter)
@@ -136,6 +137,7 @@ int ui_golfers_draw(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float vi
 // click-through check in the gallery, golf.log with SIMGOLF_GOLFERS_LOG).
 typedef struct GwLayout {
   UiRect card, close;
+  UiRect diary;
   UiRect bubble_text;  // the last big bubble's text area (contrast measurements)
   UiRect btn[6];       // by golf's hit id; w == 0: not offered
 } GwLayout;

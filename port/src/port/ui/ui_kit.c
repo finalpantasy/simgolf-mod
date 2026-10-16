@@ -230,6 +230,7 @@ double ui_now(const UiCtx *c) { return c->now; }
 int ui_is_hot(const UiCtx *c, uint32_t id) { return id && c->in.hot == id; }
 int ui_is_active(const UiCtx *c, uint32_t id) { return id && c->in.active == id; }
 int ui_clicked(const UiCtx *c, uint32_t id) { return ui_interact_clicked(&c->in, id); }
+int ui_right_clicked(const UiCtx *c, uint32_t id) { return c->in.right_clicked == id; }
 float ui_wheel(const UiCtx *c, uint32_t id) { return c->in.wheel_id == id ? c->in.wheel : 0; }
 UiDraw *ui_drawer(UiCtx *c) { return &c->d; }
 UiText *ui_texter(UiCtx *c) { return &c->t; }
@@ -1040,6 +1041,8 @@ UiRect ui_popover(UiCtx *c, float ax, float ay, float w, float h, int side) {
   if (side > 0) r = ui_rect(ax + gap + arrow / 2, ay - h / 2, w, h);   // to the right of the anchor
   else r = ui_rect(ax - gap - arrow / 2 - w, ay - h / 2, w, h);
   float m = ui_s(c, t->edge_margin);
+    if (r.x + r.w > c->w - m) r.x = c->w - m - r.w;
+    if (r.x < m) r.x = m;
   if (r.y < m) r.y = m;
   if (r.y + r.h > c->h - m) r.y = c->h - m - r.h;
   r = ui_rect_round(r);

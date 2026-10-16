@@ -28,6 +28,8 @@
 #include <string>
 #include <vector>
 
+#include "port/weather_audio.h"
+
 namespace {
 
 constexpr int kRate = 44100;
@@ -208,6 +210,7 @@ void SDLCALL mix(void *, Uint8 *stream, int len) {
     if (done) g_voices.erase(g_voices.begin() + (long)v);
     else v++;
   }
+  weather_audio_mix(out, frames, master, effects);
   for (int i = 0; i < frames * 2; i++) {
     if (out[i] > 1.0f || out[i] < -1.0f) g_clipped++;
     out[i] = out[i] > 1.0f ? 1.0f : out[i] < -1.0f ? -1.0f : out[i];
@@ -261,6 +264,15 @@ void snd_js_init(void) {
     return;
   }
   g_trace = getenv("SIMGOLF_SOUND_LOG") != nullptr;
+  const char *rain_dir = getenv("SIMGOLF_WEATHER_AUDIO_DIR");
+  char *base_dir = SDL_GetBasePath();
+  std::string default_rain_dir = std::string(base_dir ? base_dir : "") + "audio/weather";
+  int rain_layers = weather_audio_load_rain(rain_dir && *rain_dir ? rain_dir : default_rain_dir.c_str());
+  SDL_free(base_dir);
+  fprintf(stderr, "weather: recorded rain layers %d/3%s\n", rain_layers,
+          rain_layers==3 ? " loaded" : "; using procedural fallback");
+  fprintf(stderr, "weather: recorded thunder variants %d/4; pack %s\n",
+          weather_audio_recorded_thunder_count(), rain_dir && *rain_dir ? rain_dir : default_rain_dir.c_str());
   const char *wav = getenv("SIMGOLF_MIXWAV");
   if (wav && *wav && (g_wav = fopen(wav, "wb"))) {
     wav_header(g_wav, 0);
@@ -388,17 +400,20 @@ void snd_js_stop(int index) {
 }
 
 void snd_js_shutdown(void) {
-  if (!g_dev) return;
-  SDL_CloseAudioDevice(g_dev);
-  g_dev = 0;
-  g_voices.clear();
-  for (Sound &s : g_sounds) s = Sound();
-  if (g_wav) {
-    wav_header(g_wav, g_wav_frames);
-    fclose(g_wav);
-    g_wav = nullptr;
-    g_wav_frames = 0;
+  if (g_dev) {
+    SDL_CloseAudioDevice(g_dev);
+    g_dev = 0;
+    g_voices.clear();
+    for (Sound &s : g_sounds) s = Sound();
+    if (g_wav) {
+      wav_header(g_wav, g_wav_frames);
+      fclose(g_wav);
+      g_wav = nullptr;
+      g_wav_frames = 0;
+    }
   }
+  // SDL has stopped the callback before the DSP and its published state reset.
+  weather_audio_shutdown();
 }
 
 }  // extern "C"

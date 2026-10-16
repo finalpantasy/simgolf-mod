@@ -141,3 +141,12 @@ Delete the install folder and the desktop shortcut. Nothing else was changed on 
 Your saved games are in `game\Saved Games` inside the install folder; copy them out first if you want to keep them.
 
 The playable program is **Sim Golf Remastered.exe**. Setup creates the desktop shortcut for it. Your existing settings and saves are retained during updates.
+
+## Optional Terrain Mod
+
+The separate `SimGolf-Remastered-Terrain-v0.1.17.zip` adds experimental ground
+textures. It is not required for any bug fix, golfer, personality, weather feature
+or the approved clubhouse. Close the game and copy the archive's `ui` folder into
+your installation beside the program, merging folders. Read its README to switch
+it independently. Saves and settings stay intact. The normal in-game updater
+selects the Windows program archive and does not download this optional mod.

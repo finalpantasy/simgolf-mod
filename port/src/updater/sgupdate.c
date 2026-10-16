@@ -24,7 +24,9 @@
 // path relative to the app folder; a trailing slash is a folder
 static const char PLAYER_EXE[] = "Sim Golf Remastered.exe";
 static const char *const ITEMS[] = {"golf.exe", PLAYER_EXE, "SDL2.dll", "sgsetup.exe", "sgupdate.exe", "jgld-nops.json", "version.txt", "mods.ini.default", "fonts/", "ui/",
-                                    "data/tables/", "mods-examples/"};
+                                    "data/tables/", "data/living_club.json", "data/lighting-windows.csv",
+                                    "data/weather-air.csv", "data/weather-atmosphere.csv", "data/weather-climate.csv",
+                                    "data/weather-surfaces.csv", "mods-examples/"};
 #define NITEMS ((int)(sizeof ITEMS / sizeof ITEMS[0]))
 
 static char g_log_path[MAX_PATH];

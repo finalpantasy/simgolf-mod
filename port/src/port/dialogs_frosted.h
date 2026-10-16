@@ -24,8 +24,11 @@ extern "C" {
 
 // game thread
 int dlg_game_active(void);               // original or native modal owns input until return
+int dlg_entry_nav(int vk, int shift);    // game-thread input while text entry owns keyboard
 int dlgf_enabled(void);                  // ui.dialogs=frosted_mint and the native layer is up
 void dlgf_publish(const DlgSnap *s);     // the dialog the original is showing now
+// Atomically publish a face snapshot and its matching page/preview images.
+void dlgf_publish_faces(const DlgSnap *s,const DlgPixels *tiles,const DlgPixels *preview);
 void dlgf_end(void);                     // the original dialog has returned
 int dlgf_take_action(DlgAction *a);      // next choice on the native dialog, 1 if any
 void dlgf_publish_art(int key, const uint32_t *argb, int w, int h);   // DLG_ART_* key; NULL clears

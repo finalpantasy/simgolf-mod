@@ -6,6 +6,9 @@
 #define SIMGOLF_PORT_GHIDRA_PRELUDE_H
 
 #include <stdint.h>
+#include "port/golf/weather_game.h"
+#include "port/golf/placement_animation.h"
+#include "port/golf/save_cancel.h"
 #include "port/golf/re_bounds.h"
 #include "port/camera_tiles.h"
 #include "port/clubhouse_start.h"
@@ -271,6 +274,11 @@ int mdata_cell(int *cache, const char *table, const char *row, const char *field
 int mdata_at(int *cache, const char *table, int row, const char *field, int lit);
 void mdata_thought_begin(char *buf);
 void mdata_thought_end(int event, int arg, int arg2, int slot, char *buf);
+void living_reset(void);
+void living_visit(int slot);
+void living_event(int slot, int event, int arg);
+void living_save_end(void);
+int living_reaction(int slot, int event, int original);
 #define MDATA(t, r, f, lit) ({ static int mdc_ = -1; mdata_cell(&mdc_, (t), (r), (f), (int)(lit)); })
 #define MDATA_AT(t, i, f, lit) ({ static int mdc_ = -1; mdata_at(&mdc_, (t), (int)(i), (f), (int)(lit)); })
 #else
@@ -278,6 +286,11 @@ void mdata_thought_end(int event, int arg, int arg2, int slot, char *buf);
 #define MDATA_AT(t, i, f, lit) ((int)(lit))
 #define mdata_thought_begin(buf) ((void)0)
 #define mdata_thought_end(e, a, b, s, buf) ((void)0)
+#define living_reset() ((void)0)
+#define living_visit(s) ((void)0)
+#define living_event(s,e,a) ((void)0)
+#define living_save_end() ((void)0)
+#define living_reaction(s,e,v) (v)
 #endif
 
 // task-40 (src/port/golf/overrides.c): 1 = FUN_00449540 raises water tiles at load too.
@@ -461,6 +474,9 @@ int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5); 
 int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d);   // FUN_00473cb0 (the pro's portrait)
 void fe_list_vars(int count, int *scroll, int sel, int p1, int p2);
 void fe_theme_vars(int n, const unsigned char *mask, int sel);   // the theme packs: rows, content bits per row, golf's current row
+void fe_theme_restore(int count);
+void fe_theme_remember(void);
+int dlg_edit_key(char *text, unsigned *cursor, unsigned *length, int ch, int vk, int capacity);
 void fe_loading_pic(void *sprite);   // task-69: golf's loading picture (FUN_00406250) was just drawn
 void fe_loading(int pct, const char *quote);   // task-69: the loading screen's quote is about to be drawn; pct -1 = no bar
 void fe_loading_progress(int assets);   // completed FLCs; no artwork reload, random numbers or waits
@@ -470,10 +486,11 @@ void fe_suspend(void);          // a dialog of the original is about to run its 
 // patches (port/tools/translate/golf.dialogs.json) in the popup menu (FUN_0046d6e0) and the text
 // entry (FUN_0045b2c0) call these; with ui.dialogs=original (and in the browser build) each one
 // keeps the original behaviour.
+int dlg_face_picker(int profile,int male); // -2: use original chooser; -1: cancel or applied painted face
 void dlg_pre(void);             // before the caller draws its own strip: the picture to bring back
 void dlg_begin(int kind);       // a dialog's loop starts (0 menu, 1 text entry)
 int dlg_menu(int px, int py, int sel, int checks, unsigned mask, unsigned disabled, int left, int first_y, int n_items, int width, int height);   // per frame; 1 = close it
-int dlg_entry(const char *prompt, const char *text, int caret, int max_chars);   // per frame; 1 = Enter, 2 = Esc
+int dlg_entry(const char *prompt, char *text, unsigned *caret, unsigned *length, int max_chars);   // per frame; 1 = Enter, 2 = Esc
 void dlg_hint_pre(void);        // FUN_0040d320 is about to draw a message panel (param_4 -2): keep the picture
 void dlg_wait_begin(void);      // the wait owns input before its first event pump
 int dlg_wait(void);             // per iteration of golf's wait for a click or key (FUN_0045c0c0)
@@ -481,5 +498,10 @@ void dlg_hint_end(void);        // that wait ends
 void dlg_profile_tick(void);    // per frame of the golfer profile page (FUN_004385d0): Esc presses its OK disc
 int dlg_hire(int hover);        // per frame in the hire panel (FUN_00459400); 1 = close it
 unsigned dlg_done(unsigned v);  // the dialog returns v
+
+// Complete the defined golfer body-color range after original appearance resolution.
+void golfer_palette_finish(int slot);
+
+#include "port/roster.h"
 
 #endif  // SIMGOLF_PORT_GHIDRA_PRELUDE_H

@@ -46,7 +46,8 @@ struct RecordedVertex {
   float x, y, r, g, b, a, u, v;
 };
 // world: the three vertices' positions before the modelview (x, y, z each; task-78 water).
-using Recorder = void (*)(void *user, const RecordedVertex v[3], const Texture *tex, bool blend, const float world[9]);
+using Recorder = void (*)(void *user, const RecordedVertex v[3], const Texture *tex, bool blend,
+                          const float world[9], const float normals[9]);
 
 struct Vertex {
   float pos[3];
@@ -114,8 +115,10 @@ public:
     recorderUser_ = user;
     rasterize_ = rasterize;
   }
+  int record_pad_x = 0, record_pad_y = 0;  // recording only; software view is unchanged
   // The current modelview (column-major): its rows are the eye axes in world space (task-78).
   const Mat4 &modelview() const { return stack_[MODELVIEW].back(); }
+  float heightPixels() const; // orthographic screen pixels per world Y unit
   const Texture *texture(unsigned id) const {
     return id && id <= textures_.size() && textures_[id - 1].w ? &textures_[id - 1] : nullptr;
   }

@@ -1,4 +1,24 @@
-# SimGolf Remastered for Windows 0.1.16
+# SimGolf Remastered for Windows 0.1.17
+
+## 0.1.17 - 2026-10-16
+
+A larger cast, optional living-course features and a batch of interface repairs.
+
+- Added 45 authored golfer identities and portraits, with original ordinary visitor skill progression by default. New arrival skill mixes are optional.
+- Added switchable Living Club personalities, dialogue, memories and stories. Extra mood reactions are opt-in.
+- Added optional lighting and regional weather. Effects on ball rolls and arriving golfers are opt-in.
+- Bundled the approved Parkland clubhouse. New authored terrain is a separate optional Terrain Mod download; original textures and independent art switches remain available.
+- Fixed clubhouse layer loading, retention while Options is open, and the original falling construction animation.
+- Fixed pro shot readouts and shot choices in Practice and matches, with original-text controls retained.
+- Modernised Routing Map, remembered the selected theme and added Space pause under the modern keyboard profile.
+- Fixed Save-name selection and quiet cancellation. Empty submitted names still produce the original warning.
+- Fixed duplicate welcome history, welcome wording and truncation of longer welcome messages.
+- Added real updater byte progress and a visible verification phase while protecting player settings, mods and saves.
+- Retained staff placement repairs for expanded courses and camera/scrolling fixes.
+
+New gameplay additions are independently switchable. Original energy, mood and weed balance remains the default. Manual par editing and drag-to-build are not included. No original game files are bundled.
+
+## 0.1.16 - 2026-10-16
 
 - Bundled clubhouse art is delivered through the existing updater while preserving user HD packs.
 - Added the approved Parkland clubhouse model and garden, with all four views and original-cadence animated flags and birdbath water. Existing HD art stays available; Original textures retain the original building.

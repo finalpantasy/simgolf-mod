@@ -1,3 +1,4 @@
+#include "port/roster.h"
 // Frosted Mint HUD, game-thread side, native build (simgolf mod, task-30).
 // The overview is at the top of golf/hud_hooks.c (which holds the news strip
 // override and the browser build's no-op versions of these hooks). This file
@@ -23,6 +24,7 @@
 #define G8(a) (*(volatile int8_t *)(uintptr_t)(a))
 
 #define FLAGS 0x59e7b8
+int hud_game_paused(void) { return (G32(FLAGS) & 4) != 0; }
 #define DOCK_MODE 0x567afc
 #define SCREEN_STATE 0x569498
 #define TEXT_BUF 0x51a068
@@ -351,7 +353,8 @@ static void copy_str(char *dst, int cap, const char *src) {
 static HudMsg g_hist[HUD_MSG_MAX];
 static int g_hist_n, g_hist_seq, g_news_seq;
 static int g_prev_ss, g_prev_timer;
-static char g_prev_text[400];
+static char g_prev_text[HUD_NEWS_TEXT];
+static int g_last_news_tick = -1, g_last_news_subject;
 
 // A golfer on the course: the record's state byte (+0x21) is neither 0 (unused) nor -1 (the "hire an
 // employee" placeholder, which opens that dialog when selected).
@@ -385,7 +388,11 @@ static int hole_of_text(const char *text) {
 static void note_messages(const char *date, int posted) {
   int ss = G8(SCREEN_STATE), timer = G32(0x5a7144);
   const char *text = (const char *)(uintptr_t)NEWS_TEXT;
-  if (ss == 1 && text[0] && (posted || g_prev_ss != 1 || timer > g_prev_timer || strncmp(text, g_prev_text, sizeof g_prev_text - 1) != 0)) {
+  int tick = G32(0x834170), subject = G32(0x4c2e08);
+  int duplicate = g_hist_n && tick == g_last_news_tick && subject == g_last_news_subject &&
+                  !strncmp(text, g_prev_text, sizeof g_prev_text - 1) &&
+                  !strcmp(date, g_hist[g_hist_n - 1].date);
+  if (ss == 1 && text[0] && !duplicate && (posted || g_prev_ss != 1 || timer > g_prev_timer || strncmp(text, g_prev_text, sizeof g_prev_text - 1) != 0)) {
     HudMsg *m;
     if (g_hist_n == HUD_MSG_MAX) {
       memmove(g_hist, g_hist + 1, sizeof g_hist[0] * (HUD_MSG_MAX - 1));
@@ -397,9 +404,13 @@ static void note_messages(const char *date, int posted) {
     copy_str(m->text, sizeof m->text, text);
     for (char *p = m->text; *p; p++)
       if (*p == '\n' || *p == '\r' || *p == '|') *p = ' ';
+    char *typo = strstr(m->text, "and a sparkling waters");
+    if (typo) memmove(typo + 4, typo + 6, strlen(typo + 6) + 1);
     copy_str(m->date, sizeof m->date, date);
     m->t_ms = host_now_ms();
     m->seq = g_news_seq = ++g_hist_seq;
+    g_last_news_tick = tick;
+    g_last_news_subject = subject;
     int subj = G32(0x4c2e08);
     if (golfer_ok(subj)) {
       m->show = HUD_SHOW_GOLFER;
@@ -602,7 +613,7 @@ static void read_pro(HudSnap *s, int flags) {
   }
   s->pro_shot = G32(0x58f330);
   for (int i = 0; i < 10; i++) s->pro_skill[i] = G8(SKILLS + i);
-  copy_str(s->pro_name, sizeof s->pro_name, (const char *)(uintptr_t)0x4d6098);
+  copy_str(s->pro_name, sizeof s->pro_name, (const char *)(uintptr_t)roster_address(0x4d6098));
 }
 
 // [ui] pro_setup: original (default, task-102c) leaves the pro as golf has it, as in 2002: the pro exists when a
@@ -631,7 +642,7 @@ static void hud_hide_now(void) {   // a modal dialog of golf's is about to run: 
 static void pro_profile(void) {   // FUN_00436060 case 0, the profile disc
   G8(0x582cd0) = 0x20;
   G16(0x582d6e) = 0;
-  int look = G32(0x4d60b4);
+  int look = G32(roster_address(0x4d60b4));
   G8(0x582cd1) = look == 0 ? 7 : (look & 7);
   FUN_004385d0(0, 0x98);
 }
@@ -651,7 +662,7 @@ static void pro_action(int what) {
       FUN_004065c0();   // the first setup, exactly as before the first round
     } else {            // the skills with an OK button (no points to spend)
       G32(0x4c2e08) = -1;
-      FUN_0045f0f0((char *)(uintptr_t)0x4d6098, (uint16_t)G16(SKILL_MASK), 0, -1, 200);
+      FUN_0045f0f0((char *)(uintptr_t)roster_address(0x4d6098), (uint16_t)G16(SKILL_MASK), 0, -1, 200);
     }
   }
   fprintf(stderr, "hud: pro done (ready %d, skills", pro_ready());
@@ -873,6 +884,8 @@ static void read_state(HudSnap *s) {
   s->elev_edit = (flags & 2) != 0;
   s->paused = (flags & 4) != 0;
   s->fast = G32(0x59b04c) != 0;
+  s->game_speed = bridge_game_speed();
+  s->speed_button_off = !mods_get_int("ui.speed_button", 1);
   s->zoom = G32(0x5a34e8);   // the zoom saved around the HUD draws (the live one is forced to 4 there)
   s->rotation = G32(0x5685f4);
   s->theme = G32(0x5a34e0);
@@ -1079,6 +1092,14 @@ static void run_actions(void) {
   HudAction a;
   if (!hudf_take_action(&a)) return;
   switch (a.kind) {
+    case HUD_ACT_SPEED:
+      if (a.x >= 1 && a.x <= 4) {
+        char value[8];
+        snprintf(value, sizeof value, "%d", a.x);
+        mods_option_set("gameplay.speed", value);
+        bridge_set_game_speed(a.x);
+      }
+      break;
     case HUD_ACT_CLICK: inject(a.x, a.y); break;
     case HUD_ACT_KEY: G32(0x822b9c) = a.key; break;
     case HUD_ACT_VKEY: G32(0x822b98) = a.key; break;

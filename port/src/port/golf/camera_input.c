@@ -83,7 +83,8 @@ static struct {
   int loaded, drag_middle, drag_right, wasd, wheel_zoom, edge_scroll;
   double pan_speed;
   int zoom_pointer;   // task-56: the wheel zooms toward the pointer (0: the view centre, as golf's own zoom)
-} cfg = {0, 1, 0, 1, 1, 0, 900, 1};
+  int fix_drag_scroll;
+} cfg = {0, 1, 0, 1, 1, 0, 900, 1, 1};
 
 static void trim(char *s) {
   char *a = s;
@@ -104,6 +105,7 @@ static void sync_store(void) {
   if ((v = getenv("SIMGOLF_CAMERA_INI")) && *v) return;
   if (mods_serial() == seen) return;
   seen = mods_serial();
+  cfg.fix_drag_scroll = mods_get_int("fixes.drag_scroll", 1) != 0;
   if ((v = mods_get("camera.drag_button")) && *v) {
     cfg.drag_middle = strstr(v, "middle") != NULL;
     cfg.drag_right = strstr(v, "right") != NULL;
@@ -257,6 +259,10 @@ static struct {
   int set_x, set_y;         // what we last wrote
 } g_drag;
 
+static uint32_t g_drag_serial;
+
+uint32_t camera_input_drag_serial(void) { return g_drag_serial; }
+
 static double g_click_up_at;   // a handed-back right click releases then
 static int g_click_x, g_click_y;
 
@@ -322,6 +328,12 @@ static void drag_to(int x, int y) {
     hd_ui_camera_set(g_drag.sub_x0 + tx, g_drag.sub_y0 + ty);   // kept on the map there
     g_drag.set_x = G(CAM_X);
     g_drag.set_y = G(CAM_Y);
+    if (cfg.fix_drag_scroll) {
+      // Use the clamped position as the next anchor. Motion beyond a map
+      // edge must not build up a dead zone before a reverse drag can move.
+      drag_anchor(x, y);
+      ++g_drag_serial;
+    }
     log_camera();
     return;
   }
@@ -330,6 +342,11 @@ static void drag_to(int x, int y) {
   G(CAM_X) = g_drag.set_x = nx;
   G(CAM_Y) = g_drag.set_y = ny;
   hd_ui_camera_clamp();   // wide views stop at the map edge (task-3); a clamp re-anchors the drag
+  if (cfg.fix_drag_scroll) {
+    if (G(CAM_X) != nx || G(CAM_Y) != ny || nx != g_drag.cam_x0 + lround(tx) || ny != g_drag.cam_y0 + lround(ty))
+      drag_anchor(x, y);
+    ++g_drag_serial;
+  }
   log_camera();
 }
 

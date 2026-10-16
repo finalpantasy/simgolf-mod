@@ -6,7 +6,8 @@
 // Transport: TCP on 127.0.0.1 only, one JSON object per line each way. The
 // sockets are non-blocking and polled from the game thread at every yield
 // (win_yield), so every command runs between frames on the thread that owns
-// the game's memory, window and input queue: no locks, no races.
+// the game's memory and consumes its input queue. The threaded presenter
+// dispatches native window messages and queues input between rendered frames.
 //
 // Clock: the game reads time only through port_now_ms() (GetTickCount,
 // timeGetTime, QueryPerformanceCounter, SetTimer, timeSetEvent, Sleep). On
@@ -32,9 +33,11 @@
 
 #include "port/grid.h"
 #include "port/staff.h"
+#include "port/roster.h"
 #include "port/host.h"
 #include "port/runtime.h"
 #include "mods/mods.h"
+#include "mods/living_club.h"
 
 #define BRIDGE_VERSION 1
 extern int win_screen_w, win_screen_h;   // win32.c: the game's canvas (800x600 unless canvas= is wider, task-3)
@@ -48,6 +51,7 @@ int opt_is_open(void);
 int modsp_is_open(void);
 int hud_on(void);             // ghidra_prelude.h: the new HUD replaces the old one this frame
 int hd_native_shot(const char *name);   // hd_native.c (task-3): the presented picture, 0 when off
+void hd_native_pump_events(void);  // threaded presenter owns native message dispatch
 int hd_native_dump(const char *path);   // hd_native.c (task-68): the course of every presented frame to a file, NULL ends
 uint16_t *win_screen(void);   // win32.h (not included: its enum clashes with wingdi.h)
 
@@ -78,6 +82,8 @@ void bridge_set_game_speed(double s) {
   rebase();
   g_user_speed = s;
 }
+
+double bridge_game_speed(void) { return g_user_speed; }
 
 void bridge_wait(int ms) {
   if (ms <= 0) return;
@@ -648,6 +654,7 @@ static void set_paused(int p) {
 }
 
 static void state_fields(Buf *b) {
+  bprintf(b, ",\"game_speed\":%g,\"effective_speed\":%g", g_user_speed, speed_now());
   bprintf(b, ",\"paused\":%s,\"turbo\":%s,\"speed\":%g,\"clock_ms\":%.1f,\"real_ms\":%.1f,\"frames\":%u,\"loops\":%u",
           g_paused ? "true" : "false", g_turbo ? "true" : "false", g_speed, bridge_clock_ms(), host_now_ms(),
           g_presents, g_ticks);
@@ -676,7 +683,7 @@ static void cmd_peek(int ci, const char *id, const JObj *o, Buf *b) {
   if (count > 4096) count = 4096;
   if (len < 1) len = 1;
   if (len > 65536) len = 65536;
-  uintptr_t a = staff_translate(grid_translate((uintptr_t)addr));   // map and legacy staff addresses
+  uintptr_t a = roster_address((unsigned)staff_translate(grid_translate((uintptr_t)addr)));
   if (t == T_STR || t == T_BYTES) {
     if (!mem_ok(a, len, 0)) {
       // shorter readable prefix for strings near the end of a region
@@ -714,7 +721,7 @@ static void cmd_poke(int ci, const char *id, const JObj *o, Buf *b) {
   if (!jnum(o, "addr", &addr)) { reply_err(ci, id, "poke: addr missing"); return; }
   jstr(o, "type", tname, sizeof tname);
   Type t = parse_type(tname);
-  uintptr_t a = staff_translate(grid_translate((uintptr_t)addr));   // map and legacy staff addresses
+  uintptr_t a = roster_address((unsigned)staff_translate(grid_translate((uintptr_t)addr)));
   if (t == T_BAD) { reply_err(ci, id, "unknown type %s", tname); return; }
   if (t == T_STR || t == T_BYTES) {
     static char s[4096];
@@ -1142,6 +1149,10 @@ static void run_cmd(int ci, const char *line) {
   } else if (!strcmp(cmd, "call")) {
     cmd_call(ci, id, &o, &b);
     if (!b.n) return;
+  } else if (!strcmp(cmd, "living_club")) {
+    char *snapshot = living_snapshot();
+    bprintf(&b, ",\"ok\":true,\"club\":%s", snapshot ? snapshot : "null");
+    free(snapshot);
   } else if (!strcmp(cmd, "mods_get")) {
     char key[128] = "";
     bprintf(&b, ",\"ok\":true");
@@ -1383,7 +1394,7 @@ void bridge_tick(void) {
     static double last_pump;
     double now = host_now_ms();
     if (now - last_pump > 50) {   // keep the window answering Windows, events stay queued for the game
-      SDL_PumpEvents();
+      hd_native_pump_events();
       last_pump = now;
     }
   }

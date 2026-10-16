@@ -1,0 +1,18 @@
+{
+  "comment": "Living Club: mutation at genuine thought emission after original guards, paired arrivals and new-course reset. Reports keep read-only sentence building. Original story speech remains untouched.",
+  "patches": {
+    "FUN_004315e0": [["puVar6 = &DAT_005a8c38;", "living_reset();\n  puVar6 = &DAT_005a8c38;"]],
+    "FUN_0045de80": [["  pcVar12 = (char *)CONCAT31(0xfffdff,(undefined1)DAT_00834170);", "  living_visit((int)param_1);\n  living_visit((int)param_2);\n  pcVar12 = (char *)CONCAT31(0xfffdff,(undefined1)DAT_00834170);"]],
+    "FUN_00467a00": [
+      ["  FUN_00469b00(param_2,param_3,\n               (char)", "  living_event((int)param_1,(int)param_2,(int)param_3);\n  FUN_00469b00(param_2,param_3,\n               (char)"],
+      ["  pcStack_108 = pcVar15;", "  pcVar15 = (char *)(intptr_t)living_reaction((int)param_1,(int)param_2,(int)pcVar15);\n  pcStack_108 = pcVar15;"]
+    ],
+    "FUN_0040afa0": [["  return uVar1;", "  living_save_end();\n  return uVar1;"]]
+  },
+  "required_patch_counts": {
+    "FUN_004315e0": [["puVar6 = &DAT_005a8c38;",1]],
+    "FUN_0045de80": [["  pcVar12 = (char *)CONCAT31(0xfffdff,(undefined1)DAT_00834170);",1]],
+    "FUN_00467a00": [["  FUN_00469b00(param_2,param_3,\n               (char)",1],["  pcStack_108 = pcVar15;",1]],
+    "FUN_0040afa0": [["  return uVar1;",1]]
+  }
+}

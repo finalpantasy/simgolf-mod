@@ -61,6 +61,7 @@ void bridge_on_present(void);         // every presented frame
 // paused, scaled or turbo-charged it. bridge_wait replaces the game's sleeps.
 double bridge_clock_ms(void);
 void bridge_set_game_speed(double s);   // the Options page's game speed (1 = the original pace)
+double bridge_game_speed(void);        // game thread: current player-selected multiplier
 void bridge_wait(int ms);
 // Live mod values ("section.key" from mods.ini, changed by tools at run time).
 const char *bridge_mod(const char *key);

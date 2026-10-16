@@ -29,9 +29,11 @@
 #include <SDL.h>
 
 #include "port/golfers_frosted.h"
+#include "port/portrait_game.h"
 #include "port/ui_font.h"
 #include "port/hd_native.h"
 #include "port/hd_art.h"
+#include "mods/living_club.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
@@ -81,6 +83,7 @@ static int g_n_want;
 
 // card
 static int g_card_cap;
+static int g_diary_slot = -1;
 static int g_card_art_mark = -1;
 static uint16_t *g_save;
 static size_t g_save_cap;
@@ -262,6 +265,7 @@ int gw_popover_text(int fn, const char *text, int x, int y, unsigned colour) {
 }
 
 void gw_frame_begin(void) {
+  living_frame();
   if (g_log < 0) g_log = getenv("SIMGOLF_GOLFERS_LOG") != NULL;
   g_on = gwf_enabled();
   g_rec = g_on || g_log;
@@ -299,6 +303,23 @@ int gw_name(int slot, const char *text, int x, int y, int mood) {
 }
 
 int gw_active(void) { return g_on && g_rec; }
+
+int gw_tutorial(const char *text, int x, int y) {
+  if (!g_on || !g_rec || !text || !*text || g_note.n_bubbles >= GW_BUBBLES) return 0;
+  GwBubble *b = &g_note.bubbles[g_note.n_bubbles++];
+  memset(b, 0, sizeof *b);
+  b->slot = 999; b->kind = 2; b->tone = 0;
+  b->x = x; b->y = y;
+  b->art = (int16_t)mood_key(6);
+  want_art(b->art);
+  copy_str(b->text, sizeof b->text, text);
+  if (g_log) {
+    static char last[sizeof b->text];
+    if (strcmp(last, b->text)) fprintf(stderr, "golfers: tutorial [%s]\n", b->text);
+    copy_str(last, sizeof last, b->text);
+  }
+  return 1;
+}
 
 void gw_thought_begin(int type, int state) {
   (void)state;
@@ -476,6 +497,11 @@ static void run_actions(int slot) {
   }
   GwAction a;
   if (!gwf_take_action(&a)) return;
+  if (a.kind == GW_ACT_DIARY) {
+    g_diary_slot = g_diary_slot == slot ? -1 : slot;
+    return;
+  }
+  g_diary_slot = -1;
   int x, y;
   int id = a.kind == GW_ACT_CLOSE ? 4 : a.id;
   if (!card_button_point(card_layout(slot), id, &x, &y)) return;
@@ -651,7 +677,13 @@ void gc_end(int slot) {
   g_card_cap = 0;
   hd_art_hide_from(g_card_art_mark);
   // the head, read while the original card's pixels are still in the frame (capture() restores what it touches)
-  if (slot != g_port_slot || ++g_port_frames > 120) {
+  static int direct_portrait;
+  if (portrait_card(slot, GW_ART_PORTRAIT)) {
+    direct_portrait = 1;
+    g_port_slot = slot;
+    g_port_frames = 0;
+  } else if (direct_portrait || slot != g_port_slot || ++g_port_frames > 120) {
+    direct_portrait = 0;
     g_port_slot = slot;
     g_port_frames = 0;
     publish_head(slot);
@@ -662,6 +694,17 @@ void gc_end(int slot) {
   if (bb && w >= g_save_w && h >= g_save_h)
     for (int y = 0; y < g_save_h; y++) memcpy(bb + (ptrdiff_t)y * pitch, g_save + (size_t)y * g_save_w, (size_t)g_save_w * 2);
   fill_card(slot, &g_note.card);
+  char identity[100];
+  living_card(slot, identity, sizeof identity, g_note.card.club_story, sizeof g_note.card.club_story);
+  if (*identity) {
+    size_t used = strlen(g_note.card.line2);
+    snprintf(g_note.card.line2 + used, sizeof g_note.card.line2 - used, "%s%s", used ? " | " : "", identity);
+    if (g_diary_slot == slot) {
+      g_note.card.layout = 2;
+      g_note.card.n_story = living_diary(slot, g_note.card.story);
+      memset(g_note.card.story_tone, 0, sizeof g_note.card.story_tone);
+    }
+  }
   g_note.magic = GW_NOTE_MAGIC;
   hd_ui_note_set(&g_note, (int)sizeof g_note);
   static int last = -1;

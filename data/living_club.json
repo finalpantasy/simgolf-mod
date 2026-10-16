@@ -1,0 +1,2964 @@
+{
+  "version": 1,
+  "tuning": {
+    "seed": 265443,
+    "trait_affinity": 2,
+    "initial_confidence": 50,
+    "initial_resolve": 50,
+    "confidence_step": 2,
+    "reaction_interval": 4,
+    "story_rest_visits": 2,
+    "story_min_visits": 2,
+    "setback_after": 3,
+    "setback_margin": 3,
+    "nemesis_after": 2,
+    "familiar_after": 3,
+    "missing_partner_visits": 5,
+    "story_max_visits": 8,
+    "story_setbacks_limit": 3
+  },
+  "event_groups": {
+    "1": "good",
+    "29": "good",
+    "2": "bad",
+    "3": "bad",
+    "4": "bad",
+    "8": "bad",
+    "9": "bad",
+    "20": "bad",
+    "24": "bad",
+    "30": "bad",
+    "35": "bad",
+    "36": "bad",
+    "65": "bad",
+    "12": "hazard",
+    "13": "hazard",
+    "11": "scenery",
+    "28": "scenery",
+    "39": "scenery",
+    "21": "delay",
+    "10": "needs",
+    "14": "needs",
+    "15": "needs",
+    "26": "needs",
+    "18": "comfort",
+    "25": "comfort",
+    "27": "comfort",
+    "6": "strategy",
+    "16": "strategy",
+    "17": "strategy",
+    "32": "strategy",
+    "33": "strategy",
+    "55": "strategy",
+    "56": "strategy",
+    "57": "strategy",
+    "58": "strategy",
+    "59": "strategy",
+    "60": "strategy",
+    "22": "social",
+    "51": "practice",
+    "52": "practice",
+    "53": "practice",
+    "54": "practice"
+  },
+  "personalities": [
+    {
+      "id": "gambler",
+      "name": "The Gambler",
+      "trait_mask": 14,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 1,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "Worth the risk.",
+          "That is why I went for it.",
+          "Safe shots never felt like that."
+        ],
+        "bad": [
+          "The odds were excellent yesterday.",
+          "A calculated disaster.",
+          "Double or nothing on the next one."
+        ],
+        "hazard": [
+          "That water is mostly psychological.",
+          "One yard short of genius.",
+          "I knew the stakes."
+        ],
+        "scenery": [
+          "Lovely view from the dangerous route.",
+          "That gap is practically an invitation.",
+          "Beautiful place to take a chance."
+        ],
+        "delay": [
+          "I could try the shortcut while waiting.",
+          "All this waiting is bad for my nerve.",
+          "Let us raise the stakes, not the queue."
+        ],
+        "needs": [
+          "A snack before the next gamble.",
+          "Thirst is an avoidable hazard.",
+          "I would wager there is food nearby."
+        ],
+        "comfort": [
+          "Small comforts, enormous ambitions.",
+          "A good drink steadies the nerve.",
+          "Excellent. Back to taking chances."
+        ],
+        "strategy": [
+          "Safe route or a story to tell?",
+          "I can carry that. Probably.",
+          "Fortune favors the second attempt."
+        ],
+        "social": [
+          "{partner}, fancy making this interesting?",
+          "I promise the wager is imaginary.",
+          "Your safe route, my shortcut."
+        ],
+        "practice": [
+          "Practicing the shot everyone calls foolish.",
+          "Making my own luck today.",
+          "Even gamblers should learn the odds."
+        ],
+        "arrival": [
+          "New course, fresh possibilities.",
+          "Let us find the ambitious route.",
+          "I brought my optimistic ball supply."
+        ],
+        "return": [
+          "Back for another roll of the dice.",
+          "I remember where the bold route starts.",
+          "Visit {visit}. This feels lucky."
+        ]
+      }
+    },
+    {
+      "id": "purist",
+      "name": "The Purist",
+      "trait_mask": 1,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": -1,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        12,
+        1,
+        1,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "A properly earned result.",
+          "That was an honest golf shot.",
+          "Good design rewards good judgment."
+        ],
+        "bad": [
+          "No excuse. A poor execution.",
+          "The hole asked a fair question.",
+          "I owe that shot another attempt."
+        ],
+        "hazard": [
+          "A hazard with a purpose, I hope.",
+          "I chose the wrong side.",
+          "Good golf includes consequences."
+        ],
+        "scenery": [
+          "The land does the talking here.",
+          "An understated pleasure.",
+          "A good hole needs little decoration."
+        ],
+        "delay": [
+          "Etiquette would help this queue.",
+          "A round should have a rhythm.",
+          "We seem to have misplaced the pace."
+        ],
+        "needs": [
+          "Simple refreshments would suffice.",
+          "A bench is a sound investment.",
+          "Even traditionalists need lunch."
+        ],
+        "comfort": [
+          "Quiet comfort. Nicely judged.",
+          "A modest pleasure, well provided.",
+          "Exactly what a clubhouse should offer."
+        ],
+        "strategy": [
+          "Position matters more than spectacle.",
+          "There is a proper angle into this green.",
+          "A fair choice between courage and restraint."
+        ],
+        "social": [
+          "A pleasure to share a proper round.",
+          "After you, {partner}.",
+          "Good company improves a good course."
+        ],
+        "practice": [
+          "Fundamentals first, equipment second.",
+          "Working on the ordinary shots.",
+          "A dependable swing earns its keep."
+        ],
+        "arrival": [
+          "Let us see what the layout asks.",
+          "I hope the golf speaks for itself.",
+          "A new course deserves a fair hearing."
+        ],
+        "return": [
+          "Back to see the course afresh.",
+          "I remember the questions this layout asks.",
+          "Familiar ground, another honest round."
+        ]
+      }
+    },
+    {
+      "id": "social",
+      "name": "The Social Butterfly",
+      "trait_mask": 26,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 1,
+        "strategy": 0,
+        "social": 1,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Did you see that, {partner}?",
+          "A moment worth sharing.",
+          "Now we have something to talk about."
+        ],
+        "bad": [
+          "At least nobody missed the conversation.",
+          "I was halfway through a good story.",
+          "Please remember the joke, not the shot."
+        ],
+        "hazard": [
+          "That ball is making new friends.",
+          "A splash breaks the ice.",
+          "{partner}, tell me you have done that too."
+        ],
+        "scenery": [
+          "We should bring everyone here.",
+          "A perfect place for a good chat.",
+          "The scenery deserves an audience."
+        ],
+        "delay": [
+          "Time to learn everyone in the queue.",
+          "Anyone know the group ahead?",
+          "We could start a book club at this tee."
+        ],
+        "needs": [
+          "Anyone joining me for a snack?",
+          "A conversation needs refreshments.",
+          "Let us find somewhere to sit together."
+        ],
+        "comfort": [
+          "The best part is the company.",
+          "A lovely spot to catch up.",
+          "Stay a minute, {partner}."
+        ],
+        "strategy": [
+          "Talk me through your plan.",
+          "Your idea or my adventurous idea?",
+          "Two minds, several questionable options."
+        ],
+        "social": [
+          "So, how has your week been?",
+          "Good to meet another familiar face.",
+          "We should arrange another round."
+        ],
+        "practice": [
+          "Practice is better with company.",
+          "Watch this and tell me what you think.",
+          "A little advice, {partner}?"
+        ],
+        "arrival": [
+          "Who will we meet today?",
+          "New course, new company.",
+          "I hope there is a friendly welcome."
+        ],
+        "return": [
+          "Good to see this place again.",
+          "Another chance to catch up.",
+          "Visit {visit}, and still more stories."
+        ]
+      }
+    },
+    {
+      "id": "speedster",
+      "name": "The Speedster",
+      "trait_mask": 4,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": -1,
+        "needs": 0,
+        "comfort": -1,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        12,
+        1,
+        5,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Lovely. Next tee.",
+          "Good shot, keep moving.",
+          "That saved a little time."
+        ],
+        "bad": [
+          "No time to dwell on it.",
+          "Quick recovery, then onward.",
+          "That cost a shot and a minute."
+        ],
+        "hazard": [
+          "Drop, recover, keep going.",
+          "An inconvenient detour.",
+          "Water was not on my schedule."
+        ],
+        "scenery": [
+          "Lovely view. Admiring it on the move.",
+          "Beautiful. Where is the next tee?",
+          "Scenery with an efficient route. Excellent."
+        ],
+        "delay": [
+          "I have aged on this tee.",
+          "Ready golf, anyone?",
+          "We are waiting longer than we are playing."
+        ],
+        "needs": [
+          "A quick drink would help.",
+          "Somewhere convenient to grab a bite?",
+          "A short rest, then straight back."
+        ],
+        "comfort": [
+          "Fast service. Much appreciated.",
+          "Perfectly placed for a quick stop.",
+          "Refreshed and ready to move."
+        ],
+        "strategy": [
+          "Which route avoids the extra walk?",
+          "Decide, commit, play.",
+          "A clear plan keeps a round moving."
+        ],
+        "social": [
+          "Ready when you are, {partner}.",
+          "We make a brisk pair.",
+          "Chat while walking?"
+        ],
+        "practice": [
+          "A short, focused practice session.",
+          "Ten useful swings, then a round.",
+          "No wasted motion."
+        ],
+        "arrival": [
+          "Let us get straight to the first tee.",
+          "A fresh round and a clear schedule.",
+          "Ready to play."
+        ],
+        "return": [
+          "Back for another brisk round.",
+          "I know the way to the first tee.",
+          "Let us keep a good rhythm today."
+        ]
+      }
+    },
+    {
+      "id": "perfectionist",
+      "name": "The Perfectionist",
+      "trait_mask": 5,
+      "reactions": {
+        "good": 1,
+        "bad": -1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        12,
+        8,
+        1,
+        1,
+        5,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Almost exactly what I intended.",
+          "That will do. This once.",
+          "The preparation finally showed."
+        ],
+        "bad": [
+          "One tiny flaw. One enormous consequence.",
+          "I know exactly what went wrong.",
+          "That was below my own standard."
+        ],
+        "hazard": [
+          "The margin was there. I missed it.",
+          "Unacceptable alignment.",
+          "I should have checked the landing twice."
+        ],
+        "scenery": [
+          "A carefully composed view.",
+          "The little details matter.",
+          "Someone has an eye for proportion."
+        ],
+        "delay": [
+          "My routine has completely cooled off.",
+          "Hard to maintain a rhythm like this.",
+          "Waiting makes me reconsider everything."
+        ],
+        "needs": [
+          "Concentration is difficult when thirsty.",
+          "I should have planned a food stop.",
+          "A proper rest would improve my focus."
+        ],
+        "comfort": [
+          "Exactly the break I needed.",
+          "Well timed, well provided.",
+          "Everything feels in order again."
+        ],
+        "strategy": [
+          "Let me check the angle once more.",
+          "There is an exact answer here.",
+          "I want the right shot, not merely a possible one."
+        ],
+        "social": [
+          "Was that line as clean as it looked?",
+          "Honest feedback, {partner}.",
+          "I promise I am only judging my own swing."
+        ],
+        "practice": [
+          "Repeating it until it feels right.",
+          "A small correction makes a large difference.",
+          "One more carefully measured attempt."
+        ],
+        "arrival": [
+          "A clean scorecard. So much potential.",
+          "Today I will keep the small errors out.",
+          "Let us establish a good standard."
+        ],
+        "return": [
+          "I have been thinking about my last round.",
+          "Another chance to get the details right.",
+          "The same course, a better approach."
+        ]
+      }
+    },
+    {
+      "id": "stroller",
+      "name": "The Scenic Stroller",
+      "trait_mask": 16,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 1,
+        "delay": 1,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        12,
+        1,
+        1,
+        1,
+        8,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "A pleasant little bonus.",
+          "Good golf on a lovely afternoon.",
+          "That felt as easy as the breeze."
+        ],
+        "bad": [
+          "Still a lovely day.",
+          "The score is not the whole afternoon.",
+          "A little longer to enjoy the walk."
+        ],
+        "hazard": [
+          "A scenic place to lose a ball.",
+          "The pond has its own charm.",
+          "I shall take the long way around."
+        ],
+        "scenery": [
+          "Worth stopping for this view.",
+          "Listen to the birds.",
+          "I could spend the afternoon right here."
+        ],
+        "delay": [
+          "At least the view holds up.",
+          "No hurry on my account.",
+          "A chance to notice the surroundings."
+        ],
+        "needs": [
+          "A bench with a view would be lovely.",
+          "A drink and a quiet moment?",
+          "I have walked up quite an appetite."
+        ],
+        "comfort": [
+          "A perfect little pause.",
+          "This is part of the pleasure.",
+          "Rested, refreshed, in no particular hurry."
+        ],
+        "strategy": [
+          "Which route has the nicer walk?",
+          "There is pleasure in the longer way.",
+          "I can admire the view before deciding."
+        ],
+        "social": [
+          "Lovely weather for a shared walk.",
+          "No need to rush, {partner}.",
+          "Good company and open air."
+        ],
+        "practice": [
+          "A few gentle swings will do.",
+          "Enjoying the practice as much as the round.",
+          "There is no hurry to master everything."
+        ],
+        "arrival": [
+          "What a promising place for a walk.",
+          "Let us discover the quiet corners.",
+          "Golf and fresh air. Excellent."
+        ],
+        "return": [
+          "I missed this little walk.",
+          "Back for another pleasant afternoon.",
+          "I wonder what I will notice today."
+        ]
+      }
+    },
+    {
+      "id": "equipment",
+      "name": "The Equipment Addict",
+      "trait_mask": 8,
+      "reactions": {
+        "good": 0,
+        "bad": 1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 1,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        12,
+        5,
+        1,
+        1,
+        8,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "That club has earned its place.",
+          "The new grip finally makes sense.",
+          "Exactly what the brochure promised."
+        ],
+        "bad": [
+          "Clearly the wrong club.",
+          "Perhaps a different shaft would help.",
+          "That putter and I need a conversation."
+        ],
+        "hazard": [
+          "This ball was not waterproof enough.",
+          "An expensive equipment test.",
+          "Time to inspect the recovery club."
+        ],
+        "scenery": [
+          "A lovely backdrop for new clubs.",
+          "I should photograph the bag here.",
+          "Good scenery flatters the equipment."
+        ],
+        "delay": [
+          "Time to compare what everyone carries.",
+          "I could browse the shop while waiting.",
+          "Anyone tried the latest wedges?"
+        ],
+        "needs": [
+          "I packed clubs and forgot lunch.",
+          "A new bag needs a snack pocket.",
+          "Even excellent equipment cannot cure thirst."
+        ],
+        "comfort": [
+          "A drink, then a look around the shop.",
+          "Now I can appreciate the facilities.",
+          "The essentials, before the accessories."
+        ],
+        "strategy": [
+          "There must be a club for this.",
+          "Testing the distance chart.",
+          "An excellent excuse to try the new wedge."
+        ],
+        "social": [
+          "What is in your bag, {partner}?",
+          "You should try this grip.",
+          "I promise this is my last equipment recommendation."
+        ],
+        "practice": [
+          "Comparing two clubs scientifically. Mostly.",
+          "Testing rather than merely buying.",
+          "Learning what this equipment actually does."
+        ],
+        "arrival": [
+          "Fresh course. Full bag.",
+          "Let us see which clubs earn their keep.",
+          "I brought options. Many options."
+        ],
+        "return": [
+          "Back with a slightly different bag.",
+          "I have a new theory about my putter.",
+          "Same course. Revised equipment strategy."
+        ]
+      }
+    },
+    {
+      "id": "comeback",
+      "name": "The Comeback Kid",
+      "trait_mask": 20,
+      "reactions": {
+        "good": 0,
+        "bad": 1,
+        "hazard": 1,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        12,
+        8,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "That is how a comeback starts.",
+          "One good shot changes the mood.",
+          "Still plenty of golf in me."
+        ],
+        "bad": [
+          "The comeback needs a beginning.",
+          "I have recovered from worse.",
+          "That is the disaster portion finished."
+        ],
+        "hazard": [
+          "A setback, not a verdict.",
+          "Out of the hazard and back in it.",
+          "The next shot still belongs to me."
+        ],
+        "scenery": [
+          "A good place to clear my head.",
+          "A deep breath and a fresh view.",
+          "There is room to start again here."
+        ],
+        "delay": [
+          "Using the pause to reset.",
+          "Plenty of time to find my nerve.",
+          "A delay cannot beat me."
+        ],
+        "needs": [
+          "Refuel, regroup, return.",
+          "A drink would help the recovery.",
+          "Even determination needs lunch."
+        ],
+        "comfort": [
+          "Ready for the second wind.",
+          "That break put me back together.",
+          "A small recovery before the next one."
+        ],
+        "strategy": [
+          "There is always another way back.",
+          "A recovery route is still a route.",
+          "Let us build from the next sensible shot."
+        ],
+        "social": [
+          "We are still in this, {partner}.",
+          "Bad starts make good stories.",
+          "I would not count either of us out."
+        ],
+        "practice": [
+          "Working on getting out of trouble.",
+          "A little practice, a little belief.",
+          "The recovery shot deserves practice too."
+        ],
+        "arrival": [
+          "Another chance to surprise myself.",
+          "Whatever happens, I will keep going.",
+          "A fresh scorecard and a little stubbornness."
+        ],
+        "return": [
+          "Back to finish what I started.",
+          "Last time was only one round.",
+          "This place has not seen my best yet."
+        ]
+      }
+    },
+    {
+      "id": "historian",
+      "name": "The Club Historian",
+      "trait_mask": 1,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 1,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 1
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        1,
+        1,
+        12,
+        5
+      ],
+      "lines": {
+        "good": [
+          "One for the notebook.",
+          "I hope somebody saw that.",
+          "A small addition to club history."
+        ],
+        "bad": [
+          "An unfortunate footnote.",
+          "I shall remember the lesson.",
+          "Not every chapter is distinguished."
+        ],
+        "hazard": [
+          "This hazard and I have a history.",
+          "Another entry in the pond ledger.",
+          "A familiar place for an unhappy ball."
+        ],
+        "scenery": [
+          "Some views become part of a club.",
+          "A landmark worth remembering.",
+          "This place has its own character."
+        ],
+        "delay": [
+          "There have been longer waits. Probably.",
+          "A pause for a little reminiscing.",
+          "This tee has heard some stories."
+        ],
+        "needs": [
+          "Even historians need refreshments.",
+          "I recall a very good snack here.",
+          "A rest before the next chapter."
+        ],
+        "comfort": [
+          "A pleasant tradition in the making.",
+          "Worth remembering this stop.",
+          "The little rituals give a club character."
+        ],
+        "strategy": [
+          "I remember trying another route.",
+          "The old approach may still have merit.",
+          "A familiar question, a fresh answer."
+        ],
+        "social": [
+          "Remember our last round, {partner}?",
+          "Every regular has a story.",
+          "We should keep a record of these afternoons."
+        ],
+        "practice": [
+          "A good habit worth preserving.",
+          "Learning something to remember next time.",
+          "Even old hands can learn."
+        ],
+        "arrival": [
+          "A first visit deserves a proper look.",
+          "Let us see what stories begin here.",
+          "An unfamiliar course, for the moment."
+        ],
+        "return": [
+          "Another chapter at a familiar club.",
+          "I remember my first visit.",
+          "Visit {visit}. The history keeps growing."
+        ]
+      }
+    },
+    {
+      "id": "rookie",
+      "name": "The Nervous Rookie",
+      "trait_mask": 0,
+      "reactions": {
+        "good": 0,
+        "bad": -1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": -1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        12,
+        5,
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Was that actually good?",
+          "I meant to do that. I think.",
+          "I might be getting the hang of this."
+        ],
+        "bad": [
+          "Sorry. Am I holding everyone up?",
+          "I thought I understood that shot.",
+          "Can I take a breath before the next one?"
+        ],
+        "hazard": [
+          "Is there a sensible way out?",
+          "I was hoping the pond was farther away.",
+          "Please tell me this happens to everyone."
+        ],
+        "scenery": [
+          "A nice place to calm the nerves.",
+          "At least I can appreciate the view.",
+          "That is easier to enjoy than my score."
+        ],
+        "delay": [
+          "Everyone must be watching my practice swing.",
+          "A little time to settle down.",
+          "I hope I am not the reason for the queue."
+        ],
+        "needs": [
+          "Perhaps a short break would help.",
+          "I forgot to drink anything.",
+          "Nerves seem to use a lot of energy."
+        ],
+        "comfort": [
+          "Feeling a little more settled.",
+          "That was a useful breather.",
+          "Ready to try again. Gently."
+        ],
+        "strategy": [
+          "Which option is the forgiving one?",
+          "I would appreciate a little advice.",
+          "One sensible shot at a time."
+        ],
+        "social": [
+          "Thanks for being patient, {partner}.",
+          "It helps having someone alongside.",
+          "I am learning. Slowly."
+        ],
+        "practice": [
+          "A place where mistakes are expected.",
+          "That feels a little less frightening.",
+          "Trying to find one dependable swing."
+        ],
+        "arrival": [
+          "First tee nerves again.",
+          "I hope I remember the basics.",
+          "Here goes. Please be a friendly course."
+        ],
+        "return": [
+          "At least I know the way around now.",
+          "Back for another try.",
+          "I remember one good shot from last time."
+        ]
+      }
+    },
+    {
+      "id": "mentor",
+      "name": "The Mentor",
+      "trait_mask": 18,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 1,
+        "practice": 1,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        5,
+        12,
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "A useful example, for once.",
+          "See? A simple plan can work.",
+          "That is worth practicing."
+        ],
+        "bad": [
+          "A lesson I apparently needed again.",
+          "Everyone gets one wrong.",
+          "Watch how I recover, not how I missed."
+        ],
+        "hazard": [
+          "A good chance to learn a recovery.",
+          "Let us make the next shot simple.",
+          "No shame in taking the sensible exit."
+        ],
+        "scenery": [
+          "Take a moment to enjoy where we are.",
+          "Good golf includes looking around.",
+          "A lovely place to learn."
+        ],
+        "delay": [
+          "A chance for a quiet tip.",
+          "We can rehearse a little while waiting.",
+          "Patience is a golfing skill too."
+        ],
+        "needs": [
+          "Do not forget to eat and drink.",
+          "Looking after yourself helps your golf.",
+          "Let us take a useful break."
+        ],
+        "comfort": [
+          "A good habit, taking a proper rest.",
+          "Refreshed minds make better decisions.",
+          "Now we can concentrate again."
+        ],
+        "strategy": [
+          "Talk me through what you see.",
+          "Choose a shot you can trust.",
+          "The sensible route is nothing to apologize for."
+        ],
+        "social": [
+          "Good effort, {partner}.",
+          "Take your time. We were all beginners.",
+          "Tell me which part felt difficult."
+        ],
+        "practice": [
+          "Small improvements add up.",
+          "Start with one repeatable movement.",
+          "There is no need to master it today."
+        ],
+        "arrival": [
+          "Let us learn something today.",
+          "A new course offers new lessons.",
+          "There is room for everyone to improve."
+        ],
+        "return": [
+          "Back to see what we can build on.",
+          "Another afternoon of small improvements.",
+          "I hope we both learn something new."
+        ]
+      }
+    },
+    {
+      "id": "braggart",
+      "name": "The Braggart",
+      "trait_mask": 10,
+      "reactions": {
+        "good": 1,
+        "bad": -1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        5,
+        1,
+        1,
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Exactly as advertised.",
+          "You may applaud quietly.",
+          "That is the shot I was talking about."
+        ],
+        "bad": [
+          "The wind changed. Obviously.",
+          "An experimental technique.",
+          "You should have seen my practice swing."
+        ],
+        "hazard": [
+          "I was testing the hazard.",
+          "Normally I clear that easily.",
+          "A deliberately difficult recovery opportunity."
+        ],
+        "scenery": [
+          "A suitable setting for my talents.",
+          "This view deserves a memorable shot.",
+          "Excellent backdrop. Watch carefully."
+        ],
+        "delay": [
+          "They probably heard I was coming.",
+          "Plenty of time for my best golf story.",
+          "I could demonstrate while we wait."
+        ],
+        "needs": [
+          "Even talent requires refreshments.",
+          "I should have brought my own catering.",
+          "A champion-sized appetite."
+        ],
+        "comfort": [
+          "A well-deserved little luxury.",
+          "Excellent service for excellent company.",
+          "Now I can return to entertaining everyone."
+        ],
+        "strategy": [
+          "I have several impressive options.",
+          "The difficult route suits my reputation.",
+          "A straightforward shot for someone like me."
+        ],
+        "social": [
+          "Did I mention my last great shot?",
+          "Keep an eye on this, {partner}.",
+          "I am trying to remain modest."
+        ],
+        "practice": [
+          "Just maintaining the natural gift.",
+          "A little polish on the brilliance.",
+          "I do practice. Occasionally."
+        ],
+        "arrival": [
+          "Let us give this course something to remember.",
+          "I hope somebody is watching.",
+          "A fresh audience. How convenient."
+        ],
+        "return": [
+          "Back by popular demand. Mine.",
+          "You may remember my finer moments.",
+          "Another chance to witness the technique."
+        ]
+      }
+    },
+    {
+      "id": "competitor",
+      "name": "The Quiet Competitor",
+      "trait_mask": 4,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": -1,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        12,
+        1,
+        1,
+        8,
+        1,
+        1,
+        5,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Useful.",
+          "That keeps me interested.",
+          "One shot at a time."
+        ],
+        "bad": [
+          "Adjust and continue.",
+          "I can do better.",
+          "No need to discuss it."
+        ],
+        "hazard": [
+          "Find the exit.",
+          "One penalty. Move on.",
+          "The next shot matters now."
+        ],
+        "scenery": [
+          "A good place to concentrate.",
+          "Quiet suits me.",
+          "A moment to clear the mind."
+        ],
+        "delay": [
+          "Staying ready.",
+          "Keep the focus warm.",
+          "Waiting is part of the test."
+        ],
+        "needs": [
+          "A short break is sensible.",
+          "Need a drink.",
+          "Refuel before the next stretch."
+        ],
+        "comfort": [
+          "Ready again.",
+          "That helped.",
+          "Back to the round."
+        ],
+        "strategy": [
+          "Choose the percentage shot.",
+          "A clear line. A firm decision.",
+          "Commit to the plan."
+        ],
+        "social": [
+          "Good shot, {partner}.",
+          "Let the golf do the talking.",
+          "A close round is a good round."
+        ],
+        "practice": [
+          "Working on one weakness.",
+          "Quiet repetition.",
+          "Making the next round count."
+        ],
+        "arrival": [
+          "Ready.",
+          "Let us see the challenge.",
+          "A clean start."
+        ],
+        "return": [
+          "Back to improve.",
+          "I remember the difficult parts.",
+          "Another round. Another chance."
+        ]
+      }
+    },
+    {
+      "id": "sore_loser",
+      "name": "The Sore Loser",
+      "trait_mask": 4,
+      "reactions": {
+        "good": 0,
+        "bad": -1,
+        "hazard": -1,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        8,
+        1,
+        1,
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "That should settle a few things.",
+          "Finally, a proper result.",
+          "I knew I had that shot."
+        ],
+        "bad": [
+          "That is deeply irritating.",
+          "I am better than that.",
+          "Nobody needs to mention this later."
+        ],
+        "hazard": [
+          "Of all the places to finish.",
+          "That hazard is getting on my nerves.",
+          "I want another chance at this hole."
+        ],
+        "scenery": [
+          "At least something is going right.",
+          "Hard to argue with the view.",
+          "A brief distraction from the score."
+        ],
+        "delay": [
+          "This is not helping my mood.",
+          "Waiting makes everything worse.",
+          "Can we please get on with it?"
+        ],
+        "needs": [
+          "I need a drink before another mistake.",
+          "Perhaps hunger is the problem.",
+          "A break. Before I say something unhelpful."
+        ],
+        "comfort": [
+          "Fine. That helped a little.",
+          "A better mood is possible.",
+          "Let us try the next part again."
+        ],
+        "strategy": [
+          "I want the route that gets a shot back.",
+          "There must be a better answer.",
+          "I am not conceding this hole."
+        ],
+        "social": [
+          "Enjoy that shot, {partner}.",
+          "I remember our last round.",
+          "I will have something to say next time."
+        ],
+        "practice": [
+          "I am not losing to that shot again.",
+          "Working on the part that annoyed me.",
+          "Practice is better than making excuses."
+        ],
+        "arrival": [
+          "Today had better go well.",
+          "A fresh scorecard. Good.",
+          "Let us keep this respectable."
+        ],
+        "return": [
+          "Back to put something right.",
+          "I have not forgotten last time.",
+          "We have unfinished business here."
+        ]
+      }
+    },
+    {
+      "id": "sport",
+      "name": "The Good Sport",
+      "trait_mask": 24,
+      "reactions": {
+        "good": 0,
+        "bad": 1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 1,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        12,
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        5,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "That was a pleasure.",
+          "Happy with that one.",
+          "A good moment in a good round."
+        ],
+        "bad": [
+          "Fair enough. On we go.",
+          "You have to smile at that.",
+          "No reason to spoil the afternoon."
+        ],
+        "hazard": [
+          "A splash for the spectators.",
+          "Well, the pond won that exchange.",
+          "I shall try the dry route next time."
+        ],
+        "scenery": [
+          "Lucky to spend an afternoon here.",
+          "A view worth sharing.",
+          "There is plenty to enjoy beyond the score."
+        ],
+        "delay": [
+          "Everyone deserves their turn.",
+          "We will get going shortly.",
+          "No sense letting a queue ruin things."
+        ],
+        "needs": [
+          "A snack sounds sensible.",
+          "A quick rest would do us good.",
+          "Looking forward to a cold drink."
+        ],
+        "comfort": [
+          "That hit the spot.",
+          "A pleasant stop.",
+          "Ready for a little more golf."
+        ],
+        "strategy": [
+          "A fair challenge. I like it.",
+          "Both routes look interesting.",
+          "Let us see what happens."
+        ],
+        "social": [
+          "Well played, {partner}.",
+          "I am enjoying our round.",
+          "Your good shot deserves its moment."
+        ],
+        "practice": [
+          "Always something to improve.",
+          "A little effort goes a long way.",
+          "Enjoying the learning part."
+        ],
+        "arrival": [
+          "Good company, good golf, hopefully.",
+          "Let us have a pleasant round.",
+          "A new course to enjoy."
+        ],
+        "return": [
+          "Glad to be back.",
+          "Another chance for a good afternoon.",
+          "I enjoyed the last visit."
+        ]
+      }
+    },
+    {
+      "id": "superstitious",
+      "name": "The Superstitious One",
+      "trait_mask": 9,
+      "reactions": {
+        "good": 1,
+        "bad": -1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        12,
+        8,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "The lucky routine worked.",
+          "Same tee marker next time.",
+          "I knew that ball felt right."
+        ],
+        "bad": [
+          "I skipped a step in my routine.",
+          "Wrong pocket for the lucky marker.",
+          "Something upset the golfing spirits."
+        ],
+        "hazard": [
+          "That ball was unlucky anyway.",
+          "The pond has a strange influence.",
+          "I should have used the other tee."
+        ],
+        "scenery": [
+          "This place has good signs.",
+          "A bird crossed from the lucky side.",
+          "The surroundings feel promising."
+        ],
+        "delay": [
+          "A chance to reset the ritual.",
+          "Do not break the routine while waiting.",
+          "Perhaps the delay is a sign."
+        ],
+        "needs": [
+          "Always the same snack before a good round.",
+          "A drink from the lucky side.",
+          "I need my usual little break."
+        ],
+        "comfort": [
+          "The ritual feels complete.",
+          "That should restore the good fortune.",
+          "Everything is back in its proper order."
+        ],
+        "strategy": [
+          "The left route feels lucky.",
+          "Same practice swing, same good thought.",
+          "Trusting the familiar signs."
+        ],
+        "social": [
+          "Stand just there, {partner}. It helped before.",
+          "I think we make a lucky pairing.",
+          "Please do not mention my streak."
+        ],
+        "practice": [
+          "Rehearsing the whole routine.",
+          "The practice swing is part of the spell.",
+          "Keeping my habits consistent."
+        ],
+        "arrival": [
+          "Lucky marker, lucky ball, ready.",
+          "The signs look promising.",
+          "A new course needs a careful first ritual."
+        ],
+        "return": [
+          "Same ball marker as last time.",
+          "Back to test the lucky routine.",
+          "I remember where the good signs were."
+        ]
+      }
+    },
+    {
+      "id": "rules",
+      "name": "The Rules Lawyer",
+      "trait_mask": 1,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": -1,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        5,
+        1,
+        1,
+        8,
+        12,
+        1,
+        1,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Entirely legitimate.",
+          "A result beyond dispute.",
+          "Everything in the proper order."
+        ],
+        "bad": [
+          "I shall record that accurately.",
+          "No creative accounting here.",
+          "The scorecard will reflect the facts."
+        ],
+        "hazard": [
+          "Let us establish the correct procedure.",
+          "A penalty is a penalty.",
+          "There is a proper way to recover."
+        ],
+        "scenery": [
+          "The grounds appear well considered.",
+          "A respectable setting.",
+          "I appreciate a clearly defined boundary."
+        ],
+        "delay": [
+          "Pace of play is an etiquette matter.",
+          "Everyone has responsibilities in a queue.",
+          "A little consideration would help."
+        ],
+        "needs": [
+          "A scheduled break would be sensible.",
+          "No rule against a snack.",
+          "A drink before proceeding."
+        ],
+        "comfort": [
+          "A perfectly reasonable interval.",
+          "Proper facilities, properly used.",
+          "Ready to resume."
+        ],
+        "strategy": [
+          "First, clarify the available options.",
+          "The legal route is usually clear.",
+          "I prefer a plan with no ambiguity."
+        ],
+        "social": [
+          "Your turn, {partner}.",
+          "Shall we agree how to proceed?",
+          "A friendly reminder about etiquette."
+        ],
+        "practice": [
+          "Practicing within the designated area.",
+          "A sound grasp of the fundamentals.",
+          "Good habits prevent disagreements."
+        ],
+        "arrival": [
+          "Let us observe the local arrangements.",
+          "A new course. I shall pay attention.",
+          "A properly conducted round, please."
+        ],
+        "return": [
+          "I remember the local conventions.",
+          "Back for another orderly round.",
+          "The same standards as last time."
+        ]
+      }
+    },
+    {
+      "id": "clown",
+      "name": "The Class Clown",
+      "trait_mask": 10,
+      "reactions": {
+        "good": 0,
+        "bad": 1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 1,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        8,
+        1,
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        5,
+        1,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Please contain your astonishment.",
+          "That one was for comic contrast.",
+          "Occasionally the joke is a good shot."
+        ],
+        "bad": [
+          "A bold contribution to slapstick.",
+          "I meant to provide entertainment.",
+          "The ball declined my invitation."
+        ],
+        "hazard": [
+          "A refreshing swim for the ball.",
+          "Another donation to pond science.",
+          "My ball has taken up diving."
+        ],
+        "scenery": [
+          "A lovely place to embarrass myself.",
+          "Even the trees are a good audience.",
+          "Scenery excellent. Golfer questionable."
+        ],
+        "delay": [
+          "We have time for my longer jokes.",
+          "Is this the queue for golf or retirement?",
+          "I could grow a beard before we tee off."
+        ],
+        "needs": [
+          "Comedy requires fuel.",
+          "I am dangerously low on snacks.",
+          "A thirsty golfer is a dry comedian."
+        ],
+        "comfort": [
+          "A standing ovation for the refreshments.",
+          "That deserves a little applause.",
+          "Restored to my usual questionable form."
+        ],
+        "strategy": [
+          "Which route is funniest in hindsight?",
+          "A choice between golf and performance art.",
+          "I have a plan. That is the joke."
+        ],
+        "social": [
+          "Try not to laugh during the swing.",
+          "Your audience awaits, {partner}.",
+          "We make a thoroughly unserious pair."
+        ],
+        "practice": [
+          "Practicing my serious golfer impression.",
+          "Even comedy needs rehearsal.",
+          "Learning to miss in fewer directions."
+        ],
+        "arrival": [
+          "A new venue for the same questionable talent.",
+          "I brought clubs and material.",
+          "Let us keep the ball out of the punchline."
+        ],
+        "return": [
+          "Back for an encore.",
+          "You may remember my less dignified moments.",
+          "Same golfer, fresh material."
+        ]
+      }
+    },
+    {
+      "id": "pessimist",
+      "name": "The Pessimist",
+      "trait_mask": 0,
+      "reactions": {
+        "good": 1,
+        "bad": -1,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        8,
+        12,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "That cannot last.",
+          "I suppose one had to go right.",
+          "Suspiciously successful."
+        ],
+        "bad": [
+          "There it is.",
+          "Exactly as feared.",
+          "My expectations were well prepared."
+        ],
+        "hazard": [
+          "Might as well have thrown it in.",
+          "The pond looked hungry.",
+          "I knew that landing was too hopeful."
+        ],
+        "scenery": [
+          "At least the view cannot miss a putt.",
+          "One reliably pleasant thing.",
+          "I shall enjoy it before the next disaster."
+        ],
+        "delay": [
+          "Naturally there is a queue.",
+          "A promising start to the inconvenience.",
+          "I expected this to take a while."
+        ],
+        "needs": [
+          "Of course I forgot refreshments.",
+          "Hunger was inevitable.",
+          "A rest before the next disappointment."
+        ],
+        "comfort": [
+          "Better than expected.",
+          "I can find little fault with that.",
+          "A rare encouraging development."
+        ],
+        "strategy": [
+          "Which option goes wrong least?",
+          "I can see the problem with both routes.",
+          "Let us minimize the damage."
+        ],
+        "social": [
+          "I hope you brought patience, {partner}.",
+          "You may want to lower your expectations.",
+          "At least we can be disappointed together."
+        ],
+        "practice": [
+          "Preparing for the likely difficulties.",
+          "It cannot make me much worse.",
+          "Perhaps one dependable shot is possible."
+        ],
+        "arrival": [
+          "Here we go again.",
+          "I have brought spare balls and low expectations.",
+          "Let us see what goes wrong first."
+        ],
+        "return": [
+          "Back, against my better predictions.",
+          "I remember the troublesome parts.",
+          "Perhaps today will surprise me."
+        ]
+      }
+    },
+    {
+      "id": "optimist",
+      "name": "The Eternal Optimist",
+      "trait_mask": 28,
+      "reactions": {
+        "good": 0,
+        "bad": 1,
+        "hazard": 1,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        8,
+        1,
+        5,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        12,
+        1,
+        1
+      ],
+      "lines": {
+        "good": [
+          "I knew something good was coming.",
+          "What a promising shot.",
+          "There is plenty more where that came from."
+        ],
+        "bad": [
+          "A useful warm-up for the next one.",
+          "The next shot could be wonderful.",
+          "Still time for a lovely recovery."
+        ],
+        "hazard": [
+          "A chance to try something different.",
+          "The recovery could be the best part.",
+          "One splash cannot spoil a day."
+        ],
+        "scenery": [
+          "What a place to spend an afternoon.",
+          "There is something lovely everywhere.",
+          "Even the walk feels encouraging."
+        ],
+        "delay": [
+          "More time to look forward to the shot.",
+          "We will be playing again soon.",
+          "A good chance to catch our breath."
+        ],
+        "needs": [
+          "A little refreshment will put things right.",
+          "I can almost taste the next snack.",
+          "A break could be just what we need."
+        ],
+        "comfort": [
+          "Perfect. Everything feels brighter.",
+          "That was a lovely little stop.",
+          "Ready for more good things."
+        ],
+        "strategy": [
+          "Both routes have possibilities.",
+          "I rather like our chances.",
+          "A good decision is waiting here."
+        ],
+        "social": [
+          "This could be our best round, {partner}.",
+          "I am glad we are playing together.",
+          "Something good is bound to happen."
+        ],
+        "practice": [
+          "Every swing is another chance.",
+          "I can feel an improvement coming.",
+          "A little practice goes somewhere."
+        ],
+        "arrival": [
+          "This looks promising.",
+          "A fresh round full of possibilities.",
+          "I have a good feeling about today."
+        ],
+        "return": [
+          "Another chance for a lovely round.",
+          "Back with renewed expectations.",
+          "Today might be the day."
+        ]
+      }
+    },
+    {
+      "id": "bargain",
+      "name": "The Bargain Hunter",
+      "trait_mask": 0,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": -1,
+        "needs": 0,
+        "comfort": 1,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        12,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "Excellent return on that swing.",
+          "Getting my money worth.",
+          "An economical little shot."
+        ],
+        "bad": [
+          "An expensive use of effort.",
+          "That added to the cost per hole.",
+          "I expected a little more value."
+        ],
+        "hazard": [
+          "There goes another perfectly usable ball.",
+          "The pond is an expensive feature.",
+          "I shall take the economical recovery."
+        ],
+        "scenery": [
+          "A view included in the green fee.",
+          "That adds value to the afternoon.",
+          "A scenic bonus at no extra charge."
+        ],
+        "delay": [
+          "I paid to play, not queue.",
+          "The value falls with every minute.",
+          "Perhaps the waiting should be discounted."
+        ],
+        "needs": [
+          "Something reasonably priced to eat?",
+          "I should have packed a drink.",
+          "A bench is excellent value."
+        ],
+        "comfort": [
+          "A worthwhile little stop.",
+          "That was money well spent.",
+          "Good service earns its price."
+        ],
+        "strategy": [
+          "Which route costs fewer balls?",
+          "The sensible choice protects the budget.",
+          "A practical shot has its rewards."
+        ],
+        "social": [
+          "We should share a round more often.",
+          "Any good club tips, {partner}?",
+          "Good company costs nothing."
+        ],
+        "practice": [
+          "Practice makes the green fee go further.",
+          "Getting more use from the clubs I own.",
+          "A sensible investment of time."
+        ],
+        "arrival": [
+          "Let us see what the afternoon is worth.",
+          "A fresh chance for good value.",
+          "I intend to enjoy every hole."
+        ],
+        "return": [
+          "Back to get another good round out of this place.",
+          "I know where the useful facilities are.",
+          "A familiar course is a sensible choice."
+        ]
+      }
+    },
+    {
+      "id": "luxury",
+      "name": "The Luxury Lover",
+      "trait_mask": 2,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": -1,
+        "comfort": 1,
+        "strategy": 0,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        12,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "A rather satisfying experience.",
+          "That had a certain elegance.",
+          "Precisely the finish I wanted."
+        ],
+        "bad": [
+          "A less refined moment.",
+          "That spoiled the presentation.",
+          "I prefer a smoother experience."
+        ],
+        "hazard": [
+          "An inconvenient splash.",
+          "I would rather admire the water from here.",
+          "A recovery without the discomfort, please."
+        ],
+        "scenery": [
+          "An excellent setting.",
+          "The surroundings make an impression.",
+          "That view improves the whole visit."
+        ],
+        "delay": [
+          "This is not the service I imagined.",
+          "A comfortable waiting area would help.",
+          "I do value a well-paced afternoon."
+        ],
+        "needs": [
+          "A proper refreshment stop, please.",
+          "Comfort should not be an afterthought.",
+          "I could use somewhere pleasant to rest."
+        ],
+        "comfort": [
+          "Now this is a proper afternoon.",
+          "Excellent attention to comfort.",
+          "A little quality makes a difference."
+        ],
+        "strategy": [
+          "An elegant route would suit me.",
+          "I prefer a composed approach.",
+          "There is no need to make this undignified."
+        ],
+        "social": [
+          "A pleasure, {partner}.",
+          "Good company completes the experience.",
+          "Shall we enjoy the clubhouse afterward?"
+        ],
+        "practice": [
+          "A little polish for the technique.",
+          "Improving the finer details.",
+          "Making the game feel more effortless."
+        ],
+        "arrival": [
+          "Let us see how they look after guests.",
+          "A promising place for a civilized round.",
+          "I appreciate a thoughtful welcome."
+        ],
+        "return": [
+          "Back for a little familiar comfort.",
+          "I remember the pleasant parts.",
+          "Another opportunity for a fine afternoon."
+        ]
+      }
+    },
+    {
+      "id": "regular",
+      "name": "The Loyal Regular",
+      "trait_mask": 17,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 1,
+        "strategy": 0,
+        "social": 1,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        8,
+        1,
+        1,
+        1,
+        1,
+        1,
+        5,
+        1,
+        12,
+        1
+      ],
+      "lines": {
+        "good": [
+          "This place brings out a good shot.",
+          "A familiar little pleasure.",
+          "Another reason to keep coming back."
+        ],
+        "bad": [
+          "I have had better moments here.",
+          "A bad shot on a good afternoon.",
+          "I know I can play this better."
+        ],
+        "hazard": [
+          "An old acquaintance, that hazard.",
+          "We have been through this before.",
+          "I really should know that corner by now."
+        ],
+        "scenery": [
+          "One of my favorite parts of the walk.",
+          "This view feels like part of my routine.",
+          "There is comfort in a familiar place."
+        ],
+        "delay": [
+          "I know the usual rhythm is better.",
+          "A familiar tee, an unfamiliar wait.",
+          "We will be moving again shortly."
+        ],
+        "needs": [
+          "Time for my usual little stop.",
+          "I know what would help right now.",
+          "A rest before the familiar stretch ahead."
+        ],
+        "comfort": [
+          "Just as welcome as I remembered.",
+          "My kind of little break.",
+          "The routine is part of the pleasure."
+        ],
+        "strategy": [
+          "I remember what worked before.",
+          "A familiar choice, never quite the same shot.",
+          "Let us try a small improvement."
+        ],
+        "social": [
+          "Good to see you again, {partner}.",
+          "Same company, another afternoon.",
+          "We should make a habit of this."
+        ],
+        "practice": [
+          "Keeping the familiar swing in order.",
+          "A little regular practice.",
+          "I like having something to work on here."
+        ],
+        "arrival": [
+          "Perhaps this will become my place.",
+          "A first visit can start a good habit.",
+          "Let us see how it feels."
+        ],
+        "return": [
+          "Good to be back where I know the way.",
+          "My usual round, with fresh possibilities.",
+          "Visit {visit}. Beginning to feel at home."
+        ]
+      }
+    },
+    {
+      "id": "wanderer",
+      "name": "The Wanderer",
+      "trait_mask": 6,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 1,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 0,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        12,
+        1,
+        8,
+        1,
+        1,
+        1,
+        5,
+        1
+      ],
+      "lines": {
+        "good": [
+          "A shot worth remembering on my travels.",
+          "A pleasant discovery.",
+          "That will be a good memory of this place."
+        ],
+        "bad": [
+          "Every course teaches something.",
+          "A new variation on an old mistake.",
+          "I have missed in many interesting places."
+        ],
+        "hazard": [
+          "A local hazard, thoroughly investigated.",
+          "Another place my ball wanted to visit.",
+          "Perhaps the other route offers more."
+        ],
+        "scenery": [
+          "This is why I try new places.",
+          "A view with its own character.",
+          "Worth the journey."
+        ],
+        "delay": [
+          "I wonder how the next course handles queues.",
+          "An unexpected stop on the tour.",
+          "Time to compare notes."
+        ],
+        "needs": [
+          "Exploring the refreshment options.",
+          "A traveler needs provisions.",
+          "A little rest before the next discovery."
+        ],
+        "comfort": [
+          "A welcome little discovery.",
+          "I shall remember this stop.",
+          "Comfort travels well."
+        ],
+        "strategy": [
+          "Let us try the less familiar route.",
+          "Something new to figure out.",
+          "A different answer might be interesting."
+        ],
+        "social": [
+          "Where else do you play, {partner}?",
+          "Always good to meet someone on the way.",
+          "We can exchange course stories."
+        ],
+        "practice": [
+          "Learning a shot for the next course.",
+          "A useful addition to the travel kit.",
+          "There is always another technique to discover."
+        ],
+        "arrival": [
+          "Another course to explore.",
+          "I wonder what makes this place different.",
+          "Let us see beyond the first tee."
+        ],
+        "return": [
+          "Worth another visit.",
+          "I have not explored every possibility here.",
+          "Familiar enough to notice something new."
+        ]
+      }
+    },
+    {
+      "id": "analyst",
+      "name": "The Analyst",
+      "trait_mask": 5,
+      "reactions": {
+        "good": 0,
+        "bad": 0,
+        "hazard": 0,
+        "scenery": 0,
+        "delay": 0,
+        "needs": 0,
+        "comfort": 0,
+        "strategy": 1,
+        "social": 0,
+        "practice": 1,
+        "arrival": 0,
+        "return": 0
+      },
+      "story_weights": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        8,
+        12,
+        1,
+        1,
+        1,
+        1,
+        5
+      ],
+      "lines": {
+        "good": [
+          "That supports the plan.",
+          "A useful result to build on.",
+          "The approach was repeatable."
+        ],
+        "bad": [
+          "A result worth examining.",
+          "The decision and execution need separating.",
+          "I want to understand that miss."
+        ],
+        "hazard": [
+          "My margin estimate was poor.",
+          "That changes the risk calculation.",
+          "Record the miss and adjust."
+        ],
+        "scenery": [
+          "Interesting use of the available land.",
+          "A good place to observe the layout.",
+          "The surroundings affect how I read this hole."
+        ],
+        "delay": [
+          "The bottleneck is becoming clear.",
+          "A delay worth understanding.",
+          "The pace is part of the whole experience."
+        ],
+        "needs": [
+          "Concentration drops when I neglect breaks.",
+          "A sensible point to refuel.",
+          "A short rest could improve the next stretch."
+        ],
+        "comfort": [
+          "A useful recovery interval.",
+          "That should help concentration.",
+          "The break served its purpose."
+        ],
+        "strategy": [
+          "Let us compare the landing options.",
+          "A small change in angle matters.",
+          "I want a plan I can explain."
+        ],
+        "social": [
+          "What did you notice, {partner}?",
+          "We could compare approaches afterward.",
+          "Another perspective improves the analysis."
+        ],
+        "practice": [
+          "Testing one adjustment at a time.",
+          "Looking for a repeatable result.",
+          "The useful part is understanding why."
+        ],
+        "arrival": [
+          "A fresh set of questions.",
+          "Let us establish a baseline.",
+          "I want to understand this course."
+        ],
+        "return": [
+          "Back to test what I learned.",
+          "I have a better plan for the difficult holes.",
+          "Another visit, more useful observations."
+        ]
+      }
+    }
+  ],
+  "stories": [
+    {
+      "id": "second_chance",
+      "title": "A second chance",
+      "trigger": "trouble",
+      "goal": 3,
+      "closure": [
+        "I can leave that rough start behind without proving anything.",
+        "A difficult round need not become a lifelong argument.",
+        "I am ready for another kind of golfing story."
+      ],
+      "opening": [
+        "I want to come back with a calmer plan.",
+        "That miss has given me something to work on.",
+        "Next visit, I want to handle this better."
+      ],
+      "return": [
+        "Back to give that plan another chance.",
+        "I remembered the lesson from last visit.",
+        "Let us see if the new approach holds up."
+      ],
+      "progress": [
+        "A better response than last time.",
+        "The plan is beginning to help.",
+        "I can feel the recovery taking shape."
+      ],
+      "success": [
+        "I have found a way to move past that rough start.",
+        "That old mistake no longer owns the afternoon.",
+        "The comeback finally feels real."
+      ],
+      "setback": [
+        "A difficult chapter, but I can return.",
+        "The old mistake came back. I need a fresh approach.",
+        "Progress has taken a detour."
+      ]
+    },
+    {
+      "id": "confidence",
+      "title": "Finding their feet",
+      "trigger": "trouble",
+      "goal": 3,
+      "closure": [
+        "I do not need perfect golf to belong here.",
+        "I can return even when the nerves come with me.",
+        "Confidence can begin with accepting an imperfect round."
+      ],
+      "opening": [
+        "I would like one dependable thing to trust.",
+        "I need to find a little confidence.",
+        "A rough start, but I can learn from it."
+      ],
+      "return": [
+        "A familiar place feels a little less daunting.",
+        "Back to work on trusting myself.",
+        "I remembered the part I wanted to improve."
+      ],
+      "progress": [
+        "That felt more certain.",
+        "A little confidence earned, not borrowed.",
+        "I am starting to trust the swing."
+      ],
+      "success": [
+        "I can belong here without playing perfectly.",
+        "I have something dependable to build on.",
+        "That confidence took a few visits to earn."
+      ],
+      "setback": [
+        "The nerves returned today.",
+        "A setback is making me doubt myself.",
+        "I need a little time to find that trust again."
+      ]
+    },
+    {
+      "id": "companions",
+      "title": "A familiar pairing",
+      "trigger": "partner",
+      "goal": 3,
+      "closure": [
+        "We have shared some afternoons. I can keep those memories.",
+        "Our rounds have taken different paths for a while.",
+        "There is room for new company and old memories."
+      ],
+      "opening": [
+        "Another round with a familiar face.",
+        "We are learning each other's routines.",
+        "There is something good about familiar company."
+      ],
+      "return": [
+        "Good to share the course again, {partner}.",
+        "Back for another chapter together.",
+        "We have a little shared history now."
+      ],
+      "progress": [
+        "Another good moment to share.",
+        "We are building a collection of golfing memories.",
+        "That gives us something pleasant to remember."
+      ],
+      "success": [
+        "These shared rounds have become a club tradition.",
+        "We have made some good memories together.",
+        "I will remember this run of afternoons."
+      ],
+      "setback": [
+        "A difficult round for familiar company.",
+        "We are not finding the usual rhythm.",
+        "Perhaps another day will suit us better."
+      ]
+    },
+    {
+      "id": "rematch",
+      "title": "Unfinished business",
+      "trigger": "partner",
+      "goal": 4,
+      "closure": [
+        "I can enjoy the golf without settling every comparison.",
+        "That challenge taught me something, even without a perfect answer.",
+        "I am ready to leave the scorekeeping in my head behind."
+      ],
+      "opening": [
+        "Playing with you gives me something to aim for.",
+        "I want to bring a better game next time.",
+        "A familiar partner makes me focus."
+      ],
+      "return": [
+        "Back with a little more determination.",
+        "Ready to test myself beside you again.",
+        "I have been thinking about our last round."
+      ],
+      "progress": [
+        "That is closer to the golf I wanted to bring.",
+        "The extra focus is beginning to show.",
+        "One good response at a time."
+      ],
+      "success": [
+        "I brought better golf to this run of shared rounds.",
+        "That challenge helped me find another gear.",
+        "I can be proud of how I responded."
+      ],
+      "setback": [
+        "Today I am letting the frustration do the talking.",
+        "That was not the response I wanted.",
+        "I need to bring a calmer game next time."
+      ]
+    },
+    {
+      "id": "quiet_corner",
+      "title": "A place to return to",
+      "trigger": "scenery",
+      "goal": 3,
+      "closure": [
+        "I can enjoy this place without finding every quiet corner.",
+        "The course can be a pleasant place without becoming my only one.",
+        "I have a few good views to remember."
+      ],
+      "opening": [
+        "I would like to notice more of this place.",
+        "That view gave me a reason to come back.",
+        "There is a quieter story in this course."
+      ],
+      "return": [
+        "Back to enjoy the surroundings again.",
+        "I remembered the pleasant moments between shots.",
+        "Looking for another detail I missed."
+      ],
+      "progress": [
+        "Another little discovery.",
+        "I am learning to notice the place around the golf.",
+        "This course rewards paying attention."
+      ],
+      "success": [
+        "This has become a place I can settle into.",
+        "I have collected more than scores here.",
+        "A few visits have made this place feel familiar."
+      ],
+      "setback": [
+        "The golf distracted me from the afternoon.",
+        "I forgot to look beyond the next mistake.",
+        "Next time, I want to slow my thoughts down."
+      ]
+    },
+    {
+      "id": "practice_pays",
+      "title": "The practice promise",
+      "trigger": "practice",
+      "goal": 4,
+      "closure": [
+        "Some habits take longer than a few visits.",
+        "I can keep practicing without making it a promise to prove.",
+        "The work can continue without owning the whole afternoon."
+      ],
+      "opening": [
+        "I want these practice swings to mean something.",
+        "One weakness deserves some patient work.",
+        "A small practice promise to myself."
+      ],
+      "return": [
+        "Back to build on the practice.",
+        "I remember what I wanted to work on.",
+        "Let us see what has stayed with me."
+      ],
+      "progress": [
+        "A little of that work is showing.",
+        "The practice has given me something to trust.",
+        "One useful improvement at a time."
+      ],
+      "success": [
+        "The habit of working at it has finally taken hold.",
+        "I have something more dependable than a lucky swing.",
+        "Those practice visits gave me a foundation."
+      ],
+      "setback": [
+        "The old habit has crept back.",
+        "The work is not showing yet.",
+        "I need to revisit the basics."
+      ]
+    },
+    {
+      "id": "course_puzzle",
+      "title": "Reading the course",
+      "trigger": "strategy",
+      "goal": 3,
+      "closure": [
+        "I do not have to solve the whole course today.",
+        "Some questions are worth leaving open.",
+        "I can enjoy another round without a perfect plan."
+      ],
+      "opening": [
+        "This layout has a question I want to solve.",
+        "There is a route I have not understood yet.",
+        "I want to come back with a clearer plan."
+      ],
+      "return": [
+        "Back to test another reading of the course.",
+        "I remembered the choice that puzzled me.",
+        "A familiar question with a fresh approach."
+      ],
+      "progress": [
+        "That choice makes more sense now.",
+        "The plan is becoming clearer.",
+        "I am beginning to read what the hole asks."
+      ],
+      "success": [
+        "I have found an approach I can explain and trust.",
+        "The course puzzle finally feels readable.",
+        "A few visits turned uncertainty into a plan."
+      ],
+      "setback": [
+        "My reading of that shot was wrong.",
+        "The course has another question for me.",
+        "I need to reconsider the plan."
+      ]
+    },
+    {
+      "id": "patience",
+      "title": "Learning the rhythm",
+      "trigger": "patience",
+      "goal": 3,
+      "closure": [
+        "I cannot control every wait. I can choose what to carry forward.",
+        "I am letting go of the argument with the queue.",
+        "Some afternoons have an imperfect rhythm."
+      ],
+      "opening": [
+        "I want to stop carrying this frustration into every shot.",
+        "The waiting is testing more than my schedule.",
+        "I need a better way to keep my focus."
+      ],
+      "return": [
+        "Back to find a steadier rhythm.",
+        "I remember how impatient I became last time.",
+        "Trying to leave the waiting behind each shot."
+      ],
+      "progress": [
+        "That was a calmer response.",
+        "A useful shot without the extra frustration.",
+        "Finding the rhythm again."
+      ],
+      "success": [
+        "I have learned to find good golf between the interruptions.",
+        "The waiting no longer owns the whole round.",
+        "A little patience has made these visits better."
+      ],
+      "setback": [
+        "The frustration got ahead of me again.",
+        "I lost the rhythm I was building.",
+        "Another reminder to take a breath."
+      ]
+    },
+    {
+      "id": "ritual",
+      "title": "A little club ritual",
+      "trigger": "comfort",
+      "goal": 3,
+      "closure": [
+        "A pleasant routine can change without being lost.",
+        "I can keep the good little memories and try something new.",
+        "The ritual was a pleasure, not an obligation."
+      ],
+      "opening": [
+        "That little stop could become a habit.",
+        "A pleasant routine is taking shape.",
+        "I have found a small reason to return."
+      ],
+      "return": [
+        "Back for the golf and the little comforts.",
+        "I remembered the pleasant pause last time.",
+        "A familiar break in a fresh afternoon."
+      ],
+      "progress": [
+        "Another welcome part of the routine.",
+        "The small comforts are becoming familiar.",
+        "This is beginning to feel like my kind of visit."
+      ],
+      "success": [
+        "I have made a little tradition of coming here.",
+        "The round and its little rituals belong together now.",
+        "There is a familiar pleasure in returning."
+      ],
+      "setback": [
+        "A rough stretch interrupted the pleasant routine.",
+        "Today has not found its comfortable rhythm.",
+        "I shall try for a better afternoon next time."
+      ]
+    },
+    {
+      "id": "good_run",
+      "title": "Keeping a good feeling",
+      "trigger": "success",
+      "goal": 4,
+      "closure": [
+        "One good spell need not become a permanent test.",
+        "I can enjoy the good shots without demanding a streak.",
+        "The next round gets to be its own afternoon."
+      ],
+      "opening": [
+        "I would like to carry that feeling into another visit.",
+        "A good shot worth building on.",
+        "Let us see whether I can make this a habit."
+      ],
+      "return": [
+        "Back to build on the good moments.",
+        "I remembered how that successful shot felt.",
+        "A fresh visit to test the confidence."
+      ],
+      "progress": [
+        "Another sign that the good golf can return.",
+        "The encouraging moments are adding up.",
+        "A little consistency is emerging."
+      ],
+      "success": [
+        "Those good moments have become something I can trust.",
+        "I have built a pleasant run of golfing memories.",
+        "It took more than one lucky afternoon."
+      ],
+      "setback": [
+        "The good feeling is harder to find today.",
+        "A rough patch interrupted the run.",
+        "I need to rebuild that rhythm patiently."
+      ]
+    },
+    {
+      "id": "belonging",
+      "title": "Becoming a regular",
+      "trigger": "regular",
+      "goal": 3,
+      "closure": [
+        "I can feel at home without making every visit the same.",
+        "There is room here for an occasional visitor too.",
+        "I have a little history here, whatever comes next."
+      ],
+      "opening": [
+        "I am beginning to feel part of this place.",
+        "The course is becoming familiar.",
+        "A few visits have given me a little history here."
+      ],
+      "return": [
+        "Another familiar afternoon begins.",
+        "Back to add to my little club history.",
+        "It is good to know the way around."
+      ],
+      "progress": [
+        "Another pleasant moment at a familiar club.",
+        "This place is giving me more to remember.",
+        "A little more at home with every visit."
+      ],
+      "success": [
+        "I have made a place for myself in this club routine.",
+        "These visits have become part of my golfing life.",
+        "I came as a visitor and found a familiar place."
+      ],
+      "setback": [
+        "Even a familiar place can give me a difficult day.",
+        "Today has tested my attachment a little.",
+        "I would like the next visit to feel easier."
+      ]
+    },
+    {
+      "id": "nemesis",
+      "title": "Making peace with a hole",
+      "trigger": "nemesis",
+      "goal": 3,
+      "closure": [
+        "That hole can remain difficult without becoming my whole round.",
+        "I am letting this hole be a golf hole again.",
+        "I can enjoy the course without winning every argument with it."
+      ],
+      "opening": [
+        "Hole {hole} has become unfinished business.",
+        "I want to stop fearing hole {hole}.",
+        "This hole is asking for a better response."
+      ],
+      "return": [
+        "Back to face that troublesome hole.",
+        "I remember the place that got under my skin.",
+        "A fresh visit, the same unfinished business."
+      ],
+      "progress": [
+        "A better answer to an old problem.",
+        "That troublesome hole is becoming less frightening.",
+        "A little ground gained against the old mistake."
+      ],
+      "success": [
+        "I have found a way to face that hole without dread.",
+        "The troublesome hole no longer defines my visits.",
+        "We have made a little peace, this hole and I."
+      ],
+      "setback": [
+        "The old trouble found me again.",
+        "That hole still has questions for me.",
+        "Peace will take another attempt."
+      ]
+    }
+  ],
+  "traits": [
+    {
+      "id": "neat",
+      "set": [
+        "The little details deserve care.",
+        "A tidy approach clears the mind.",
+        "I appreciate things kept in order."
+      ],
+      "clear": [
+        "A little disorder never ruined my afternoon.",
+        "I can live with a rough edge.",
+        "Good enough to enjoy the day."
+      ]
+    },
+    {
+      "id": "outgoing",
+      "set": [
+        "There is always someone worth meeting.",
+        "A round is better with conversation.",
+        "Tell me about your last round, {partner}."
+      ],
+      "clear": [
+        "A quiet round suits me.",
+        "I am happy with a little silence.",
+        "Good company need not fill every pause."
+      ]
+    },
+    {
+      "id": "active",
+      "set": [
+        "I would rather be moving.",
+        "A walk would keep me ready.",
+        "Let us find the rhythm again."
+      ],
+      "clear": [
+        "I can appreciate a slower moment.",
+        "No harm in a little pause.",
+        "A gentle pace suits me today."
+      ]
+    },
+    {
+      "id": "playful",
+      "set": [
+        "There is a joke in there somewhere.",
+        "At least the afternoon has a sense of humor.",
+        "I can laugh at that one."
+      ],
+      "clear": [
+        "I would like to take the next shot seriously.",
+        "A moment to collect myself.",
+        "Let me focus on the golf."
+      ]
+    },
+    {
+      "id": "nice",
+      "set": [
+        "Good effort, {partner}.",
+        "No need to be hard on yourself.",
+        "I am glad we can share the afternoon."
+      ],
+      "clear": [
+        "I shall concentrate on my own round.",
+        "Let us see what the next shot brings.",
+        "I have my own standard to meet."
+      ]
+    }
+  ],
+  "context": {
+    "redemption": [
+      "A better answer on hole {hole} at last.",
+      "That feels different from the old trouble here.",
+      "I remembered what went wrong on this hole."
+    ],
+    "nemesis": [
+      "Hello again, hole {hole}. We need to talk.",
+      "This hole and I have unfinished business.",
+      "I remember making that mistake here before."
+    ],
+    "familiar": [
+      "We have shared a few rounds now, {partner}.",
+      "Another memory for our collection, {partner}.",
+      "Familiar company makes this afternoon different."
+    ],
+    "rival": [
+      "We seem to bring out a little edge in each other.",
+      "I remember our more difficult moments, {partner}.",
+      "Perhaps we can find a better rhythm today."
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+id = "living_club"
+name = "Living Club"
+version = "0.1.0"
+authors = ["SimGolf mod team"]
+description = "25 personalities, original trait depth, contextual chatter and persistent golfer stories."
+platform = "^1.0"
+game = ">=1.2.0"
+
+[settings]
+"golfers.living" = "1"
+"golfers.reactions" = "0"

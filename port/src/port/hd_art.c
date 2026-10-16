@@ -56,11 +56,15 @@
 #include "port/hd_art_dialog_cutoff.h"
 #include "port/hd_art_geom.h"
 #include "port/hd_art_pixels.h"
+#include "port/sprite_alpha.h"
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
 #include "port/parallel_jobs.h"
 #include "port/water_native.h"
+#include "port/cast_shadow.h"
+#include "port/course_light.h"
+#include "port/light_transfer.h"
 
 // ------------------------------------------------------------------ settings
 
@@ -76,6 +80,7 @@ static char g_dir[MAX_PATH], g_xdir[MAX_PATH];   // upscaled art, and the origin
 static int g_cache_mb = 1024, g_log = 1, g_on, g_selftest, g_loaders = 4, g_debug, g_any, g_pack = 1;
 static int g_look_base[NCAT], g_look_env[NCAT] = {-1, -1, -1, -1, -1, -1, -1};
 static int g_env_phase, g_base_done;   // set_key calls after the store are SIMGOLF_DISPLAY's
+static volatile LONG g_alpha_edges=1;
 
 // HD is the default (card task-71, the maintainer 2026-10-10: "i want the game to be in hd, not pixelized"); scripted
 // runs set SIMGOLF_ART_DEFAULT=original so their pictures stay the plain build's.
@@ -163,6 +168,7 @@ void hd_art_set_key(const char *k, const char *v) {
 // The mods store over golf.ini (hd_native.c calls this between the two).
 void hd_art_read_store(void) {
   defaults();
+  InterlockedExchange(&g_alpha_edges,mods_get_int("art.alpha_edges",1)!=0);
   if (!g_base_done) {   // the first call: what golf.ini said
     memcpy(g_look_base, g_look, sizeof g_look);
     g_pixel_base = g_pixel;
@@ -195,6 +201,10 @@ void hd_art_read_store(void) {
 }
 
 int hd_art_active(void) { return g_on; }
+int hd_art_portrait_source(char *dir, int cap) {
+  if (dir && cap > 0) snprintf(dir, (size_t)cap, "%s", g_dir);
+  return g_on && g_look[C_PEOPLE] == L_UPSCALED;
+}
 
 // The Textures choice now in effect: "hd", "pixel_hd", "original" or "custom" (a mix set by the per-category keys).
 const char *hd_art_textures_name(void) {
@@ -230,6 +240,7 @@ typedef struct {
   int views, fpv;
   int shadow;        // index of <name>Shadow.flc, -1
   int clubhouse;     // approved render pack beside the executable
+  int bundled_terrain;
 } ArtFile;
 
 static ArtFile *g_files;
@@ -339,17 +350,22 @@ static int find_file(const char *path, const char *ext) {
 }
 
 static int load_index(void) {
-  char path[MAX_PATH + 16];
+  char path[MAX_PATH + 32];
   snprintf(path, sizeof path, "%s/index.tsv", g_dir);
   FILE *f = fopen(path, "r");
   char line[1024];
   int cap = 0;
   int custom = clubhouse_pack_ready();
   g_clubhouse_active = custom;
-  for (int pass = 0; pass < 2; pass++) {
-  if (pass) {
-    if (!custom) break;
+  for (int pass = 0; pass < 3; pass++) {
+  if (pass == 1) {
+    if (!custom) continue;
     snprintf(path, sizeof path, "%s/index.tsv", g_clubhouse_dir);
+    f = fopen(path, "r");
+  } else if (pass == 2) {
+    const char *enabled = mods_get("art.terrain");
+    if (enabled && !atoi(enabled)) continue;
+    snprintf(path, sizeof path, "%s/ui/terrain/index.tsv", host_exe_dir());
     f = fopen(path, "r");
   }
   if (!f) continue;
@@ -361,7 +377,8 @@ static int load_index(void) {
     if (n < 10) continue;
     char nm[MAX_PATH];
     normalize(col[0], nm, sizeof nm);
-    if (pass && clubhouse_slot(nm) < 0) continue;
+    if (pass == 1 && clubhouse_slot(nm) < 0) continue;
+    if (pass == 2 && (strcmp(col[1], "texture") || strcmp(col[2], "terrain"))) continue;
     int replace = -1;
     if (pass) for (int i = 0; i < g_nfiles; i++)
       if (!strcmp(g_files[i].norm, nm)) { replace = i; break; }
@@ -386,7 +403,8 @@ static int load_index(void) {
     a->views = atoi(col[7]);
     a->fpv = atoi(col[8]);
     a->shadow = -1;
-    a->clubhouse = pass;
+    a->clubhouse = pass == 1;
+    a->bundled_terrain = pass == 2;
   }
   fclose(f);
   }
@@ -508,6 +526,16 @@ static void on_flic_open(const char *path, int slot) {
 }
 
 static struct { int cuts, tagged, untagged; } g_tagstat;
+int hd_art_portrait_frame(uint32_t wrap, char *source, int cap, int *ax, int *ay) {
+  if (!g_tags || !wrap || !source || cap <= 0) return 0;
+  Tag *t = tag_slot(U32(wrap + 4), 0);
+  if (!t || t->view < 0 || t->file < 0) return 0;
+  ArtFile *a = &g_files[t->file];
+  if (!strstr(a->src, "NormalWalk")) return 0;
+  snprintf(source, (size_t)cap, "%s", a->out);
+  *ax = 240 - a->crop_x; *ay = 240 - a->crop_y;
+  return 1;
+}
 
 // Surfaces golf loaded a PCX into (FUN_00475840): wrapper -> index entry.
 typedef struct { uint32_t surf; int file; char name[64]; } SurfFile;
@@ -595,7 +623,8 @@ static void on_cut(void *wrap, int src, int x, int y, int w, int h) {
 // course; on title, menu and report pages the whole page). Each owns the
 // canvas pixels its draws changed, checked against the picture at its end.
 
-enum { V_RGBA, V_IDX, V_SHADOW, V_RECOLOR, V_MASKED, V_SHADE, V_INDEXED_SHADOW };
+enum { V_RGBA, V_IDX, V_SHADOW, V_RECOLOR, V_MASKED, V_SHADE, V_INDEXED_SHADOW,
+       V_RGBA_EDGE, V_RECOLOR_EDGE };
 enum { LC, LT };
 
 typedef struct {
@@ -685,6 +714,7 @@ typedef struct {
   int file, view, frame, variant;
   int sx, sy, sw, sh, mask;   // stills: the rectangle (1x) and the mask file (-1 none)
   int shadow_max_index;       // V_INDEXED_SHADOW: last source index treated as a LUT plane
+  int alpha_edges;            // immutable request setting, never read the mod store in loaders
   uint16_t pal[256];   // V_IDX/V_RECOLOR: RGB555 colours; shadows: black alpha per index from 0xf8
 } Req;
 
@@ -747,7 +777,12 @@ static Key entry_key(const Entry *e, int shadow) {
     if (e->variant == V_INDEXED_SHADOW) h = (h ^ e->shadow_max_index) * 16777619u;
     return make_key(e->file, 0xff, 0xff, e->variant, h);
   }
-  return make_key(e->file, e->view, e->frame, e->variant, e->pal_hash);
+  int variant=e->variant;
+  if(InterlockedCompareExchange(&g_alpha_edges,0,0)){
+    if(variant==V_RGBA)variant=V_RGBA_EDGE;
+    if(variant==V_RECOLOR)variant=V_RECOLOR_EDGE;
+  }
+  return make_key(e->file, e->view, e->frame, variant, e->pal_hash);
 }
 
 // Game thread: asks for an entry's texture unless it is there or on its way.
@@ -764,6 +799,7 @@ static void want(const Entry *e, int shadow, const uint16_t *pal) {
     r->view = e->view;
     r->frame = e->frame;
     r->variant = shadow ? V_SHADOW : e->variant;
+    r->alpha_edges=(k.b>>28)==V_RGBA_EDGE||(k.b>>28)==V_RECOLOR_EDGE;
     r->sx = e->sx, r->sy = e->sy, r->sw = e->sw, r->sh = e->sh;
     r->shadow_max_index = shadow ? 0 : e->shadow_max_index;
     r->mask = e->variant == V_MASKED ? (int)e->pal_hash : -1;
@@ -809,7 +845,7 @@ static uint8_t *decode_sized(const char *path, int want_idx, int *w, int *h, uin
       IWICBitmapFrameDecode_GetPixelFormat(fr, &fmt);
       if (IsEqualGUID(&fmt, &GUID_WICPixelFormat8bppIndexed)) {
         out = malloc((size_t)W * H);
-        if (FAILED(IWICBitmapFrameDecode_CopyPixels(fr, NULL, W, W * H, out))) { free(out); out = NULL; }
+        if (!out || FAILED(IWICBitmapFrameDecode_CopyPixels(fr, NULL, W, W * H, out))) { free(out); out = NULL; }
         if (out && pal_rgb) {
           IWICPalette *p = NULL;
           if (SUCCEEDED(IWICImagingFactory_CreatePalette(g_wic, &p)) && SUCCEEDED(IWICBitmapFrameDecode_CopyPalette(fr, p))) {
@@ -1006,6 +1042,7 @@ static Sheet *sheet_get(int file, int format) {
   if (!s) {   // all held: this decode stays private
     LeaveCriticalSection(&g_sheet_lock);
     Sheet *p = calloc(1, sizeof *p);
+    if (!p) { free(px); return NULL; }
     *p = (Sheet){file, format, w, h, -1, px, 0};
     return p;
   }
@@ -1040,6 +1077,7 @@ static uint8_t *load_still(const Req *r, int *w, int *h) {
   uint8_t *out = NULL;
   if (W > 0 && H > 0 && x0 >= 0 && y0 >= 0 && x0 + W <= c->w && y0 + H <= c->h) {
     out = malloc((size_t)W * H * 4);
+    if (!out) { sheet_put(c); return NULL; }
     for (int y = 0; y < H; y++) memcpy(out + (size_t)y * W * 4, c->px + ((size_t)(y0 + y) * c->w + x0) * 4, (size_t)W * 4);
     if (r->variant == V_SHADE)   // black, as dark as golf's first shadow level, where the sheet has pixels
       for (int i = 0; i < W * H; i++) {
@@ -1136,7 +1174,7 @@ static void load_one(const Req *r, Done *d) {
     uint8_t *idx = decode_frame(path, 1, &w, &h, NULL, r->file);
     if (idx) {
       rgba = malloc((size_t)w * h * 4);
-      for (int i = 0; i < w * h; i++) {
+      for (int i = 0; rgba && i < w * h; i++) {
         uint8_t v = idx[i], *o = rgba + (size_t)i * 4;
         if (r->variant == V_SHADOW) {
           o[0] = o[1] = o[2] = 0;
@@ -1155,6 +1193,7 @@ static void load_one(const Req *r, Done *d) {
       free(idx);
     }
   }
+  if(r->view>=0&&r->alpha_edges)sprite_alpha_extrude(rgba,w,h,1);
   d->key = r->key;
   d->w = w;
   d->h = h;
@@ -1733,9 +1772,19 @@ uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int 
   }
   double t0 = host_now_ms();
   char path[MAX_PATH * 2];
-  snprintf(path, sizeof path, "%s/%s.png", g_dir, g_files[f].out);
+  if (g_files[f].bundled_terrain)
+    snprintf(path, sizeof path, "%s/ui/terrain/%s.png", host_exe_dir(), g_files[f].out);
+  else
+    snprintf(path, sizeof path, "%s/%s.png", g_dir, g_files[f].out);
   int W = 0, H = 0;
-  uint8_t *up = decode(path, 0, &W, &H, NULL);
+  int scale = mods_get_int("art.terrain_scale", 2);
+  if (scale < 1) scale = 1;
+  if (scale > 4) scale = 4;
+  // Hundreds of terrain textures coexist with D3D staging and sprite sheets
+  // in a 32-bit process. Bound bundled detail before decoding, including reloads.
+  uint8_t *up = g_files[f].bundled_terrain
+      ? decode_sized(path, 0, &W, &H, NULL, w * scale, h * scale)
+      : decode(path, 0, &W, &H, NULL);
   if (!up || W < w || H < h || W % w || H % h) {
     free(up);
     return NULL;
@@ -2048,7 +2097,7 @@ void hd_art_publish(int layered, const uint16_t *screen) {
 
 typedef struct {
   Key key;
-  SDL_Texture *tex;
+  SDL_Texture *tex, *emissive;
   int w, h, used_slot;
   uint32_t used;
 } Tex;
@@ -2065,6 +2114,106 @@ static uint8_t *g_drawable[2];
 static LONG g_cur_serial = -1;
 static SDL_BlendMode g_premul;
 static struct { int frames, entries, drawn; double ms; } g_rstat;
+static const CourseRelief *g_relief;
+void hd_art_relief(const CourseRelief *relief,int enabled){g_relief=enabled?relief:NULL;}
+static CastShadowRenderer g_cast;
+static CourseLight g_light;
+static CourseEnclosure g_enclosure;
+static CourseEnclosureDraw g_enclosure_draw;
+static LONG g_enclosure_serial=-1;
+static double g_enclosure_strength;
+static CourseWindows g_windows;
+static uint8_t *g_cast_replaced;
+static int g_cast_capacity;
+static LONG g_cast_serial = -1;
+typedef struct {
+  SDL_Rect clip;
+  double ox,oy,k,slope_x,slope_y,aspect,softness,contact;
+  int count,width,height,alpha_edges;
+  long relief_serial;
+} ShadowInputs;
+static ShadowInputs g_shadow_inputs;
+static uint8_t *g_shadow_inputs_copy;
+static size_t g_shadow_inputs_bytes;
+static int g_shadow_valid,g_shadow_drawn,g_shadow_cache_on;
+static unsigned long g_shadow_hits,g_shadow_misses;
+
+// Opt-in native QA only. Snapshot the retained GPU mask without changing the
+// output image. Production never reads shadow textures back to the CPU.
+static uint8_t *shadow_verify_snapshot(size_t *bytes) {
+  if (!g_cast.target || g_cast.width <= 0 || g_cast.height <= 0) return NULL;
+  *bytes=(size_t)g_cast.width*g_cast.height*4;
+  uint8_t *pixels=malloc(*bytes);
+  if(!pixels)return NULL;
+  SDL_Renderer *r=g_cast.renderer;
+  SDL_Texture *target=SDL_GetRenderTarget(r);
+  SDL_Rect viewport,clip;float sx,sy;
+  SDL_RenderGetViewport(r,&viewport);SDL_RenderGetClipRect(r,&clip);
+  SDL_bool clipped=SDL_RenderIsClipEnabled(r);SDL_RenderGetScale(r,&sx,&sy);
+  int ok=SDL_SetRenderTarget(r,g_cast.target)==0;
+  if(ok){SDL_RenderSetViewport(r,NULL);SDL_RenderSetScale(r,1,1);SDL_RenderSetClipRect(r,NULL);
+    ok=SDL_RenderReadPixels(r,NULL,SDL_PIXELFORMAT_RGBA32,pixels,g_cast.width*4)==0;}
+  SDL_SetRenderTarget(r,target);SDL_RenderSetScale(r,sx,sy);
+  SDL_RenderSetViewport(r,&viewport);SDL_RenderSetClipRect(r,clipped?&clip:NULL);
+  if(!ok){free(pixels);return NULL;}return pixels;
+}
+
+static int enclosure_caster(const Entry *e,double *x,double *y,double *rx,double *ry){
+  const ArtFile *a=&g_files[e->file];
+  if(e->hidden||e->view<0||a->kind!=K_SPRITE||(a->cat!=C_TREES&&a->cat!=C_BUILDINGS)||
+     strstr(a->norm,"_base")||strstr(a->norm,"_anim")||a->w4<=0||a->h4<=0)return 0;
+  double ax=(240-a->crop_x)/(a->w4/4.),ay=(240-a->crop_y)/(a->h4/4.);
+  *x=e->x+(e->flip&1?1-ax:ax)*e->w;*y=e->y+(e->flip&2?1-ay:ay)*e->h;
+  *rx=fmax(3,e->w*(a->cat==C_BUILDINGS?.48:.60));*ry=fmax(3,*rx*.52);return 1;
+}
+static void enclosure_prepare(void){
+  if(!g_on||!g_cur_ok[LC]||g_enclosure_serial==g_cur_serial)return;
+  List *c=&g_cur[LC];course_enclosure_begin(&g_enclosure,c->w,c->h);
+  for(int i=0;i<c->n;i++){double x,y,rx,ry;
+    if(g_drawable[LC][i+1]&&enclosure_caster(&c->e[i],&x,&y,&rx,&ry))course_enclosure_add(&g_enclosure,x,y,rx,ry);}
+  g_enclosure_serial=g_cur_serial;
+}
+void hd_art_enclosure_ground(SDL_Renderer *r,const uint8_t *ground,int w,int h,double ox,double oy,double k){
+  if(g_enclosure_strength<=0||!g_on){course_enclosure_draw_destroy(&g_enclosure_draw);return;}
+  if(!r||!ground||!g_cur_ok[LC]||w!=g_cur[LC].w||h!=g_cur[LC].h)return;
+  enclosure_prepare();
+  if(course_enclosure_draw(&g_enclosure_draw,r,&g_enclosure,ground,w,h,ox,oy,k,g_enclosure_strength,g_light.linear))return;
+  SDL_BlendMode blend;SDL_GetRenderDrawBlendMode(r,&blend);SDL_SetRenderDrawBlendMode(r,SDL_BLENDMODE_BLEND);
+  SDL_Vertex v[4092];int n=0;const int order[6]={0,1,2,2,1,3};
+  for(int y=0;y<h;y++)for(int x=0;x<w;){
+    if(!ground[(size_t)y*w+x]){x++;continue;}int left=x++;while(x<w&&ground[(size_t)y*w+x]&&x-left<12)x++;
+    SDL_Vertex q[4];int visible=0;
+    for(int i=0;i<4;i++){
+      double px=i&1?x:left,py=y+i/2,shade=course_enclosure_sample(&g_enclosure,px,py,0,0,0,0)*g_enclosure_strength*.20;
+      double a=g_light.linear?1-light_display_encode((float)(1-shade)):shade;
+      Uint8 alpha=(Uint8)lround(fmax(0,fmin(1,a))*255);visible|=alpha;
+      q[i]=(SDL_Vertex){{(float)(ox+px*k),(float)(oy+py*k)},{0,0,0,alpha},{0,0}};
+    }
+    if(!visible)continue;for(int j=0;j<6;j++)v[n++]=q[order[j]];
+    if(n==4092){SDL_RenderGeometry(r,NULL,v,n,NULL,0);n=0;}
+  }
+  if(n)SDL_RenderGeometry(r,NULL,v,n,NULL,0);SDL_SetRenderDrawBlendMode(r,blend);
+}
+void hd_art_fog_features(uint8_t *features,int w,int h,double fog_pixels){
+  if(!features||!g_on||!g_cur_ok[LC]||w!=g_cur[LC].w||h!=g_cur[LC].h)return;
+  List *c=&g_cur[LC];fog_pixels=fmax(2,fmin(60,fog_pixels));
+  for(int i=0;i<c->n;i++){
+    const Entry *e=&c->e[i];const ArtFile *a=&g_files[e->file];
+    if(!g_drawable[LC][i+1]||a->kind!=K_SPRITE||a->w4<=0||a->h4<=0)continue;
+    double ax=(240-a->crop_x)/(a->w4/4.),ay=(240-a->crop_y)/(a->h4/4.);
+    int gx=(int)fmax(0,fmin(w-1,e->x+(e->flip&1?1-ax:ax)*e->w));
+    double base=e->y+(e->flip&2?1-ay:ay)*e->h;
+    int gy=(int)fmax(0,fmin(h-1,base));uint8_t valley=features[((size_t)gy*w+gx)*3+1];
+    int x0=(int)fmax(0,floor(e->x)),x1=(int)fmin(w,ceil(e->x+e->w));
+    int y0=(int)fmax(0,floor(e->y)),y1=(int)fmin(h,ceil(e->y+e->h));
+    for(int y=y0;y<y1;y++){
+      int fade=(int)lround(63*exp(-fmax(0,base-y)/fog_pixels));
+      for(int x=x0;x<x1;x++)if(c->owner[(size_t)y*w+x]==i+1){
+        size_t p=((size_t)y*w+x)*3;features[p+1]=valley;features[p+2]=(uint8_t)(fade*4);
+      }
+    }
+  }
+}
 
 static Tex *tex_find(Key k, int make) {
   uint32_t h = key_hash(k) & (TEX_N - 1);
@@ -2101,7 +2250,9 @@ static void tex_evict(void) {
       if (g_tex[i].tex && (!old || g_tex[i].used < old->used)) old = &g_tex[i];
     if (!old || old->used + 2 >= g_tick) break;   // all in use right now
     SDL_DestroyTexture(old->tex);
-    g_tex_bytes -= (size_t)old->w * old->h * 4;
+    if(old->emissive)SDL_DestroyTexture(old->emissive);
+    g_tex_bytes -= (size_t)old->w * old->h * (old->emissive?8:4);
+    old->emissive=NULL;
     g_ntex--;
     EnterCriticalSection(&g_lock);
     KeyState *s = ks_find(old->key, 0);
@@ -2127,7 +2278,17 @@ static int upload_done(SDL_Renderer *r) {
       SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
       Tex *x = tex_find(d.key, 1);
       if (x) {
-        if (x->tex) { SDL_DestroyTexture(x->tex); g_tex_bytes -= (size_t)x->w * x->h * 4; g_ntex--; }
+        if (x->tex) { SDL_DestroyTexture(x->tex); g_tex_bytes -= (size_t)x->w * x->h * (x->emissive?8:4); g_ntex--; }
+        if(x->emissive)SDL_DestroyTexture(x->emissive);x->emissive=NULL;
+        unsigned file=d.key.a>>16;int lit=0;
+        uint8_t *mask=file<(unsigned)g_nfiles?course_light_windows(&g_windows,g_files[file].norm,(d.key.a>>8)&255,d.rgba,d.w,d.h,&lit):NULL;
+        if(mask){
+          x->emissive=SDL_CreateTexture(r,SDL_PIXELFORMAT_RGBA32,SDL_TEXTUREACCESS_STATIC,d.w,d.h);
+          if(x->emissive&&SDL_UpdateTexture(x->emissive,NULL,mask,d.w*4)<0){SDL_DestroyTexture(x->emissive);x->emissive=NULL;}
+          if(x->emissive){SDL_SetTextureBlendMode(x->emissive,SDL_BLENDMODE_ADD);SDL_SetTextureScaleMode(x->emissive,SDL_ScaleModeLinear);}
+          if(getenv("SIMGOLF_ATMOSPHERE_LOG"))fprintf(stderr,"lighting: windows %s view %u pixels %d\n",g_files[file].norm,(d.key.a>>8)&255,lit);
+          free(mask);
+        }
         x->key = d.key;
         x->used_slot = 1;
         x->tex = t;
@@ -2135,7 +2296,7 @@ static int upload_done(SDL_Renderer *r) {
         x->h = d.h;
         x->used = g_tick;
         g_ntex++;
-        g_tex_bytes += (size_t)d.w * d.h * 4;
+        g_tex_bytes += (size_t)d.w * d.h * (x->emissive?8:4);
         if (g_tex_bytes > g_tex_peak) g_tex_peak = g_tex_bytes;
       } else {
         SDL_DestroyTexture(t);
@@ -2185,6 +2346,21 @@ void hd_art_take(void) {
   LeaveCriticalSection(&g_pub_lock);
 }
 
+// Blank companion layers must never hide the native building while its
+// combined replacement frame is loading or has been evicted from the cache.
+static int clubhouse_frame_ready(const List *list, int view) {
+  int animation=0;
+  for(int i=0;i<list->n;i++) {
+    const Entry *e=&list->e[i];
+    const ArtFile *a=&g_files[e->file];
+    if(!a->clubhouse || e->view!=view || e->hidden)continue;
+    int slot=clubhouse_slot(a->norm);
+    if(slot==1)animation=1;
+    if(slot>=0 && (!tex_of(e,0) || (e->shadow_file>=0 && !tex_of(e,1))))return 0;
+  }
+  return animation;
+}
+
 int hd_art_prepare(SDL_Renderer *r, int new_frame) {
   if (!g_on) return 0;
   if (!g_premul)
@@ -2206,11 +2382,12 @@ int hd_art_prepare(SDL_Renderer *r, int new_frame) {
     for (int i = 0; i < c->n; i++) {
       const Entry *e = &c->e[i];
       uint8_t ok = !e->hidden && tex_of(e, 0) && (e->shadow_file < 0 || tex_of(e, 1));
+      if(ok && g_files[e->file].clubhouse)ok=clubhouse_frame_ready(c,e->view);
       diff |= ok != g_drawable[w][i + 1];
       g_drawable[w][i + 1] = ok;
     }
     if (!diff) continue;
-    changed = 1;
+    changed = 1;g_enclosure_serial=-1;
     size_t n = (size_t)c->w * c->h;
     for (size_t i = 0; i < n; i++) g_cut[w][i] = g_drawable[w][c->owner[i]];
   }
@@ -2229,6 +2406,203 @@ static void shadow_rect(const Entry *e, const SDL_FRect *d, SDL_FRect *out) {
 
 #include "port/hd_art_preview.inc"
 
+int hd_art_draw_shadows(SDL_Renderer *r, SDL_Rect clip, double ox, double oy, double k,
+                        const uint8_t *ground, int width, int height, int enabled,
+                        double slope_x, double slope_y, double opacity, double ground_aspect) {
+  g_cast_serial = -1;
+  if (!enabled) {
+    free(g_shadow_inputs_copy);g_shadow_inputs_copy=NULL;g_shadow_inputs_bytes=0;g_shadow_valid=0;
+    cast_shadow_destroy(&g_cast);
+    free(g_cast_replaced); g_cast_replaced = NULL; g_cast_capacity = 0;
+    return 0;
+  }
+  if (!g_on || !g_cur_ok[LC] || !ground || width != g_cur[LC].w || height != g_cur[LC].h){g_shadow_valid=0;return 0;}
+  List *c = &g_cur[LC];
+  if (g_cast_capacity < c->n) {
+    uint8_t *p = realloc(g_cast_replaced, (size_t)c->n);
+    if (!p) return 0;
+    g_cast_replaced = p; g_cast_capacity = c->n;
+  }
+  if (isfinite(opacity) && opacity <= 0) {
+    g_shadow_valid=0;
+    if(c->n)memset(g_cast_replaced,0,(size_t)c->n);
+    // Enhanced night has no solar shadow. Keep replacement active without
+    // making a mask, so the art's fixed midday shadow does not return.
+    for (int i = 0; i < c->n; i++) {
+      const Entry *e = &c->e[i];
+      const ArtFile *a = &g_files[e->file];
+      g_cast_replaced[i] = g_drawable[LC][i + 1] && e->view >= 0 && a->kind == K_SPRITE &&
+                          (a->cat == C_TREES || a->cat == C_BUILDINGS || a->cat == C_PEOPLE);
+    }
+    g_cast_serial = g_cur_serial;
+    return 0;
+  }
+  const CourseRelief *relief=g_relief&&g_relief->width==width&&g_relief->height==height&&g_relief->max_lift>.01&&g_relief->max_lift<=512?g_relief:NULL;
+  if(relief){
+    int px=(int)ceil(relief->max_lift*k*fabs(slope_x))+2;
+    int py=(int)ceil(relief->max_lift*k*fabs(1+slope_y))+2;
+    clip.x-=px;clip.y-=py;clip.w+=px*2;clip.h+=py*2;
+  }
+  g_cast.relief=relief;
+  ShadowInputs input={0};input.relief_serial=relief?relief->serial:-1;input.clip=clip;input.ox=ox;input.oy=oy;input.k=k;
+  input.slope_x=slope_x;input.slope_y=slope_y;input.aspect=ground_aspect;
+  input.softness=g_light.softness;input.contact=g_light.contact;
+  input.count=c->n;input.width=width;input.height=height;
+  input.alpha_edges=InterlockedCompareExchange(&g_alpha_edges,0,0)!=0;
+  size_t entry_bytes=(size_t)c->n*sizeof(Entry);
+  uint8_t *verify_mask=NULL,*verify_replaced=NULL;size_t verify_bytes=0;
+  static double verify_last;
+  int verify_due=getenv("SIMGOLF_SHADOW_CACHE_VERIFY")&&host_now_ms()-verify_last>250;
+  if(g_shadow_cache_on&&g_shadow_valid&&!memcmp(&input,&g_shadow_inputs,sizeof input)&&
+     !memcmp(c->e,g_shadow_inputs_copy,entry_bytes)&&
+     !memcmp(g_drawable[LC]+1,g_shadow_inputs_copy+entry_bytes,(size_t)c->n)&&
+     g_cast.image_valid){
+    if(verify_due){
+      verify_last=host_now_ms();verify_mask=shadow_verify_snapshot(&verify_bytes);
+      verify_replaced=malloc((size_t)c->n);
+      if(verify_mask&&verify_replaced)memcpy(verify_replaced,g_cast_replaced,(size_t)c->n);
+      else{free(verify_mask);free(verify_replaced);verify_mask=verify_replaced=NULL;
+        fprintf(stderr,"shadow verify: FAILED snapshot\n");}
+    }
+    if(!verify_due&&cast_shadow_reuse(&g_cast,r,clip,k,opacity)){
+    g_cast.linear=g_light.linear;
+    if(cast_shadow_end(&g_cast,ground,width,height,ox,oy,k)){
+      g_cast_serial=g_cur_serial;g_shadow_hits++;
+      if(getenv("SIMGOLF_RENDER_PROFILE")||getenv("SIMGOLF_SHADOW_CACHE_LOG")){
+        static double last;double now=host_now_ms();if(now-last>1000){last=now;fprintf(stderr,"shadow cache: hits %lu rebuilds %lu casters %d\n",g_shadow_hits,g_shadow_misses,g_shadow_drawn);}
+      }
+      return g_shadow_drawn;
+    }
+    g_shadow_valid=0;return 0;
+    }
+  }
+  g_shadow_valid=0;g_shadow_misses++;
+  if(c->n)memset(g_cast_replaced,0,(size_t)c->n);
+  int profile=getenv("SIMGOLF_RENDER_PROFILE")!=NULL;
+  double p0=profile?host_now_ms():0;
+  if (!cast_shadow_begin(&g_cast, r, clip, k, enabled, slope_x, slope_y, opacity, ground_aspect)) {
+    free(verify_mask);free(verify_replaced);return 0;
+  }
+  double p1=profile?host_now_ms():0;
+  g_cast.relief=relief;g_cast.softness=g_light.softness;g_cast.contact=g_light.contact;g_cast.linear=g_light.linear;
+  int drawn = 0;
+  for (int i = 0; i < c->n; i++) {
+    const Entry *e = &c->e[i];
+    const ArtFile *a = &g_files[e->file];
+    if (!g_drawable[LC][i + 1] || e->view < 0 || a->kind != K_SPRITE ||
+        (a->cat != C_TREES && a->cat != C_PEOPLE && a->cat != C_BUILDINGS)) continue;
+    if(a->cat==C_BUILDINGS&&strstr(a->norm,"_anim")){g_cast_replaced[i]=1;continue;}
+    if(a->cat==C_BUILDINGS&&strstr(a->norm,"_base"))continue;
+    int fw = a->w4 / 4, fh = a->h4 / 4;
+    if (fw <= 0 || fh <= 0) continue;
+    double ax = 240 - a->crop_x, ay = 240 - a->crop_y;
+    // The terrain mask is zero on existing sprite pixels, including many
+    // ground anchors. Gate the receiving ground in the compositor instead.
+    SDL_FRect d = {(float)(ox + e->x * k), (float)(oy + e->y * k), (float)(e->w * k), (float)(e->h * k)};
+    if(relief){
+      double gx=e->x+(e->flip&1?1-ax/fw:ax/fw)*e->w;
+      double gy=e->y+(e->flip&2?1-ay/fh:ay/fh)*e->h;
+      double lift=course_relief_sample(relief,gx,gy)*k;
+      d.x+=(float)(slope_x*lift);d.y+=(float)((1+slope_y)*lift);
+    }
+    Key key = entry_key(e, 0);
+    uint64_t id = (uint64_t)key.a << 32 | key.b;
+    g_cast_replaced[i] = (uint8_t)(a->cat==C_BUILDINGS ?
+      cast_shadow_building(&g_cast,ax/fw,ay/fh,d,e->flip):cast_shadow_draw(&g_cast,id,tex_of(e,0),fw,fh,ax,ay,d,e->flip));
+    drawn += g_cast_replaced[i];
+  }
+  double p2=profile?host_now_ms():0;
+  if (cast_shadow_end(&g_cast, ground, width, height, ox, oy, k)) g_cast_serial = g_cur_serial;
+  else drawn = 0;
+  if(verify_mask){
+    size_t bytes=0;uint8_t *rebuilt=shadow_verify_snapshot(&bytes);
+    int same=rebuilt&&bytes==verify_bytes&&!memcmp(verify_mask,rebuilt,bytes)&&
+      !memcmp(verify_replaced,g_cast_replaced,(size_t)c->n)&&g_cast_serial==g_cur_serial;
+    fprintf(stderr,"shadow verify: %s bytes %zu casters %d slope %.6f %.6f\n",same?"PASS":"FAILED",verify_bytes,drawn,slope_x,slope_y);
+    free(rebuilt);free(verify_mask);free(verify_replaced);
+  }
+  // Bound the comparison packet to1MiB. Exact inputs, not a hash, guard reuse.
+  // A frame still preparing masks is never retained as a complete result.
+  if(g_shadow_cache_on&&g_cast_serial==g_cur_serial&&!g_cast.builds&&c->n>0&&
+     entry_bytes+(size_t)c->n<=1024u*1024u){
+    size_t bytes=entry_bytes+(size_t)c->n;
+    if(g_shadow_inputs_bytes<bytes){uint8_t *copy=realloc(g_shadow_inputs_copy,bytes);if(copy){g_shadow_inputs_copy=copy;g_shadow_inputs_bytes=bytes;}}
+    if(g_shadow_inputs_bytes>=bytes){
+      memcpy(g_shadow_inputs_copy,c->e,entry_bytes);memcpy(g_shadow_inputs_copy+entry_bytes,g_drawable[LC]+1,(size_t)c->n);
+      g_shadow_inputs=input;g_shadow_drawn=drawn;g_shadow_valid=1;
+    }
+  }
+  if(profile){double p3=host_now_ms();if(p3-p0>25||g_cast.builds)fprintf(stderr,"shadow profile: time %.3f total %.3f begin %.3f casters %.3f composite %.3f new_masks %d bytes %zu drawn %d\n",p0,p3-p0,p1-p0,p2-p1,p3-p2,g_cast.builds,g_cast.bytes,drawn);}
+  return drawn;
+}
+
+void hd_art_lighting(const EnvironmentConfig *c,const EnvironmentSample *s,double ax,double ay,double bx,double by){
+  g_enclosure_strength=0;memset(&g_light,0,sizeof g_light);g_shadow_cache_on=c&&c->shadow_cache;if(!c||!s||!c->enabled)return;
+  g_light.linear=c->linear_light;
+  g_light.ambient=c->lighting?c->ambient_fill:0;g_light.surfaces=c->lighting?c->surface_light:0;
+  g_light.contact=isfinite(c->contact_shadow)?fmax(0,fmin(1,c->contact_shadow)):0;
+  g_light.softness=environment_shadow_softness(c,s);
+  g_enclosure_strength=isfinite(c->enclosure_shade)&&c->lighting?fmax(0,fmin(1,c->enclosure_shade)):0;
+  g_light.lamps=c->lighting&&isfinite(c->night_lights)?fmax(0,fmin(1,c->night_lights)):0;
+  g_light.lamp_radius=isfinite(c->light_radius)?fmax(1,fmin(80,c->light_radius)):22;
+  g_light.daylight=s->daylight;g_light.strength=s->sun_strength*(c->weather_shadows?environment_shadow_transmission(c,s):1);g_light.elevation=s->sun_y;
+  // Camera axes express scene motion, opposite the displayed world axes.
+  double lx=-(ax*s->sun_x+bx*s->sun_z),ly=-(ay*s->sun_x+by*s->sun_z),length=hypot(lx,ly);
+  g_light.light_x=length>1e-9?lx/length:0;g_light.light_y=length>1e-9?ly/length:0;
+}
+void hd_art_lamps(SDL_Renderer *r,SDL_Rect clip,const uint8_t *receiver,int w,int h,double ox,double oy,double k){
+  double gain=g_light.lamps*course_light_night(&g_light);
+  if(!g_on||!g_cur_ok[LC]||!receiver||gain<=.001||w!=g_cur[LC].w||h!=g_cur[LC].h)return;
+  SDL_Rect old,combined;SDL_bool clipped=SDL_RenderIsClipEnabled(r);SDL_RenderGetClipRect(r,&old);
+  if(clipped){if(!SDL_IntersectRect(&clip,&old,&combined))return;clip=combined;}SDL_RenderSetClipRect(r,&clip);
+  List *c=&g_cur[LC];int lamps=0,spill_cells=0;
+  for(int i=0;i<c->n&&lamps<32;i++){
+    const Entry *e=&c->e[i];if(!g_drawable[LC][i+1]||e->view<0)continue;
+    Tex *t=tex_find(entry_key(e,0),0);if(!t||!t->emissive)continue;
+    const CourseWindow *profile=NULL;for(int j=0;j<g_windows.count;j++)if(g_windows.windows[j].view==e->view&&!strcmp(g_windows.windows[j].asset,g_files[e->file].norm)){profile=&g_windows.windows[j];break;}
+    if(!profile)continue;lamps++;
+    double gx=e->x+(e->flip&1?1-profile->ground_x:profile->ground_x)*e->w;
+    double gy=e->y+(e->flip&2?1-profile->ground_y:profile->ground_y)*e->h;
+    spill_cells+=course_light_spill(r,receiver,w,h,ox,oy,k,gx,gy,g_light.lamp_radius*fmax(.25,e->w/(g_files[e->file].w4/4.)),gain);
+    SDL_SetTextureAlphaMod(t->emissive,(Uint8)lround(gain*255));
+    // The original ownership map preserves foreground trees, golfers and
+    // later sprite occlusion. Never redraw an entire luminous sprite on top.
+    SDL_Vertex v[4092];int n=0;const int order[6]={0,1,2,2,1,3};
+    int y0=(int)fmax(0,floor(e->y)),y1=(int)fmin(h,ceil(e->y+e->h));
+    int x0=(int)fmax(0,floor(e->x)),x1=(int)fmin(w,ceil(e->x+e->w));
+    for(int y=y0;y<y1;y++)for(int x=x0;x<x1;){
+      if(c->owner[(size_t)y*w+x]!=i+1){x++;continue;}int start=x++;while(x<x1&&c->owner[(size_t)y*w+x]==i+1)x++;
+      for(int j=0;j<6;j++){int q=order[j];double px=q&1?x:start,py=y+q/2;double u=(px-e->x)/e->w,tv=(py-e->y)/e->h;
+        v[n++]=(SDL_Vertex){{(float)(ox+px*k),(float)(oy+py*k)},{255,255,255,(Uint8)lround(gain*255)},
+          {(float)(e->flip&1?1-u:u),(float)(e->flip&2?1-tv:tv)}};}
+      if(n==4092){SDL_RenderGeometry(r,t->emissive,v,n,NULL,0);n=0;}
+    }
+    if(n)SDL_RenderGeometry(r,t->emissive,v,n,NULL,0);SDL_SetTextureAlphaMod(t->emissive,255);
+  }
+  SDL_RenderSetClipRect(r,clipped?&old:NULL);
+  if(getenv("SIMGOLF_ATMOSPHERE_LOG")){static double last;double now=host_now_ms();if(now-last>1000){last=now;fprintf(stderr,"lighting: local lights %d gain %.3f spill_cells %d\n",lamps,gain,spill_cells);}}
+}
+static int g_wind_on;static double g_wind_seconds,g_wind_x;
+void hd_art_wind(int enabled,double seconds,double wind_x){g_wind_on=enabled;g_wind_seconds=seconds;g_wind_x=wind_x;}
+static int wind_flag(SDL_Renderer *r,SDL_Texture *tx,SDL_FRect d,int flip,const char *name){
+  if(!g_wind_on||!tx||!name||strncmp(name,"flics/tees/flag",15))return 0;
+  SDL_Vertex verts[9*5];int index[8*4*6],n=0;
+  for(int y=0;y<=4;y++)for(int x=0;x<=8;x++){
+    double u=x/8.0,v=y/4.0,tu=flip&1?1-u:u,tv=flip&2?1-v:v;
+    double cloth=fmax(0,1-tv*2.2)*tu*tu;
+    double wave=sin(g_wind_seconds*(3+fabs(g_wind_x)*2)-u*5);
+    double sway=cloth*(.3+fabs(g_wind_x)*1.8)*wave*fmin(d.h/35,4);
+    verts[y*9+x]=(SDL_Vertex){{d.x+(float)(u*d.w+sway),d.y+(float)(v*d.h+cloth*sway*.25)},
+      {255,255,255,255},{(float)(flip&1?1-u:u),(float)(flip&2?1-v:v)}};
+  }
+  for(int y=0;y<4;y++)for(int x=0;x<8;x++){int a=y*9+x;int q[6]={a,a+1,a+9,a+9,a+1,a+10};for(int j=0;j<6;j++)index[n++]=q[j];}
+  int ok=SDL_RenderGeometry(r,tx,verts,45,index,n)==0;
+  if(ok&&getenv("SIMGOLF_ATMOSPHERE_LOG")){
+    static double last_flag_log;double now=host_now_ms();
+    if(now-last_flag_log>1000){last_flag_log=now;fprintf(stderr,"weather: flag cloth seconds %.3f wind %.3f asset %s\n",g_wind_seconds,g_wind_x,name);}
+  }
+  return ok;
+}
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
   if (!g_on || !g_cur_ok[which]) return;
   double t0 = host_now_ms();
@@ -2239,7 +2613,8 @@ void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
     const Entry *e = &c->e[i];
     SDL_FRect d = {(float)(ox + e->x * k), (float)(oy + e->y * k), (float)(e->w * k), (float)(e->h * k)};
     SDL_RendererFlip f = (e->flip & 1 ? SDL_FLIP_HORIZONTAL : 0) | (e->flip & 2 ? SDL_FLIP_VERTICAL : 0);
-    if (e->shadow_file >= 0) {
+    int replaced = which == LC && g_cast_serial == g_cur_serial && i < g_cast_capacity && g_cast_replaced[i];
+    if (e->shadow_file >= 0 && !replaced) {
       SDL_Texture *s = tex_of(e, 1);
       if (s) {
         SDL_FRect sd;
@@ -2266,7 +2641,19 @@ void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
       SDL_SetTextureColorMod(tx, (Uint8)(uw[0] * 255 + 0.5f), (Uint8)(uw[1] * 255 + 0.5f), (Uint8)(uw[2] * 255 + 0.5f));
       SDL_SetTextureAlphaMod(tx, (Uint8)(uwa * 255 + 0.5f));
     }
-    SDL_RenderCopyExF(r, tx, NULL, &d, 0, NULL, f);
+    int relit=0;
+    if(which==LC&&!under&&(g_light.ambient>0||g_light.surfaces>0)&&g_files[e->file].kind==K_SPRITE&&
+       (g_files[e->file].cat==C_TREES||(g_files[e->file].cat==C_BUILDINGS&&!strstr(nm,"_base")&&!strstr(nm,"_anim"))))
+    {
+      CourseLight local=g_light;double gx,gy,rx,ry;
+      if(g_enclosure_strength>0&&enclosure_caster(e,&gx,&gy,&rx,&ry)){
+        enclosure_prepare();
+        local.enclosure_left=g_enclosure_strength*course_enclosure_sample(&g_enclosure,e->x,gy,gx,gy,rx,ry);
+        local.enclosure_right=g_enclosure_strength*course_enclosure_sample(&g_enclosure,e->x+e->w,gy,gx,gy,rx,ry);
+      }
+      relit=course_light_sprite(r,tx,d,e->flip,g_files[e->file].cat==C_BUILDINGS,&local);
+    }
+    if(!relit&&(which!=LC||!wind_flag(r,tx,d,e->flip,nm)))SDL_RenderCopyExF(r, tx, NULL, &d, 0, NULL, f);
     if (under) {
       SDL_SetTextureColorMod(tx, 255, 255, 255);
       SDL_SetTextureAlphaMod(tx, 255);
@@ -2325,6 +2712,7 @@ void hd_art_init(int presenter_on) {
     snprintf(g_dir, sizeof g_dir, "%s", full);
   }
   double t0 = host_now_ms();
+  // Authored building lamps retired by the maintainer. Leave profiles unloaded.
   int n = load_index();
   if (!n) {
     fprintf(stderr, "art: no index.tsv in %s (tools/upscale/make_index.py); original art\n", g_dir);

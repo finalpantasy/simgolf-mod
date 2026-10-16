@@ -1,0 +1,29 @@
+{
+  "comment": "Remaster showRoutingMapScreen 0x00456be0 and remove baked-in chrome from the land-sale minimap. The original routing handlers and nested land-map draw remain in charge.",
+  "patches": {
+    "FUN_0044b9c0": [
+      ["iVar6 = iVar16 * local_b2c + 0x96;", "if (!rp_credits((char **)auStack_80c,local_b2c)) {\n      iVar6 = iVar16 * local_b2c + 0x96;"],
+      ["puVar17 = auStack_80c + local_b2c;", "}\n      puVar17 = auStack_80c + local_b2c;"]
+    ],
+    "FUN_00456be0": [
+      ["local_fc = 0;", "rp_route_enter();\n  local_fc = 0;"],
+      ["LAB_00456c5a:\n  do {", "LAB_00456c5a:\n  do {\n    rp_route_reset();"],
+      ["FUN_00473e60(", "rp_route_sprite("],
+      ["FUN_00404b70(", "rp_route_tc(0,"],
+      ["FUN_00404bc0(", "rp_route_tc(1,"],
+      ["FUN_004049d0(", "rp_route_tc(2,"],
+      ["FUN_00480b00(", "rp_route_rect("],
+      ["FUN_00478530(", "rp_route_wrap("],
+      ["FUN_00475df0(&DAT_00519cd4,(int)&iStack_c0,4,uVar10);", "FUN_00475df0(&DAT_00519cd4,(int)&iStack_c0,4,uVar10);\n          rp_map_tile(uVar19, iVar7, uVar10);"],
+      ["FUN_00480c80(&DAT_00519a60);", "rp_route_selected((int)local_f8,local_f4,local_fc);\n    rp_frame_preflush();\n    FUN_00480c80(&DAT_00519a60);"],
+      ["FUN_0045c030();", "rp_frame_preflush();\n      FUN_0045c030();\n      rp_route_poll();"],
+      ["return pcVar8;", "rp_route_leave();\n      return pcVar8;"]
+    ],
+    "FUN_004587a0": [
+      ["FUN_00473e60(", "rp_tract_sprite("]
+    ],
+    "FUN_00438390": [
+      ["iVar1 = param_1;", "iVar4 = dlg_face_native(param_1);\n  if (iVar4 != -2) return iVar4;\n  iVar1 = param_1;"]
+    ]
+  }
+}

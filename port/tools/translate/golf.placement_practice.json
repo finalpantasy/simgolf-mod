@@ -1,5 +1,6 @@
 {
   "comment": "Issue30: the active-shot skill labels are drawn after hud_restore, outside the bottom panel view. Skip only this text when the modern HUD owns the screen. Keep original skill bit updates, shot calculations, original HUD and browser drawing. Issue32: keep the five original practice shot hitboxes available when the paused pro page is reopened in mode 4 only while the Frosted Mint HUD is active; preserve mode 3, original-HUD mode-4 fallback, hitbox bounds, and selection behavior.",
+  "patch_order_note": "Apply before golf.popovers.json renames the original text helper.",
   "patches": {
     "FUN_00435f00": [
       [

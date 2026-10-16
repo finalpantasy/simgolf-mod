@@ -200,6 +200,13 @@ void Context::shade(const Vertex &v, float out[4]) const {
   out[3] = clamp01(matDiffuse[3]);
 }
 
+float Context::heightPixels() const {
+  Mat4 m=stack_[PROJECTION].back()*stack_[MODELVIEW].back();
+  if(m.m[3]!=0||m.m[7]!=0||m.m[11]!=0||m.m[15]==0)return 0;
+  float pixels=m.m[5]/m.m[15]*vh_*.5f;
+  return isfinite(pixels)&&pixels>0?pixels:0;
+}
+
 void Context::project(const Vertex &v, ScreenVertex &out) const {
   float p[4] = {v.pos[0], v.pos[1], v.pos[2], 1}, e[4], c[4];
   xform(stack_[MODELVIEW].back(), p, e);
@@ -227,7 +234,9 @@ void Context::triangle(const Vertex &a, const Vertex &b, const Vertex &c) {
     for (int i = 0; i < 3; i++)
       r[i] = {s[i].x, s[i].y, s[i].c[0], s[i].c[1], s[i].c[2], s[i].c[3], s[i].u, s[i].v};
     const float world[9] = {a.pos[0], a.pos[1], a.pos[2], b.pos[0], b.pos[1], b.pos[2], c.pos[0], c.pos[1], c.pos[2]};
-    recorder_(recorderUser_, r, texture2D ? texture(bound_) : nullptr, blend, world);
+    const float normals[9] = {a.normal[0], a.normal[1], a.normal[2], b.normal[0], b.normal[1], b.normal[2],
+                              c.normal[0], c.normal[1], c.normal[2]};
+    recorder_(recorderUser_, r, texture2D ? texture(bound_) : nullptr, blend, world, normals);
   }
   if (!rasterize_ || !pixels_) return;
   if (area > 0) rasterize(s[0], s[1], s[2]);

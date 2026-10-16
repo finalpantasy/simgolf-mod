@@ -38,7 +38,11 @@
       ],
       [
         "FUN_00480c80(&DAT_00519a60);\n    do {\n      FUN_0045bf80(1,0);\n      FUN_0045c030();",
-        "{\n      int dlg_r = dlg_entry(local_120,(char *)&DAT_0051a068,(int)uVar6,param_4);\n      if (dlg_r == 1) {\n        *(undefined1 *)((int)&DAT_0051a068 + local_128) = 0;\n        return (int)dlg_done(0);\n      }\n      if (dlg_r == 2) {\n        *(undefined1 *)&DAT_0051a068 = 0;\n        return (int)dlg_done(0);\n      }\n    }\n    FUN_00480c80(&DAT_00519a60);\n    do {\n      FUN_0045bf80(1,0);\n    {\n      int dlg_r = dlg_entry(local_120,(char *)&DAT_0051a068,(int)uVar6,param_4);\n      if (dlg_r == 1) {\n        *(undefined1 *)((int)&DAT_0051a068 + local_128) = 0;\n        return (int)dlg_done(0);\n      }\n      if (dlg_r == 2) {\n        *(undefined1 *)&DAT_0051a068 = 0;\n        return (int)dlg_done(0);\n      }\n    }\n      FUN_0045c030();"
+        "{\n      int dlg_r = dlg_entry(local_120,(char *)&DAT_0051a068,&uVar6,&local_128,param_4);\n      if (dlg_r == 1) {\n        *(undefined1 *)((int)&DAT_0051a068 + local_128) = 0;\n        return (int)dlg_done(0);\n      }\n      if (dlg_r == 2) {\n        *(undefined1 *)&DAT_0051a068 = 0;\n        return (int)dlg_done(0x1b);\n      }\n    }\n    FUN_00480c80(&DAT_00519a60);\n    do {\n      FUN_0045bf80(1,0);\n    {\n      int dlg_r = dlg_entry(local_120,(char *)&DAT_0051a068,&uVar6,&local_128,param_4);\n      if (dlg_r == 1) {\n        *(undefined1 *)((int)&DAT_0051a068 + local_128) = 0;\n        return (int)dlg_done(0);\n      }\n      if (dlg_r == 2) {\n        *(undefined1 *)&DAT_0051a068 = 0;\n        return (int)dlg_done(0x1b);\n      }\n    }\n      FUN_0045c030();"
+      ],
+      [
+        "iVar5 = FUN_0045ae30();",
+        "iVar5 = FUN_0045ae30();\n    if (dlg_edit_key((char *)&DAT_0051a068,&uVar7,&local_128,iVar4,iVar5,param_4)) {\n      uVar6 = uVar7;\n      continue;\n    }"
       ]
     ],
     "FUN_00405b10": [

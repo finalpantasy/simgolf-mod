@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -212,18 +213,44 @@ int crt_open(nu path, nu flags, ...) {
   char tmp[530];
   int safe = write && (flags & 0x200) && is_save(real) && fs_safe_saves();
   if (safe) snprintf(tmp, sizeof tmp, "%s.tmp", real);
-  int fd = open(safe ? tmp : real, f, 0666);
-  if (fd >= 0 && fd < 256 && write) {
-    g_fd_written[fd] = strdup(real);
-    g_fd_final[fd] = safe ? strdup(tmp) : NULL;
+  // Reserve bookkeeping before any destructive open. In particular, a failed
+  // allocation must never silently turn a safe save into an untracked write.
+  char *written = write ? strdup(real) : NULL;
+  char *final = safe ? strdup(tmp) : NULL;
+  char *path_copy = strdup(real);
+  if ((write && !written) || (safe && !final) || !path_copy) {
+    free(written); free(final); free(path_copy);
+    errno = ENOMEM;
+    return -1;
   }
-  if (fd >= 0 && fd < 256) { g_fd_path[fd] = strdup(real); g_fd_failed[fd] = 0; g_fd_bytes[fd] = 0; }
+  int fd = open(safe ? tmp : real, f, 0666);
+  if (fd < 0 || (safe && fd >= 256)) {
+    int error = fd < 0 ? errno : EMFILE;
+    if (fd >= 0) close(fd);
+    free(written); free(final); free(path_copy);
+    errno = error;
+    return -1;
+  }
+  if (fd < 256) {
+    g_fd_written[fd] = written;
+    g_fd_final[fd] = final;
+    g_fd_path[fd] = path_copy;
+    g_fd_failed[fd] = 0;
+    g_fd_bytes[fd] = 0;
+  } else {
+    // Keep the original direct-write behavior outside the tracking table.
+    free(written); free(final); free(path_copy);
+  }
   return fd;
 }
 int crt_read(nu fd, nu buf, nu n) {
+  if ((int32_t)fd < 0) { errno = EBADF; return -1; }
+  if (n > INT_MAX || (!buf && n)) { errno = EINVAL; return -1; }
   return (int)read((int)fd, P(buf), n);
 }
 int crt_write(nu fd, nu buf, nu n) {
+  if ((int32_t)fd < 0) { errno = EBADF; return -1; }
+  if (n > INT_MAX || (!buf && n)) { crt_io_failed(fd); errno = EINVAL; return -1; }
   uint32_t requested = n;
   // Harness-only short-write injection. It follows the real write and close
   // paths and is absent unless this instance explicitly sets the test variable.
@@ -241,6 +268,7 @@ int crt_write(nu fd, nu buf, nu n) {
   return r;
 }
 int crt_close(nu fd) {
+  if ((int32_t)fd < 0) { errno = EBADF; return -1; }
   int synced = fd < 256 && g_fd_final[fd] ? fs_commit((int)fd) : 1;
   int r = close((int)fd);
   if (fd < 256 && g_fd_failed[fd]) r = -1;
@@ -263,7 +291,10 @@ int crt_close(nu fd) {
   if (fd < 256) { free(g_fd_path[fd]); g_fd_path[fd] = NULL; }
   return r;
 }
-int crt_lseek(nu fd, nu off, nu whence) { return (int)lseek((int)fd, (int32_t)off, (int)whence); }
+int crt_lseek(nu fd, nu off, nu whence) {
+  if ((int32_t)fd < 0) { errno = EBADF; return -1; }
+  return (int)lseek((int)fd, (int32_t)off, (int)whence);
+}
 int crt_tell(nu fd) { return crt_lseek(fd, 0, SEEK_CUR); }
 
 int crt_remove(nu path) {
@@ -314,17 +345,30 @@ nu crt_fopen(nu path, nu mode) {
   for (const char *p = md; *p && j < 6; p++)
     if (*p == 'r' || *p == 'w' || *p == 'a' || *p == '+') hm[j++] = *p;
   hm[j] = 0;
-  FILE *h = fopen(real, hm);
-  if (!h) return 0;
+  // A write-mode fopen can truncate an existing file. Reserve the stream
+  // slot and all bookkeeping first so failure cannot destroy its contents.
   int i;
   for (i = 0; i < MAX_FILES && g_files[i]; i++) {}
-  if (i == MAX_FILES) { fclose(h); return 0; }
-  g_files[i] = h;
-  g_text[i] = strchr(md, 'b') == NULL;
-  g_written[i] = write ? strdup(real) : NULL;
+  if (i == MAX_FILES) { errno = EMFILE; return 0; }
   MsFile *m = calloc(1, sizeof *m);
+  char *written = write ? strdup(real) : NULL;
+  if (!m || (write && !written)) {
+    free(m); free(written);
+    errno = ENOMEM;
+    return 0;
+  }
+  FILE *h = fopen(real, hm);
+  if (!h) {
+    int error = errno;
+    free(m); free(written);
+    errno = error;
+    return 0;
+  }
   m->file = i;
   m->flag = write ? (strchr(md, '+') ? IORW : IOWRT) : IOREAD;
+  g_text[i] = strchr(md, 'b') == NULL;
+  g_written[i] = written;
+  g_files[i] = h;
   return U(m);
 }
 
@@ -332,15 +376,15 @@ int crt_fclose(nu f) {
   int i;
   FILE *h = host(f, &i);
   if (!h) return -1;
-  fclose(h);
+  int r = fclose(h);
   g_files[i] = NULL;
   if (g_written[i]) {
-    fs_written(g_written[i]);
+    if (r == 0) fs_written(g_written[i]);
     free(g_written[i]);
     g_written[i] = NULL;
   }
   free(P(f));
-  return 0;
+  return r;
 }
 
 static void set_eof(nu f, FILE *h) {
@@ -371,7 +415,9 @@ int crt_flsbuf(nu c, nu f) {
   FILE *h = host(f, NULL);
   if (!h) return -1;
   ((MsFile *)P(f))->cnt = 0;
-  return fputc((int)(c & 0xff), h) == EOF ? -1 : (int)(c & 0xff);
+  int r = fputc((int)(c & 0xff), h);
+  set_eof(f, h);
+  return r == EOF ? -1 : (int)(c & 0xff);
 }
 
 nu crt_fgets(nu buf, nu n, nu f) {
@@ -379,6 +425,7 @@ nu crt_fgets(nu buf, nu n, nu f) {
   FILE *h = host(f, &i);
   if (!h || (int)n <= 0) return 0;
   char *out = S(buf);
+  if (n == 1) { out[0] = 0; return buf; }
   int k = 0;
   while (k < (int)n - 1) {
     int c = getc_text(h, g_text[i]);
@@ -416,7 +463,9 @@ nu crt_fread(nu buf, nu size, nu n, nu f) {
 nu crt_fwrite(nu buf, nu size, nu n, nu f) {
   FILE *h = host(f, NULL);
   if (!h) return 0;
-  return (nu)fwrite(P(buf), size, n, h);
+  nu written = (nu)fwrite(P(buf), size, n, h);
+  set_eof(f, h);
+  return written;
 }
 
 int crt_fprintf(nu f, nu fmt, ...) {
@@ -426,6 +475,7 @@ int crt_fprintf(nu f, nu fmt, ...) {
   va_start(ap, fmt);
   int r = vfprintf(h, S(fmt), ap);
   va_end(ap);
+  set_eof(f, h);
   return r;
 }
 

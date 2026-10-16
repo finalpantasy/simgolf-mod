@@ -343,11 +343,18 @@ static nu xy(int x, int y) { return ((nu)(uint16_t)y << 16) | (uint16_t)x; }
 int hd_ui_event(SDL_Event *e);   // hd_native.c (hd_native.h needs SDL before win32.h)
 int keymap_event(SDL_Event *e);  // golf/keymap.c (task-24): the key bindings
 int dbg_overlay_event(SDL_Event *e);   // debug_overlay.c (task-113): its hotkey; polls its actions each pump
+int hd_native_poll_event(SDL_Event *e);
 #endif
 
 static void pump_sdl(void) {
   SDL_Event e;
-  while (SDL_PollEvent(&e)) {
+  while (
+#ifdef __EMSCRIPTEN__
+    SDL_PollEvent(&e)
+#else
+    hd_native_poll_event(&e)
+#endif
+  ) {
 #ifndef __EMSCRIPTEN__
     if (dbg_overlay_event(&e)) continue;    // the debug overlay's hotkey (task-113)
     if (hd_ui_event(&e)) continue;          // native UI layers first (hd_native.c, task-3)
