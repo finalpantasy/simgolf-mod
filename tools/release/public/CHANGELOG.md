@@ -1,5 +1,6 @@
-# SimGolf Remastered for Windows 0.1.15
+# SimGolf Remastered for Windows 0.1.16
 
+- Bundled clubhouse art is delivered through the existing updater while preserving user HD packs.
 - Added the approved Parkland clubhouse model and garden, with all four views and original-cadence animated flags and birdbath water. Existing HD art stays available; Original textures retain the original building.
 
 - Restored the original assigned golfer clothing colours after repairing lost palette-call arguments in the translated game.

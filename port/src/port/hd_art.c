@@ -260,7 +260,7 @@ static int clubhouse_slot(const char *norm) {
 static int clubhouse_pack_ready(void) {
   const char *enabled = mods_get("art.clubhouse");
   if (enabled && !atoi(enabled)) return 0;
-  snprintf(g_clubhouse_dir, sizeof g_clubhouse_dir, "%s/art/clubhouse", host_exe_dir());
+  snprintf(g_clubhouse_dir, sizeof g_clubhouse_dir, "%s/ui/clubhouse", host_exe_dir());
   static const char *const folders[] = {"clubL1", "clubL1_ANIM", "clubL1_ANIMShadow", "clubL1_base"};
   char p[MAX_PATH + 128];
   snprintf(p, sizeof p, "%s/index.tsv", g_clubhouse_dir);
