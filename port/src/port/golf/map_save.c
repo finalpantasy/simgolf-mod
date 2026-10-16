@@ -17,6 +17,9 @@
 #define SAVE_FD (*(int *)0x568d08)        // DAT_00568d08: open save file
 #define SAVE_READING (*(int *)0x53e638)   // DAT_0053e638: 1 load, 0 save
 #define FIRST_FIELD 0x822c78
+#define LAST_COMMON_FIELD 0x5a5a00
+
+void save_camera_focus(void);
 
 // The tag itself: grid_save_tag in grid.c (this file sees only the game's
 // own types, which clash with the C library's).
@@ -28,6 +31,11 @@ int FUN_0040af70(int param_1, int param_2) {
     staff_save_tag(SAVE_FD, SAVE_READING);
     camera_tiles_save_field(SAVE_FD, SAVE_READING);
   }
-  if (SAVE_READING != 0) return crt_read(SAVE_FD, param_1, param_2);
+  if (SAVE_READING != 0) {
+    int n = crt_read(SAVE_FD, param_1, param_2);
+    if (param_1 == LAST_COMMON_FIELD && param_2 == 4 && n == 4)
+      save_camera_focus();
+    return n;
+  }
   return crt_write(SAVE_FD, param_1, param_2);
 }

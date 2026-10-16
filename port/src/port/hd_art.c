@@ -229,12 +229,70 @@ typedef struct {
   int crop_x, crop_y;   // 1x: the frame's top-left in the 480x480 canvas
   int views, fpv;
   int shadow;        // index of <name>Shadow.flc, -1
+  int clubhouse;     // approved render pack beside the executable
 } ArtFile;
 
 static ArtFile *g_files;
 static int g_nfiles;
 static int *g_fhash;   // open addressing, size g_fhash_n, -1 empty
 static int g_fhash_n;
+static char g_clubhouse_dir[MAX_PATH];
+static int g_clubhouse_active;
+
+static int texture_budget_mb(void) {
+  // D3D keeps additional staging copies in this 32-bit process. Leave room
+  // for the game, decoder and upload queue when the animated overlay is used.
+  return g_clubhouse_active && g_cache_mb > 256 ? 256 : g_cache_mb;
+}
+static void normalize(const char *in, char *out, size_t n);
+
+static int clubhouse_slot(const char *norm) {
+  static const char *const names[] = {
+    "flics/bldgs/park/clubl1.flc", "flics/bldgs/park/clubl1_anim.flc",
+    "flics/bldgs/park/clubl1_animshadow.flc", "flics/bldgs/park/clubl1_base.flc"
+  };
+  for (int i = 0; i < 4; i++) if (!strcmp(norm, names[i])) return i;
+  return -1;
+}
+
+// Validate the complete cohort before replacing a static slot with a blank.
+// An incomplete install must keep the complete original clubhouse reachable.
+static int clubhouse_pack_ready(void) {
+  const char *enabled = mods_get("art.clubhouse");
+  if (enabled && !atoi(enabled)) return 0;
+  snprintf(g_clubhouse_dir, sizeof g_clubhouse_dir, "%s/art/clubhouse", host_exe_dir());
+  static const char *const folders[] = {"clubL1", "clubL1_ANIM", "clubL1_ANIMShadow", "clubL1_base"};
+  char p[MAX_PATH + 128];
+  snprintf(p, sizeof p, "%s/index.tsv", g_clubhouse_dir);
+  FILE *index = fopen(p, "r");
+  if (!index) return 0;
+  char row[1024]; int seen = 0, valid = 1;
+  while (fgets(row, sizeof row, index)) {
+    if (row[0] == '#') continue;
+    char *col[10]; int n = 0;
+    for (char *t = strtok(row, "\t\r\n"); t && n < 10; t = strtok(NULL, "\t\r\n")) col[n++] = t;
+    if (!n) continue;
+    char norm[MAX_PATH]; normalize(col[0], norm, sizeof norm);
+    int slot = clubhouse_slot(norm);
+    if (n != 10 || slot < 0 || (seen & (1 << slot)) ||
+        atoi(col[3]) <= 0 || atoi(col[3]) > 4096 || atoi(col[4]) <= 0 || atoi(col[4]) > 4096 ||
+        atoi(col[7]) != 4 || atoi(col[8]) != (slot == 1 || slot == 2 ? 15 : 1) ||
+        strcmp(col[1], slot == 2 ? "shadow" : "sprite")) { valid = 0; break; }
+    seen |= 1 << slot;
+  }
+  fclose(index);
+  if (!valid || seen != 15) return 0;
+  for (int slot = 0; slot < 4; slot++) for (int view = 0; view < 4; view++)
+    for (int frame = 0; frame < (slot == 1 || slot == 2 ? 15 : 1); frame++)
+      for (int indexed = 0; indexed < 2; indexed++) {
+        snprintf(p, sizeof p, "%s/Flics/Bldgs/Park/%s/v%d_f%02d%s.png",
+                 g_clubhouse_dir, folders[slot], view, frame, indexed ? ".idx" : "");
+        FILE *f = fopen(p, "rb");
+        if (!f) return 0;
+        fclose(f);
+      }
+  return 1;
+}
 
 static uint32_t hash_str(const char *s) {
   uint32_t h = 2166136261u;
@@ -284,20 +342,34 @@ static int load_index(void) {
   char path[MAX_PATH + 16];
   snprintf(path, sizeof path, "%s/index.tsv", g_dir);
   FILE *f = fopen(path, "r");
-  if (!f) return 0;
   char line[1024];
   int cap = 0;
+  int custom = clubhouse_pack_ready();
+  g_clubhouse_active = custom;
+  for (int pass = 0; pass < 2; pass++) {
+  if (pass) {
+    if (!custom) break;
+    snprintf(path, sizeof path, "%s/index.tsv", g_clubhouse_dir);
+    f = fopen(path, "r");
+  }
+  if (!f) continue;
   while (fgets(line, sizeof line, f)) {
     if (line[0] == '#') continue;
     char *col[10];
     int n = 0;
     for (char *t = strtok(line, "\t\r\n"); t && n < 10; t = strtok(NULL, "\t\r\n")) col[n++] = t;
     if (n < 10) continue;
-    if (g_nfiles == cap) g_files = realloc(g_files, (cap = cap ? cap * 2 : 8192) * sizeof *g_files);
-    ArtFile *a = &g_files[g_nfiles++];
-    a->src = _strdup(col[0]);
     char nm[MAX_PATH];
     normalize(col[0], nm, sizeof nm);
+    if (pass && clubhouse_slot(nm) < 0) continue;
+    int replace = -1;
+    if (pass) for (int i = 0; i < g_nfiles; i++)
+      if (!strcmp(g_files[i].norm, nm)) { replace = i; break; }
+    if (replace < 0 && g_nfiles == cap)
+      g_files = realloc(g_files, (cap = cap ? cap * 2 : 8192) * sizeof *g_files);
+    ArtFile *a = &g_files[replace < 0 ? g_nfiles++ : replace];
+    if (replace >= 0) { free(a->src); free(a->norm); free(a->out); }
+    a->src = _strdup(col[0]);
     a->norm = _strdup(nm);
     a->out = _strdup(col[0]);
     char *dot = strrchr(a->out, '.');
@@ -314,8 +386,11 @@ static int load_index(void) {
     a->views = atoi(col[7]);
     a->fpv = atoi(col[8]);
     a->shadow = -1;
+    a->clubhouse = pass;
   }
   fclose(f);
+  }
+  if (!g_nfiles) return 0;
   g_fhash_n = 1;
   while (g_fhash_n < g_nfiles * 2) g_fhash_n <<= 1;
   g_fhash = malloc(g_fhash_n * sizeof(int));
@@ -700,18 +775,33 @@ static void want(const Entry *e, int shadow, const uint16_t *pal) {
 
 static __declspec(thread) IWICImagingFactory *g_wic;   // one per loader thread
 
-static uint8_t *decode(const char *path, int want_idx, int *w, int *h, uint8_t *pal_rgb) {
+static uint8_t *decode_sized(const char *path, int want_idx, int *w, int *h, uint8_t *pal_rgb, int max_w, int max_h) {
   wchar_t wp[MAX_PATH + 16];
   if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, wp, MAX_PATH + 16)) return NULL;
   IWICBitmapDecoder *dec = NULL;
   IWICBitmapFrameDecode *fr = NULL;
   IWICFormatConverter *conv = NULL;
+  IWICBitmapScaler *scaler = NULL;
   uint8_t *out = NULL;
   if (FAILED(IWICImagingFactory_CreateDecoderFromFilename(g_wic, wp, NULL, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &dec)))
     return NULL;
   if (SUCCEEDED(IWICBitmapDecoder_GetFrame(dec, 0, &fr))) {
     UINT W, H;
     IWICBitmapFrameDecode_GetSize(fr, &W, &H);
+    IWICBitmapSource *source = (IWICBitmapSource *)fr;
+    // Approved renders exceed the declared sprite resolution. Decode RGBA at
+    // that resolution so animation cannot exhaust the 32-bit address space.
+    if (want_idx <= 0 && max_w > 0 && max_h > 0 && (W > (UINT)max_w || H > (UINT)max_h)) {
+      if (FAILED(IWICImagingFactory_CreateBitmapScaler(g_wic, &scaler)) ||
+          FAILED(IWICBitmapScaler_Initialize(scaler, source, max_w, max_h, WICBitmapInterpolationModeFant))) {
+        if (scaler) IWICBitmapScaler_Release(scaler);
+        IWICBitmapFrameDecode_Release(fr);
+        IWICBitmapDecoder_Release(dec);
+        return NULL;
+      }
+      source = (IWICBitmapSource *)scaler;
+      W = max_w; H = max_h;
+    }
     *w = (int)W;
     *h = (int)H;
     if (want_idx > 0) {
@@ -736,22 +826,46 @@ static uint8_t *decode(const char *path, int want_idx, int *w, int *h, uint8_t *
         }
       }
     } else if (SUCCEEDED(IWICImagingFactory_CreateFormatConverter(g_wic, &conv)) &&
-               SUCCEEDED(IWICFormatConverter_Initialize(conv, (IWICBitmapSource *)fr,
+               SUCCEEDED(IWICFormatConverter_Initialize(conv, source,
                                                         want_idx < 0 ? &GUID_WICPixelFormat8bppGray : &GUID_WICPixelFormat32bppRGBA,
                                                         WICBitmapDitherTypeNone, NULL, 0, WICBitmapPaletteTypeCustom))) {
       UINT bpp = want_idx < 0 ? 1 : 4;   // want_idx -1: 8-bit grey
       out = malloc((size_t)W * H * bpp);
-      if (FAILED(IWICFormatConverter_CopyPixels(conv, NULL, W * bpp, W * H * bpp, out))) { free(out); out = NULL; }
+      if (!out || FAILED(IWICFormatConverter_CopyPixels(conv, NULL, W * bpp, W * H * bpp, out))) { free(out); out = NULL; }
     }
   }
   if (conv) IWICFormatConverter_Release(conv);
+  if (scaler) IWICBitmapScaler_Release(scaler);
   if (fr) IWICBitmapFrameDecode_Release(fr);
   IWICBitmapDecoder_Release(dec);
   return out;
 }
 
+static uint8_t *decode(const char *path, int want_idx, int *w, int *h, uint8_t *pal_rgb) {
+  return decode_sized(path, want_idx, w, h, pal_rgb, 0, 0);
+}
+
+static uint8_t *decode_frame(const char *path, int want_idx, int *w, int *h, uint8_t *pal_rgb, int file) {
+  const ArtFile *a = &g_files[file];
+  if (!a->clubhouse) return decode(path, want_idx, w, h, pal_rgb);
+  uint8_t *px = decode_sized(path, want_idx, w, h, pal_rgb, a->w4, a->h4);
+  // Palette indices must remain exact for native shadows and PixelHD.
+  if (px && want_idx > 0 && (*w > a->w4 || *h > a->h4)) {
+    uint8_t *compact = malloc((size_t)a->w4 * a->h4);
+    if (compact) {
+      for (int y = 0; y < a->h4; y++)
+        for (int x = 0; x < a->w4; x++)
+          compact[(size_t)y * a->w4 + x] = px[(size_t)((int64_t)y * *h / a->h4) * *w + (int64_t)x * *w / a->w4];
+      *w = a->w4; *h = a->h4;
+    }
+    free(px); px = compact;
+  }
+  return px;
+}
+
 static void frame_path(char *out, size_t n, int file, int view, int frame, const char *suffix) {
-  snprintf(out, n, "%s/%s/v%d_f%02d%s", g_dir, g_files[file].out, view, frame, suffix);
+  snprintf(out, n, "%s/%s/v%d_f%02d%s", g_files[file].clubhouse ? g_clubhouse_dir : g_dir,
+           g_files[file].out, view, frame, suffix);
 }
 
 // Decoded sheets shared by the loaders (UI and building sheets are up to
@@ -984,16 +1098,16 @@ static void load_one(const Req *r, Done *d) {
     rgba = load_still(r, &w, &h);
   } else if (r->variant == V_RGBA) {
     frame_path(path, sizeof path, r->file, r->view, r->frame, ".png");
-    rgba = decode(path, 0, &w, &h, NULL);
+    rgba = decode_frame(path, 0, &w, &h, NULL, r->file);
   } else if (r->variant == V_RECOLOR) {
     // The smooth upscale with golf's palette: each pixel moves by the change
     // of its palette entry (the 8-bit upscale says which entry it belongs to).
     frame_path(path, sizeof path, r->file, r->view, r->frame, ".png");
-    rgba = decode(path, 0, &w, &h, NULL);
+    rgba = decode_frame(path, 0, &w, &h, NULL, r->file);
     uint8_t old[768] = {0};
     int iw = 0, ih = 0;
     frame_path(path, sizeof path, r->file, r->view, r->frame, ".idx.png");
-    uint8_t *idx = rgba ? decode(path, 1, &iw, &ih, old) : NULL;
+    uint8_t *idx = rgba ? decode_frame(path, 1, &iw, &ih, old, r->file) : NULL;
     if (!idx || iw != w || ih != h) {
       free(rgba);
       rgba = NULL;
@@ -1019,7 +1133,7 @@ static void load_one(const Req *r, Done *d) {
     free(idx);
   } else {
     frame_path(path, sizeof path, r->file, r->view, r->frame, ".idx.png");
-    uint8_t *idx = decode(path, 1, &w, &h, NULL);
+    uint8_t *idx = decode_frame(path, 1, &w, &h, NULL, r->file);
     if (idx) {
       rgba = malloc((size_t)w * h * 4);
       for (int i = 0; i < w * h; i++) {
@@ -1980,7 +2094,7 @@ static void tex_rehash(void) {
 }
 
 static void tex_evict(void) {
-  size_t budget = (size_t)g_cache_mb << 20;
+  size_t budget = (size_t)texture_budget_mb() << 20;
   while (g_tex_bytes > budget && g_ntex > 0) {
     Tex *old = NULL;   // the least recently used
     for (int i = 0; i < TEX_N; i++)
@@ -2242,5 +2356,5 @@ void hd_art_init(int presenter_on) {
   }
   fprintf(stderr, "art: %d files indexed from %s in %.1f ms; looks:", n, g_dir, host_now_ms() - t0);
   for (int i = 0; i < NCAT; i++) fprintf(stderr, " %s=%s", k_cat[i], k_look[g_look[i]]);
-  fprintf(stderr, "; texture budget %d MB, %d loaders\n", g_cache_mb, g_loaders);
+  fprintf(stderr, "; texture budget %d MB, %d loaders\n", texture_budget_mb(), g_loaders);
 }

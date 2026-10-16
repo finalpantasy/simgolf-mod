@@ -287,6 +287,8 @@ int fix_hole_time(void);   // task-114: repairs an inflated hole 1 time total at
 
 // task-6 (src/port/golf/overrides.c): FUN_00462020's default skin for a head, with v1.03's bound.
 int head_default_skin(int male, int rec);
+int fix_clothing_palette_on(void);
+uint32_t compose_golfer_palette(int slot);
 
 // task-74 (src/port/golf/skills.c): the pro's skill caps and the bad-shot loss switch.
 int skill_soft_cap(int tier);
@@ -348,6 +350,7 @@ int hud_old_click(void);      // a click may go to the old wheel/trays (injected
 int hud_strip_click(void);    // the same for the old golfer chip strip
 int hud_ylim(int y);          // the old HUD's y thresholds for the world cursor (off screen when on)
 
+#include "port/course_popovers.h"
 // task-31 (src/port/golf/golfers_hooks.c, golfers_game.c): the Frosted Mint
 // name tags, thought bubbles and golfer card. Translator patches
 // (tools/translate/golf.golfers.json) in FUN_00462be0 (golfer sprite and name),

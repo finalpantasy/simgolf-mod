@@ -684,12 +684,73 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   return na;
 }
 
+// Course help and object prices use the same screen-resolution font as the UI.
+// Keep their anchors with the course, but never shrink the font with world zoom.
+static void draw_popovers(UiCtx *c, const GwNote *n, float vx, float vy, float k, float sx, float sy) {
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  UiRect screen = ui_screen(c);
+  float edge = ui_s(c, 8), pad = ui_s(c, 6);
+  int used[GW_POPOVERS] = {0};
+  for (int i = 0; i < n->n_popovers && i < GW_POPOVERS; ++i) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const GwPopover *p = &n->popovers[i];
+    int style = (p->fn & 7) == 4 ? UI_TYPE_BODY : UI_TYPE_CAPTION;
+    UiFont font = ui_font(c, style);
+    float maxw = fminf(ui_s(c, t->bubble_max_w), screen.w - 2 * edge - 2 * pad);
+    if (maxw <= 0) continue;
+    char lines[32][160] = {{0}};
+    UiColor colours[32];
+    int count = 0, members[GW_POPOVERS] = {i}, nmembers = 1, last_y = p->y;
+    // GameTick emits the side cost panel between an item's name and its price.
+    // Group by anchor and vertical adjacency, including those interleaved runs.
+    for (;;) {
+      int next = -1;
+      for (int j = i + 1; j < n->n_popovers && j < GW_POPOVERS; ++j) {
+        const GwPopover *q = &n->popovers[j];
+        if (used[j] || q->fn != p->fn || q->x != p->x || q->y <= last_y || q->y - last_y > 24) continue;
+        if (next < 0 || q->y < n->popovers[next].y) next = j;
+      }
+      if (next < 0) break;
+      used[next] = 1;
+      members[nmembers++] = next;
+      last_y = n->popovers[next].y;
+    }
+    for (int member = 0; member < nmembers && count < 32; ++member) {
+      const GwPopover *part = &n->popovers[members[member]];
+      unsigned raw = part->colour & 0x7fff;
+      int red = (raw >> 10) & 31, green = (raw >> 5) & 31;
+      UiColor colour = red > green * 2 && red > 15 ? t->danger : t->text_primary;
+      int added = wrap_lines(c, style, part->text, maxw, lines + count, 32 - count);
+      for (int j = 0; j < added; ++j) colours[count + j] = colour;
+      count += added;
+    }
+    float w = 0;
+    for (int j = 0; j < count; ++j) w = fmaxf(w, ui_text_width(c, style, lines[j]));
+    float x = vx + ((p->fn & 8) ? p->x : p->x * g_zs + g_zx + sx) * k;
+    float y = vy + ((p->fn & 8) ? p->y : p->y * g_zs + g_zy + sy) * k;
+    float align = (p->fn & 7) == 2 || (p->fn & 7) == 3 ? 0 : 0.5f;
+    UiRect r = ui_rect(x - w * align - pad, y - pad, w + 2 * pad, count * font.line + 2 * pad);
+    r.x = fmaxf(screen.x + edge, fminf(r.x, screen.x + screen.w - edge - r.w));
+    r.y = fmaxf(screen.y + edge, fminf(r.y, screen.y + screen.h - edge - r.h));
+    float radius = fminf(r.h / 2, ui_s(c, 14));
+    uid_rrect_shadow(d, r, radius, 0, ui_s(c, 2), ui_s(c, 6), t->glass_shadow.color);
+    uid_rrect_backdrop(d, r, radius);
+    uid_rrect(d, r, radius, t->glass_fill_strong);
+    uid_rrect_stroke(d, r, radius, hair_px(c), t->glass_border);
+    for (int j = 0; j < count; ++j)
+      ui_text_in(c, ui_rect(r.x + pad, r.y + pad + j * font.line, w, font.line), style, colours[j], lines[j], align);
+  }
+}
+
 void ui_golfers_draw_world(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float view_x, float view_y, float px,
                            float slide_x, float slide_y) {
   if (!n || n->magic != GW_NOTE_MAGIC) return;
   tick(n);
   draw_tags(c, n, view_x, view_y, px, slide_x, slide_y);
   draw_bubbles(c, n, art, view_x, view_y, px, slide_x, slide_y);
+  draw_popovers(c, n, view_x, view_y, px, slide_x, slide_y);
 }
 
 int ui_golfers_draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float view_x, float view_y, float px,

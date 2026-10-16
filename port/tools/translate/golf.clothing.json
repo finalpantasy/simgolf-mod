@@ -1,0 +1,5 @@
+{
+ "comment": "Restore composeGolferPalette 0x00462020 from x86. Keep legacy translation and its slot/head guards reachable for comparison.",
+ "patches": {"FUN_00462020": [["local_308 = 0;", "if (fix_clothing_palette_on()) return compose_golfer_palette(param_1);\n  local_308 = 0;"]]},
+ "required_patch_counts": {"FUN_00462020": [["local_308 = 0;", 1]]}
+}

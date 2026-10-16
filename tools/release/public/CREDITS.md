@@ -8,3 +8,5 @@
 - **Plus Jakarta Sans** (SIL OFL 1.1), **Liberation fonts** and **Comic Neue** (SIL OFL 1.1): UI fonts.
 - Reference projects read for facts about file formats and Windows quirks, no code copied: nanofives/simgolfRE, crspytopgn/simgolf-native, travrei/simgolf-wine-fix.
 - The Ghidra reverse-engineering suite (NSA, Apache 2.0) was used offline to produce the decompile.
+
+Approved Parkland clubhouse and garden: local Blender modeling, assembly and rendering with supplied generated planting assets. The release contains new render assets; original game files and the legacy ground shadow are supplied by the player.

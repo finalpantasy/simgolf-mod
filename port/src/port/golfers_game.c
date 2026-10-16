@@ -29,12 +29,15 @@
 #include <SDL.h>
 
 #include "port/golfers_frosted.h"
+#include "port/ui_font.h"
 #include "port/hd_native.h"
 #include "port/hd_art.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
 #define G8(a) (*(volatile int8_t *)(uintptr_t)(a))
+
+_Static_assert(sizeof(GwNote) <= HD_NOTE_MAX, "Course UI note must fit the frame snapshot");
 
 #define DOCK_MODE 0x567afc
 #define FLAGS 0x59e7b8
@@ -237,6 +240,27 @@ static int mood_key(int mood) {
 // recorded and logged even when the original ones stay (ui.golfers=original).
 static int g_log = -1;
 
+int gw_popover_active(void) { return g_on && uif_enabled(); }
+
+int gw_popover_text(int fn, const char *text, int x, int y, unsigned colour) {
+  if (g_on && uif_enabled() && (g_rec || (fn & 8)) && text && *text && strlen(text) < sizeof g_note.popovers[0].text &&
+      g_note.n_popovers < GW_POPOVERS) {
+    GwPopover *p = &g_note.popovers[g_note.n_popovers++];
+    p->x = x; p->y = y; p->fn = fn; p->colour = colour;
+    copy_str(p->text, sizeof p->text, text);
+    if (g_log) fprintf(stderr, "popovers: fn %d at %d,%d colour %08x \"%s\"\n", fn, x, y, colour, text);
+    if (!g_rec) hd_ui_note_set(&g_note, (int)sizeof g_note);
+    return 0;
+  }
+  switch (fn & 7) {
+    case 4:
+    case 0: return FUN_00404b70((char *)text, x, y, colour);
+    case 1: return FUN_00404bc0((char *)text, x, y, colour);
+    case 2: return FUN_004049d0((char *)text, x, y, colour);
+    default: return FUN_00404ad0((char *)text, x, y, colour);
+  }
+}
+
 void gw_frame_begin(void) {
   if (g_log < 0) g_log = getenv("SIMGOLF_GOLFERS_LOG") != NULL;
   g_on = gwf_enabled();
@@ -244,6 +268,7 @@ void gw_frame_begin(void) {
   gw_hide = 0;
   if (!g_rec) return;
   g_note.n_tags = g_note.n_bubbles = 0;
+  g_note.n_popovers = 0;
   g_note.card.on = 0;
   memset(g_pos, 0, sizeof g_pos);
 }

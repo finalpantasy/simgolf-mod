@@ -21,6 +21,11 @@ A=$STAGE/app
 cp $N/golf.exe $N/SDL2.dll $N/sgsetup.exe $N/sgupdate.exe $N/jgld-nops.json "$A/"
 cp "$N/golf.exe" "$A/Sim Golf Remastered.exe"
 cp -r $N/fonts $N/ui "$A/"
+if [ -f data/approved-clubhouse.json ]; then
+  [ -f art_local/release-clubhouse/index.tsv ] || { echo "approved clubhouse pack missing: copy app/art/clubhouse from the release into art_local/release-clubhouse"; exit 3; }
+  mkdir -p "$A/art"
+  cp -r art_local/release-clubhouse "$A/art/clubhouse"
+fi
 cp -r mods/. "$A/mods/"
 git show HEAD:mods/load_order.toml > "$A/mods/load_order.toml"
 rm -rf "$A/mods/examples"

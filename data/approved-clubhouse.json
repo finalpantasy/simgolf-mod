@@ -1,0 +1,15 @@
+{
+  "id": "approved-parkland-clubhouse",
+  "version": "1.0.0",
+  "source_sha256": "e00be0d9a3a4d2b4e75ee5abda923f52ec3a922381e70abf2d96449576d5f989",
+  "scope": "Parkland level1 clubhouse, four views, fifteen original-cadence animation phases.",
+  "method": "Approved Blender building and garden rendered into native aligned PNG layers.",
+  "provenance": "User-provided approved scene with local Blender assembly and supplied plant assets. No new generation or spending.",
+  "original_game_payload": "None. Copied original ground-shadow layer excluded; game supplies its own original files.",
+  "limitations": [
+    "Parkland level1 only. Other levels/themes retain their existing art.",
+    "31 source phases sampled into15 native phases at original game cadence.",
+    "Original or PixelHD texture choice remains reachable.",
+    "This asset uses the existing2.5D sprite presentation and does not alter simulation or save layout."
+  ]
+}

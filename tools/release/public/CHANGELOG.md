@@ -1,3 +1,13 @@
+# SimGolf Remastered for Windows 0.1.15
+
+- Added the approved Parkland clubhouse model and garden, with all four views and original-cadence animated flags and birdbath water. Existing HD art stays available; Original textures retain the original building.
+
+- Restored the original assigned golfer clothing colours after repairing lost palette-call arguments in the translated game.
+- Saved courses open over the clubhouse, with tee and map-centre fallbacks when needed, avoiding empty black starting views on expanded courses.
+- Modern course hints and placement, purchase and removal labels now use the readable native typography. Original text options remain available.
+
+Existing loading improvements, HD chooser pictures and landmark benefit descriptions are retained. Original energy, mood and weed balance is unchanged. Original game data is not included.
+
 # Changelog
 
 ## 0.1.14 - 2026-10-15

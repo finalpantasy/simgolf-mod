@@ -1,0 +1,79 @@
+{
+  "comment": "Course annotations in gameTick (0x0040f5c0) use the native bubble snapshot. Original helpers remain reachable with ui.font=original or ui.golfers=original. fn bit 8 explicitly opts placement/purchase/removal UI labels into the snapshot after course_done; other late HUD calls delegate unchanged. Tutorial guidance also omits its old bitmap underline/pointer.",
+  "patches": {
+    "FUN_0040f5c0": [
+      [
+        "FUN_004493d0(iStack_1110 - iVar28,iVar23,iVar28 + iStack_1110,iVar23,-0x80000000,10,5);",
+        "if (!gw_popover_active()) FUN_004493d0(iStack_1110 - iVar28,iVar23,iVar28 + iStack_1110,iVar23,-0x80000000,10,5);"
+      ],
+      [
+        "FUN_00474030(&DAT_005a4100,(int)PTR_DAT_004c1570,iStack_1110 + 4,",
+        "if (!gw_popover_active()) FUN_00474030(&DAT_005a4100,(int)PTR_DAT_004c1570,iStack_1110 + 4,"
+      ],
+      [
+        "FUN_00404b70((char *)&DAT_0051a068,iStack_1110,iStack_1120 + (int)fVar30 * -10,0x80007fff);",
+        "gw_popover_text(4,(char *)&DAT_0051a068,iStack_1110,iStack_1120 + (int)fVar30 * -10,0x80007fff);"
+      ],
+      [
+        "FUN_00478b80(&DAT_00519cd4,0x2b0,",
+        "if (!gw_popover_active()) FUN_00478b80(&DAT_00519cd4,0x2b0,"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,0x2e0,",
+        "gw_popover_text(9,(char *)&DAT_0051a068,0x2e0,"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,(iStack_11e8 + DAT_00822d8c) / 2,\n                     (iStack_11f8 + DAT_00822d90) / 2 + -4,0x80007fff);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,(iStack_11e8 + DAT_00822d8c) / 2,\n                     (iStack_11f8 + DAT_00822d90) / 2 + -4,0x80007fff);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_1130,iStack_1118 + -0xc,\n                   (-(uint)(iVar23 != 0) & 0xffffa3e9) + 0x80007fff);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_1130,iStack_1118 + -0xc,\n                   (-(uint)(iVar23 != 0) & 0xffffa3e9) + 0x80007fff);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + -8,iVar28);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_11f0,iStack_11ec + -8,iVar28);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,\n                     ((iVar23 < 1) - 1 & 0xffffa6e0) + 0x80007d08);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,\n                     ((iVar23 < 1) - 1 & 0xffffa6e0) + 0x80007d08);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,0x80007d08);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_11f0,iStack_11ec + 8,0x80007d08);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_11e8 + 4,iStack_11f8 + -0xc,\n                         (-(uint)(iVar23 != 0) & 0xffffa3e9) + 0x80007fff);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_11e8 + 4,iStack_11f8 + -0xc,\n                         (-(uint)(iVar23 != 0) & 0xffffa3e9) + 0x80007fff);"
+      ],
+      [
+        "FUN_00404bc0((char *)&DAT_0051a068,iStack_11e8 + 4,iStack_11f8 + -0x10,0x80007fff);",
+        "gw_popover_text(9,(char *)&DAT_0051a068,iStack_11e8 + 4,iStack_11f8 + -0x10,0x80007fff);"
+      ],
+      [
+        "FUN_00404b70((char *)&DAT_0051a068,(iStack_1190 + iStack_11e8) / 2,\n                             (iStack_11f8 + iStack_117c) / 2,0x80007fff);",
+        "gw_popover_text(8,(char *)&DAT_0051a068,(iStack_1190 + iStack_11e8) / 2,\n                             (iStack_11f8 + iStack_117c) / 2,0x80007fff);"
+      ],
+      [
+        "FUN_00404b70((char *)&DAT_0051a068,(iStack_1190 + iStack_11e8) / 2,\n                           (iStack_11f8 + iStack_117c) / 2,0x80007fff);",
+        "gw_popover_text(8,(char *)&DAT_0051a068,(iStack_1190 + iStack_11e8) / 2,\n                           (iStack_11f8 + iStack_117c) / 2,0x80007fff);"
+      ],
+      [
+        "FUN_00404b70(",
+        "gw_popover_text(0,"
+      ],
+      [
+        "FUN_00404bc0(",
+        "gw_popover_text(1,"
+      ],
+      [
+        "FUN_004049d0(",
+        "gw_popover_text(2,"
+      ],
+      [
+        "FUN_00404ad0(",
+        "gw_popover_text(3,"
+      ]
+    ]
+  }
+}

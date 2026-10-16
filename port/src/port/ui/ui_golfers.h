@@ -67,6 +67,13 @@ typedef struct GwCard {
   int32_t portrait_serial;    // bumps when the head was re-read
 } GwCard;
 
+#define GW_POPOVERS 48
+typedef struct GwPopover {
+  int32_t x, y, fn;
+  uint32_t colour;
+  char text[512];
+} GwPopover;
+
 typedef struct GwNote {
   uint32_t magic;
   uint32_t serial;
@@ -77,6 +84,8 @@ typedef struct GwNote {
   GwCard card;
   GwTag tags[GW_TAGS];
   GwBubble bubbles[GW_BUBBLES];
+  int32_t n_popovers;
+  GwPopover popovers[GW_POPOVERS];
 } GwNote;
 
 // How the names and thoughts are shown (task-60). Set by the render side from the

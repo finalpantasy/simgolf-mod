@@ -263,7 +263,7 @@ static void draw(const HdUiFrame *f, void *user) {
   int have = n && f->note_size == (int)sizeof(GwNote) && n->magic == GW_NOTE_MAGIC;
   int report_covers_world = !card_layer && rpf_visible();
   int ok = g_want && !g_failed && f->course && have && !report_covers_world &&
-           (card_layer ? n->card.on : (n->n_tags || n->n_bubbles));
+           (card_layer ? n->card.on : (n->n_tags || n->n_bubbles || n->n_popovers));
   if (!ok) {
     if (card_layer) g_visible = 0;
     else g_world_up = 0;

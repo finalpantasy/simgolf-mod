@@ -22,6 +22,17 @@ int gw_hide;   // 1 while the original thought bubble's draws are skipped
 
 #ifdef __EMSCRIPTEN__
 
+int gw_popover_active(void) { return 0; }
+int gw_popover_text(int fn, const char *text, int x, int y, unsigned colour) {
+  switch (fn & 7) {
+    case 4:
+    case 0: return FUN_00404b70((char *)text, x, y, colour);
+    case 1: return FUN_00404bc0((char *)text, x, y, colour);
+    case 2: return FUN_004049d0((char *)text, x, y, colour);
+    default: return FUN_00404ad0((char *)text, x, y, colour);
+  }
+}
+
 void gw_frame_begin(void) {}
 void pv_frame_begin(void) {}   // task-53: cart path help is native only
 void pv_course_done(void) {}
