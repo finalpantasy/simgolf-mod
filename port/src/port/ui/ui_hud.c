@@ -1172,6 +1172,9 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
     float x = stats_row(c, s, cl.x + bellw + pad, cy, 0, 0) + pad;
     x = ui_text(c, x, floorf(cy + ui_font(c, UI_TYPE_CAPTION).px * 0.36f + 0.5f), UI_TYPE_CAPTION, ui_tokens(c)->text_secondary, s->date);
     speed(c, s, x + ui_s(c, 12), cy, a);
+    // In hybrid mode the 2002 toolbar remains in the game's course layer.
+    // Never put the modern build dock or camera pill on top of those controls.
+    if (hud->original_bottom) return;
     // build toolbar at the bottom left: one small button; it opens the category row, a click on the
     // course or Esc folds it away again (hud_frosted.c), the first button folds it too
     float tsq = ui_s(c, 34), tpad = ui_s(c, 5), tg = ui_s(c, 6);
@@ -2120,13 +2123,16 @@ int ui_hud_draw_original_rotate(UiCtx *c, const HudSnap *s, HudAction *out, int 
   return a.n;
 }
 
-static void shot_readout(UiCtx *c, const HudSnap *s) {
+static void shot_readout(UiCtx *c, const HudSnap *s, int original_bottom) {
   if (!s->shot_readout) return;
   const UiTokens *t = ui_tokens(c);
   UiRect scr = ui_screen(c);
   float pad = ui_s(c, 16), row = ui_s(c, 26), head = ui_s(c, 30);
   float w = fminf(ui_s(c, 380), scr.w - 2 * pad), h = 2 * pad + head + SHOT_READOUT_LINES * row;
-  UiRect r = ui_rect_round(ui_rect(scr.x + scr.w - pad - w, scr.y + scr.h - ui_s(c, 80) - h, w, h));
+  // The original trays use the lower 220 canvas pixels. Keep the modern
+  // shot information above them, even when a construction tray is expanded.
+  float bottom_clear = ui_s(c, original_bottom ? 225 : 80);
+  UiRect r = ui_rect_round(ui_rect(scr.x + scr.w - pad - w, scr.y + scr.h - bottom_clear - h, w, h));
   ui_panel(c, r, ui_s(c, 20), UI_PANEL_STRONG);
   ui_hit(c, r, ui_s(c, 20), ui_id("hud.shot.readout"), UI_HIT_BLOCK);
   ui_text_in(c, ui_rect(r.x + pad, r.y + pad, w - 2 * pad, head), UI_TYPE_LABEL, t->text_secondary, "Next shot", 0);
@@ -2159,6 +2165,15 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
   if (h->density < 0 || h->density > HUD_JWE) h->density = 0;
   g_s = s;
   g_h = h;
+  if (h->original_bottom) {
+    // Keep only the Frosted Mint top stats, notification centre and shot card.
+    // The legacy wheel, trays and mouse handlers are provided by golf itself.
+    h->density = HUD_JWE;
+    bars(c, h, s, art, &a);
+    shot_readout(c, s, 1);
+    news_ui(c, h, s, &a);
+    return a.n;
+  }
   if (h->density == 0) h->tray_hidden = 0;
   if (active_item(s) < 0) h->tray_hidden = 0;
   int own_stats = h->density == HUD_WHEEL_STATS || h->density == HUD_CARD || h->density == HUD_CARD_RIGHT ||
@@ -2192,7 +2207,7 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
   int building_tray_rotate = tray_open && active_item(s) == D_BUILD &&
                              (h->density == HUD_REGULAR || h->density >= HUD_BARS);
   place_panel(c, h, s, art, &a, building_tray_rotate);
-  shot_readout(c, s);
+  shot_readout(c, s, 0);
   if (h->density == HUD_JWE) news_ui(c, h, s, &a);
   return a.n;
 }
