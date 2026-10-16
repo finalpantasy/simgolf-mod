@@ -171,7 +171,7 @@ void hud_save(void) {
   dlgf_enabled();   // task-27: registers the dialogs layer early (a dialog needs it up before it opens)
   int w, h, pitch, is565;
   g_on = hudf_enabled() && gdi_screen_dib(0, &w, &h, &pitch, &is565) != NULL;
-  g_bottom = g_on && mods_get_int("ui.original_bottom", 0) != 0;
+  g_bottom = g_on && mods_get_int("ui.original_bottom", 1) != 0;
   if (!g_on) return;
   rects();
   for (int i = 0; i < PAGES; i++) copy_rects(i, 1);
