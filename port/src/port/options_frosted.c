@@ -57,6 +57,10 @@ static const Row k_graphics[] = {
      SEG3("hd", "HD", "pixel_hd", "Pixel HD", "original", "Original"),
      .vdesc = {"Smooth, detailed art from the upscaled art pack.", "Crisp, chunky pixel art in the game's own colours.",
                "The original 2002 pixels."}},
+#ifdef SIMGOLF_PATH_STYLE_ASSETS
+    {.type = OT_TOGGLE, .label = "Custom path materials", .key = "art.path_styles", .def = "1",
+     .desc = "Show placed path materials. Pick each material in the path build palette."},
+#endif
     {.type = OT_SEG, .label = "Water", .key = "display.water", .def = "hd",
      .desc = "How ponds, streams, waterfalls and the sea are drawn.",
      .n = 2, .vals = {"hd", "original"}, .names = {"Realistic", "Original"},
@@ -255,10 +259,16 @@ static const Row k_weather[] = {
     {.type = OT_TOGGLE, .label = "Distant storms", .key = "environment.distant_thunder", .def = "1",
      .desc = "Quiet distant thunder as storm clouds gather before rain."},
     {.type = OT_HEAD, .label = "Lighting and night"},
+    {.type = OT_SLIDER, .label = "Sunlight clarity", .key = "environment.readability", .def = "0.8", .lo=0, .hi=1,
+     .desc = "Reveal detail in shaded trees and retain color in warm sunlight."},
+    {.type = OT_SLIDER, .label = "Scenery reflections", .key = "environment.reflections", .def = "0.44", .lo=0, .hi=0.7,
+     .desc = "Nearby buildings, trees and golfers mirrored in water."},
+    {.type = OT_TOGGLE, .label = "Rainbows after showers", .key = "environment.rainbows", .def = "0",
+     .desc = "Experimental distant arc beyond the course as rain clears. Off by default."},
     {.type = OT_TOGGLE, .label = "Terrain lighting", .key = "environment.lighting", .def = "1",
      .desc = "Light the slopes and shadows of the course."},
     {.type = OT_TOGGLE, .label = "Tree and golfer shadows", .key = "environment.cast_shadows", .def = "1",
-     .desc = "Soft shadows follow the sun. Buildings keep their painted shadows."},
+     .desc = "Soft shadows from trees, golfers and building shapes follow the sun."},
     {.type = OT_TOGGLE, .label = "Black background", .key = "environment.black_background", .def = "1",
      .desc = "Keep the space beyond the course black, including during lightning."},
     {.type = OT_TOGGLE, .label = "Glowbugs", .key = "environment.glowbugs", .def = "1",
@@ -311,8 +321,9 @@ static volatile float g_view_x, g_view_y, g_view_px = 1;
 static volatile int g_seen_draw;
 static char g_initial[NPAGES][40][48];   // each row's value when the page was first drawn (restart notes)
 static int g_initial_done;
-static UiRect g_ctl_log[24][8];   // each logged row's control pieces (segments, the switch), for the layout log
-static int g_ctl_n[24];
+enum { OPTIONS_LOG_ROWS = 32 };
+static UiRect g_ctl_log[OPTIONS_LOG_ROWS][8];   // each logged row's control pieces (segments, the switch), for the layout log
+static int g_ctl_n[OPTIONS_LOG_ROWS];
 
 void opt_open(void) {
   g_open = 1;
@@ -474,7 +485,7 @@ static void log_layout(int w, int h, const UiRect *close, const UiRect *tabs, in
   if (on < 0) on = getenv("SIMGOLF_FRONTEND_LOG") != NULL || getenv("SIMGOLF_OPTIONS_LOG") != NULL;
   if (!on || now - last < 1000) return;
   last = now;
-  char line[2600];
+  char line[4096];
   int o = snprintf(line, sizeof line, "options: layout tab %d target %dx%d", g_tab, w, h);
 #define PUT(nm, r) \
   if ((r)->w > 0) o += snprintf(line + o, sizeof line - (size_t)o, " %s %.0f,%.0f", nm, (r)->x + (r)->w / 2, (r)->y + (r)->h / 2)
@@ -487,11 +498,11 @@ static void log_layout(int w, int h, const UiRect *close, const UiRect *tabs, in
     snprintf(nm, sizeof nm, "tab%d", i);
     PUT(nm, &tabs[i]);
   }
-  for (int i = 0; i < nrows && o < 1700; i++) {
+  for (int i = 0; i < nrows && o < 3200; i++) {
     char nm[24];
     snprintf(nm, sizeof nm, "row%d", i);
     PUT(nm, &rows[i]);
-    for (int k = 0; i < 24 && k < g_ctl_n[i]; k++) {
+    for (int k = 0; i < OPTIONS_LOG_ROWS && k < g_ctl_n[i]; k++) {
       snprintf(nm, sizeof nm, "row%ds%d", i, k);
       PUT(nm, &g_ctl_log[i][k]);
     }
@@ -503,7 +514,7 @@ static void log_layout(int w, int h, const UiRect *close, const UiRect *tabs, in
 
 // One row's control. Returns the new value (a static string) when the player changed it, else NULL.
 static void note_segments(UiCtx *c, const Row *r, UiRect sr, int slot) {
-  if (slot < 0 || slot >= 24) return;
+  if (slot < 0 || slot >= OPTIONS_LOG_ROWS) return;
   float pad = ui_s(c, 3), gap = ui_s(c, 2);
   float nat = ui_segmented_width(c, r->names, NULL, r->n);
   float extra = sr.w > nat ? (sr.w - nat) / r->n : 0;
@@ -544,7 +555,7 @@ static const char *draw_control(UiCtx *c, uint32_t id, const Row *r, UiRect cr, 
     }
   } else if (r->type == OT_TOGGLE || r->type == OT_BIT) {
     int on = is_on(cur);
-    if (slot >= 0 && slot < 24) {
+    if (slot >= 0 && slot < OPTIONS_LOG_ROWS) {
       g_ctl_log[slot][0] = ui_rect(cr.x + cr.w - ui_s(c, 44), cr.y + (cr.h - ui_s(c, 26)) / 2, ui_s(c, 44), ui_s(c, 26));
       g_ctl_n[slot] = 1;
     }
@@ -557,9 +568,9 @@ static const char *draw_control(UiCtx *c, uint32_t id, const Row *r, UiRect cr, 
     float norm = r->hi > r->lo ? (float)((v - r->lo) / (r->hi - r->lo)) : 0;
     norm = norm < 0 ? 0 : norm > 1 ? 1 : norm;
     char txt[24];
-    snprintf(txt, sizeof txt, "%.0f%s", v, r->unit ? r->unit : "");
+    snprintf(txt, sizeof txt, r->hi<=1?"%.2f%s":"%.0f%s", v, r->unit ? r->unit : "");
     UiRect sr = ui_rect(cr.x + cr.w - ui_s(c, 300), cr.y, ui_s(c, 300), cr.h);
-    if (slot >= 0 && slot < 24) {   // the two ends of the track, for the tests
+    if (slot >= 0 && slot < OPTIONS_LOG_ROWS) {   // the two ends of the track, for the tests
       float tw = sr.w - ui_s(c, 56);
       g_ctl_log[slot][0] = ui_rect(sr.x, sr.y, 1, sr.h);
       g_ctl_log[slot][1] = ui_rect(sr.x + tw, sr.y, 1, sr.h);
@@ -651,7 +662,7 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
   }
   float off = ui_vscroll_begin(c, scroll_id, body, content, ui_s(c, 70));
   float y = body.y + off;
-  UiRect rows_log[24];
+  UiRect rows_log[OPTIONS_LOG_ROWS];
   int nrows_log = 0;
   int restart_pending = 0;
   const char *changed_val = NULL;
@@ -667,7 +678,7 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
     UiRect rr = ui_rect(body.x, y, rw, row_h);
     uid_rrect(ui_drawer(c), rr, ui_s(c, t->radius_tile), t->surface_inset);
     uid_rrect_stroke(ui_drawer(c), rr, ui_s(c, t->radius_tile), fmaxf(1.0f, ui_s(c, 1)), t->surface_inset_border);
-    if (nrows_log < 24) rows_log[nrows_log++] = rr;
+    if (nrows_log < OPTIONS_LOG_ROWS) rows_log[nrows_log++] = rr;
     char cur[48];
     row_value(r, cur, sizeof cur);
     float cw = ui_s(c, r->type == OT_TOGGLE || r->type == OT_BIT ? 60 : 470);

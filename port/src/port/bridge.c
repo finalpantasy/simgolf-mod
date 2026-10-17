@@ -1,3 +1,4 @@
+#include "port/course_lamps.h"
 // Game bridge (native build, simgolf mod task-13): lets tools drive the live
 // game. Off unless --bridge PORT or SIMGOLF_BRIDGE=1 (port from
 // SIMGOLF_BRIDGE_PORT, default 0 = any free port; --bridge-portfile FILE gets
@@ -1149,6 +1150,14 @@ static void run_cmd(int ci, const char *line) {
   } else if (!strcmp(cmd, "call")) {
     cmd_call(ci, id, &o, &b);
     if (!b.n) return;
+  } else if (!strcmp(cmd, "path_styles")) {
+    extern int path_styles_get(int,int), path_styles_at(int,int), path_styles_selected(void);
+    extern int path_styles_paint(int,int,int);
+    int x=(int)jnum_or(&o,"x",-1), y=(int)jnum_or(&o,"y",-1);
+    int style=(int)jnum_or(&o,"style",-1), painted=0;
+    if(style>=0)painted=path_styles_paint(x,y,style);
+    bprintf(&b, ",\"ok\":true,\"selected\":%d,\"stored\":%d,\"visible\":%d,\"painted\":%d",
+      path_styles_selected(),path_styles_get(x,y),path_styles_at(x,y),painted);
   } else if (!strcmp(cmd, "living_club")) {
     char *snapshot = living_snapshot();
     bprintf(&b, ",\"ok\":true,\"club\":%s", snapshot ? snapshot : "null");
@@ -1222,6 +1231,11 @@ static void run_cmd(int ci, const char *line) {
     bprintf(&b, ",\"ok\":true,\"trace\":[");
     for (int i = n; i >= 1; i--) bprintf(&b, "%s\"%06x\"", i == n ? "" : ",", port_trace_buf[(port_trace_pos - i) & 1023]);
     bprintf(&b, "]");
+  } else if (!strcmp(cmd, "lamp_probe")) {
+    double x=0,y=0;jnum(&o,"x",&x);jnum(&o,"y",&y);
+    int row,col,occupied,count,wr,wc;
+    int allowed=lamps_game_probe((int)x,(int)y,&row,&col,&occupied,&count,&wr,&wc);
+    bprintf(&b,",\"ok\":true,\"row\":%d,\"col\":%d,\"world_row\":%d,\"world_col\":%d,\"allowed\":%d,\"occupied\":%d,\"count\":%d,\"selected\":%d",row,col,wr,wc,allowed,occupied,count,lamps_game_selected());
   } else if (!strcmp(cmd, "grid")) {
     // Where the per-tile arrays live now (grid.h): golf.exe's original
     // address of each, its real base, bytes per tile and whether it is the

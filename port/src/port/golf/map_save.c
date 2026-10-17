@@ -1,3 +1,4 @@
+#include "port/course_lamps.h"
 // Map size in saves (task-8). The game's saves (.sve, FUN_0040afa0) and
 // course files (FUN_0040bbf0) are flat lists of fields written by
 // FUN_0040af70, with no header. Both lists start with the 4 bytes at
@@ -21,7 +22,10 @@
 #define LAST_COMMON_FIELD 0x5a5a00
 
 void save_camera_focus(void);
+void place_drag_reset(void);
 #ifndef __EMSCRIPTEN__
+void path_styles_save_field(int fd, int reading);
+void path_styles_loaded(void);
 void living_save_field(int fd, int reading);
 #endif
 
@@ -31,18 +35,25 @@ void living_save_field(int fd, int reading);
 // @override FUN_0040af70
 int FUN_0040af70(int param_1, int param_2) {
   if (param_1 == FIRST_FIELD && param_2 == 4) {
+    if (SAVE_READING) place_drag_reset();
     grid_save_tag(SAVE_FD, SAVE_READING);
     staff_save_tag(SAVE_FD, SAVE_READING);
     camera_tiles_save_field(SAVE_FD, SAVE_READING);
+    lamps_game_save_field(SAVE_FD, SAVE_READING);
 #ifndef __EMSCRIPTEN__
+    path_styles_save_field(SAVE_FD, SAVE_READING);
     living_save_field(SAVE_FD, SAVE_READING);
 #endif
   }
   unsigned address = roster_address((unsigned)param_1);
   if (SAVE_READING != 0) {
     int n = crt_read(SAVE_FD, address, param_2);
-    if (param_1 == LAST_COMMON_FIELD && param_2 == 4 && n == 4)
+    if (param_1 == LAST_COMMON_FIELD && param_2 == 4 && n == 4) {
       save_camera_focus();
+#ifndef __EMSCRIPTEN__
+      path_styles_loaded();
+#endif
+    }
     return n;
   }
   return crt_write(SAVE_FD, address, param_2);

@@ -1,0 +1,10 @@
+id = "drag_placement"
+name = "Click-and-drag placement"
+version = "0.1.0"
+authors = ["SimGolf mod team"]
+description = "L-shaped paths and rectangular terrain, flowers and scenic trees at original per-tile prices."
+platform = "^1.0"
+game = ">=1.2.0"
+[settings]
+"ui.drag_placement" = "1"
+"ui.drag_tiles_per_frame" = "16"

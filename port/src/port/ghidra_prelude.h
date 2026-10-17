@@ -15,6 +15,10 @@
 #include "port/staff.h"
 #include "port/shot_readout.h"
 #include "port/grid.h"   // MAP_W, MAP_H, GRID(i): tools/translate/grid.py
+void place_drag_reset(void);
+int place_drag_next(void);
+void place_drag_pick(int *x, int *y);
+int place_drag_afford(int cost);
 void port_loading_begin(void);
 void port_loading_end(void);
 int port_loading_fast(void);

@@ -239,6 +239,9 @@ float4 ps_main(VertexOut input) : SV_TARGET {
   float pool = 0.0;
   if (surfaces.w > 0.5 && is_scene > 0.5) {
     float3 original = resolve_edge(pixel,scene_map.Load(int3(int2(pixel),0)).rgb);
+    // Bounded daylight toe lift reveals painted canopy detail without lifting
+    // exact black, changing hue, or washing out already bright highlights.
+    original=lerp(original,sqrt(max(original,0.0)),terrain_style.y*.42);
     color = original; alpha = 1.0;
     if (wet > 0.001 || surfaces.y > 0.001) {
       float green = saturate((original.g - max(original.r,original.b))*7.0);
@@ -1349,7 +1352,9 @@ bool render_d3d(EnvironmentFxState *state, SDL_Renderer *renderer, SDL_Rect clip
   // limits. No CPU readback, frame history or extra retained target per frame.
   float edge_aa=(uint64_t)target_desc.Width*target_desc.Height*4<=64ULL*1024*1024
       ?(float)clampd(weather->edge_aa,0,1,0):0;
-  bool scene_needed=weather->wetness>0.001 || weather->puddles>0.001 || weather->lightning>0.001 || edge_aa>.001;
+  float readable=(uint64_t)target_desc.Width*target_desc.Height*4<=64ULL*1024*1024
+      ?(float)clampd(weather->readability,0,1,0):0;
+  bool scene_needed=weather->wetness>0.001 || weather->puddles>0.001 || weather->lightning>0.001 || edge_aa>.001 || readable>.001;
   if(scene_needed && !copy_scene(state,rtv,target_desc)) {
     FX_RELEASE(rtv);set_detail(state,"scene copy unavailable; bounded SDL wet surface effects");return false;
   }
@@ -1363,6 +1368,7 @@ bool render_d3d(EnvironmentFxState *state, SDL_Renderer *renderer, SDL_Rect clip
   constants.air_style[1]=weather->wind_advection?1.0f:0.0f;
   constants.air_style[2]=edge_aa;
   constants.terrain_style[0]=receiver&&receiver->features?(float)clampd(weather->valley_mist,0,1,0):0;
+  constants.terrain_style[1]=readable;
   constants.view_material[3]=receiver&&receiver->features?(float)clampd(weather->material_wetness,0,1,0):0;
   for(int i=0;i<3;i++){constants.light[i]=(float)clampd(weather->light[i],-1,1,0);constants.view_material[i]=(float)clampd(weather->eye[i],-1,1,i==1?1:0);}
   constants.light[3]=(float)clampd(weather->light_strength,0,1,0);

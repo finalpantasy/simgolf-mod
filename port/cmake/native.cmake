@@ -13,6 +13,7 @@ set(SIMGOLF_GEN "${CMAKE_SOURCE_DIR}/../build/gen" CACHE PATH "Translator output
 set(SIMGOLF_GAME "${CMAKE_SOURCE_DIR}/../game" CACHE PATH "Default game folder (golf.ini or --game override it)")
 set(SIMGOLF_ART "art/upscaled" CACHE PATH "Default HD art folder (golf.ini art_dir= overrides it)")
 set(SIMGOLF_IMAGES "${SIMGOLF_GEN}/images" CACHE PATH "Module images (golf.bin, jgld.bin)")
+set(SIMGOLF_PATH_STYLE_ASSETS "${CMAKE_SOURCE_DIR}/../art_local/path-styles/pack" CACHE PATH "Optional compiled path-style pack")
 if(DEFINED ENV{TOOLS_EXT})
   set(_tools "$ENV{TOOLS_EXT}")
 else()
@@ -50,6 +51,19 @@ add_executable(golf WIN32
 
 # task-3: sharp scaling, borderless full screen, render thread (any resolution, any frame rate)
 target_sources(golf PRIVATE src/port/hd_native.c src/port/hd_terrain_native.c)
+target_sources(golf PRIVATE src/port/course_lamps.c src/port/course_lamps_art.c src/port/course_lamps_game.c src/port/course_lamps_render.c)
+add_custom_target(course_lights_files ALL
+ COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/data"
+ COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../data/course-lights.csv" "${CMAKE_BINARY_DIR}/data/course-lights.csv"
+ COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/../data/course-lamps" "${CMAKE_BINARY_DIR}/data/course-lamps")
+target_sources(golf PRIVATE src/port/path_styles.c)
+if(EXISTS "${SIMGOLF_PATH_STYLE_ASSETS}/index.tsv")
+  target_compile_definitions(golf PRIVATE SIMGOLF_PATH_STYLE_ASSETS=1)
+  add_custom_target(path_style_files ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/ui/path-styles"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${SIMGOLF_PATH_STYLE_ASSETS}" "${CMAKE_BINARY_DIR}/ui/path-styles"
+    VERBATIM)
+endif()
 target_sources(golf PRIVATE src/port/environment.c src/port/weather_state.c src/port/weather_audio.c)
 target_sources(golf PRIVATE src/port/weather_climate.c src/port/atmosphere.c)
 add_custom_target(weather_climate_files ALL
@@ -66,6 +80,7 @@ target_sources(golf PRIVATE src/port/environment_fx.cpp)
 target_sources(golf PRIVATE src/port/environment_receiver.c)
 set_property(SOURCE src/port/environment_fx.cpp APPEND PROPERTY COMPILE_OPTIONS /EHsc)
 target_sources(golf PRIVATE src/port/course_relief.c src/port/course_light.c src/port/cast_shadow.c src/platform/terrain_lighting.cpp)
+target_sources(golf PRIVATE src/port/scenery_reflect.c src/port/rainbow.c)
 set_property(SOURCE src/platform/terrain_lighting.cpp APPEND PROPERTY COMPILE_OPTIONS /EHsc)
 add_executable(environment_tests "${CMAKE_SOURCE_DIR}/../tests/native/test_environment.c" src/port/environment.c src/port/atmosphere.c)
 target_include_directories(environment_tests PRIVATE src "${SIMGOLF_SDL2}/include")
@@ -158,3 +173,7 @@ add_custom_target(ui_font_files ALL
     "${CMAKE_SOURCE_DIR}/../data/ui/font_map.txt"
     "${CMAKE_BINARY_DIR}/fonts/plus-jakarta-sans"
   VERBATIM)
+
+# Issue62: selection geometry is independent of game memory and prices.
+add_executable(place_drag_tests ../tests/native/place_drag_shape.c)
+target_include_directories(place_drag_tests PRIVATE src)

@@ -1,0 +1,13 @@
+# Optional, off by default. Original save bytes remain unchanged.
+id = "course_lights"
+name = "Course lighting"
+version = "0.2.0"
+authors = ["SimGolf mod team"]
+description = "Build and mix six priced light designs. Dusk illumination, bounded overlap, and course-bound furniture saves."
+platform = "^1.0"
+game = ">=1.2.0"
+changes_saves = true
+load_after = ["hd_presentation", "ui_hud"]
+[settings]
+"course_lights.enabled" = "1"
+"course_lights.spacing_units" = "128"

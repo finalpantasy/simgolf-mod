@@ -1,0 +1,63 @@
+{
+  "comment": "Issue62: batch original single-tile handlers without a separate pricing or placement implementation. Required counts bind each hook to cached gameTick.",
+  "patches": {
+    "FUN_0040f5c0": [
+      [
+        "else if (DAT_00822d68 == 0) goto LAB_0041e631;",
+        "else if (DAT_00822d68 == 0 && !place_drag_next()) goto LAB_0041e631;"
+      ],
+      [
+        "  if (DAT_005a9cbc != 0) {\n    DAT_004c2844 = (float)((int)DAT_004c2844 / 2);\n  }",
+        "  if (DAT_005a9cbc != 0) {\n    DAT_004c2844 = (float)((int)DAT_004c2844 / 2);\n  }\ndrag_place_dispatch:\n  place_drag_pick(&iStack_1234,&iStack_122c);"
+      ],
+      [
+        "iVar23 = FUN_00406c30(iVar28)",
+        "iVar23 = place_drag_afford(iVar28)"
+      ],
+      [
+        "iVar23 = FUN_00406c30((int)cVar21 + (int)cVar1);",
+        "iVar23 = place_drag_afford((int)cVar21 + (int)cVar1);"
+      ],
+      [
+        "  FUN_0042f7a0();\n  goto LAB_0040fc29;\n",
+        "  FUN_0042f7a0();\n  if (place_drag_next()) goto drag_place_dispatch;\n  goto LAB_0040fc29;\n"
+      ]
+    ],
+    "FUN_00470a60": [
+      [
+        "  int iVar1;",
+        "  place_drag_reset();\n  int iVar1;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040f5c0": [
+      [
+        "else if (DAT_00822d68 == 0) goto LAB_0041e631;",
+        1
+      ],
+      [
+        "  if (DAT_005a9cbc != 0) {\n    DAT_004c2844 = (float)((int)DAT_004c2844 / 2);\n  }",
+        1
+      ],
+      [
+        "iVar23 = FUN_00406c30(iVar28)",
+        1
+      ],
+      [
+        "iVar23 = FUN_00406c30((int)cVar21 + (int)cVar1);",
+        1
+      ],
+      [
+        "  FUN_0042f7a0();\n  goto LAB_0040fc29;\n",
+        2
+      ]
+    ],
+    "FUN_00470a60": [
+      [
+        "  int iVar1;",
+        1
+      ]
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+#include "port/course_lamps.h"
 // Course-view UI on wide and tall canvases (simgolf mod, task-3 steps B4/B5),
 // the game-thread half. Shared by the native and browser builds; at the
 // original 800x600 canvas every function here leaves the game as it was.
@@ -62,6 +63,8 @@
 int terrain_grid_size(int *w, int *h);   // platform/terrain_dll.cpp
 void terrain_set_line_offset_fix(int on);
 void place_frame_begin(void);
+void place_drag_frame(void);
+void place_drag_draw(void);
 void terrain_set_view_offset(int ox, int oy);   // platform/terrain_dll.cpp
 int *FUN_00430020(int x, int y, int *tx, int *ty, int exact);   // screenToWorld (generated)
 void gdi_set_view(const void *bits, int dx, int dy);   // gdi.c: GDI text and blits follow the view
@@ -198,6 +201,7 @@ static void overscan_begin(void) {
 void hd_ui_frame_camera(void) {
   sub_apply();
   place_frame_begin();
+  place_drag_frame();
   opt_game_frame();
   dbg_overlay_frame();
   overscan_begin();
@@ -247,10 +251,12 @@ void hd_ui_course_done(void) {
   if (!hd_ui_course_hook) return;
   uint8_t *s = back_surface();
   if (!s || g_view.s) return;
+  place_drag_draw();
   hd_ui_course_hook((const uint16_t *)(uintptr_t)*(uint32_t *)(s + 0x4c0), *(int32_t *)(s + 0x40), &g_frame_cam);
   gw_course_done();
   pv_course_done();
   aim_course_done();
+  lamps_game_course_done();
 }
 
 // ------------------------------------------------------------------ camera clamp

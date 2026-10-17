@@ -1418,6 +1418,10 @@ static const char *g_mods_dir = "mods";
 static int g_only_mods;   // --only mods: just the Mods pages
 static int g_only_updates;   // --only updates: focused wheel and click checks
 static int g_only_pages;     // --only pages: focused modal-page rendering
+static int g_only_core;      // --only core: the normal gallery without pages or mods
+static int g_only_course;    // --only course: HUD, components and golfer controls
+static int g_only_frontend;  // --only frontend: title, setup, load and update screens
+static int g_only_dialogs;   // --only dialogs: popup, entry and hire dialogs
 static int g_only_golfers;   // --only golfers: native card, diary and click checks
 
 static int page_mods(Page *p, const char *out) {
@@ -1509,6 +1513,10 @@ int main(int argc, char **argv) {
       g_only_mods = !strcmp(argv[i + 1], "mods");
       g_only_updates = !strcmp(argv[i + 1], "updates");
       g_only_pages = !strcmp(argv[i + 1], "pages");
+      g_only_core = !strcmp(argv[i + 1], "core");
+      g_only_course = !strcmp(argv[i + 1], "course");
+      g_only_frontend = !strcmp(argv[i + 1], "frontend");
+      g_only_dialogs = !strcmp(argv[i + 1], "dialogs");
       g_only_golfers = !strcmp(argv[i + 1], "golfers");
     }
     else if (!strcmp(argv[i], "--art")) artdir = argv[i + 1];   // art_<slot>.bmp from SIMGOLF_UI_DUMP_ART
@@ -1599,6 +1607,10 @@ int main(int argc, char **argv) {
       SDL_Texture *art[FE_ART_MAX] = {0};
       fe_demo(&snap);
       fails += page_updates(&p, out, &snap, art);
+    } else if (g_only_frontend) {
+      fails += page_frontend(&p, out);
+    } else if (g_only_dialogs) {
+      fails += page_dialogs(&p, out);
     } else if (!g_only_mods) {
       page_hud(&p, out, HUD_JWE, "");
       page_hud(&p, out, HUD_REGULAR, "-regular");
@@ -1613,11 +1625,14 @@ int main(int argc, char **argv) {
       page_contrast(&p, out, 0.75f, "o075");
       page_contrast(&p, out, 0.85f, "default");
       page_contrast(&p, out, 1.0f, "task31");
-      fails += page_frontend(&p, out);
-      fails += page_dialogs(&p, out);
-      fails += page_pages(&p, out);
+      if (!g_only_course) {
+        fails += page_frontend(&p, out);
+        fails += page_dialogs(&p, out);
+        if (!g_only_core) fails += page_pages(&p, out);
+      }
     }
-    if (!g_only_updates && !g_only_pages && !g_only_golfers) fails += page_mods(&p, out);
+    if (!g_only_updates && !g_only_pages && !g_only_core &&
+        !g_only_course && !g_only_frontend && !g_only_dialogs && !g_only_golfers) fails += page_mods(&p, out);
     ui_destroy(p.ui);
     for (int i = 0; i < HUD_ART_MAX; i++)
       if (p.art[i]) SDL_DestroyTexture(p.art[i]);

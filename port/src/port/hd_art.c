@@ -53,6 +53,7 @@
 #include "port/golf/art_hooks.h"
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
+#include "port/path_styles.h"
 #include "port/hd_art_dialog_cutoff.h"
 #include "port/hd_art_geom.h"
 #include "port/hd_art_pixels.h"
@@ -65,6 +66,7 @@
 #include "port/cast_shadow.h"
 #include "port/course_light.h"
 #include "port/light_transfer.h"
+#include "port/scenery_reflect.h"
 
 // ------------------------------------------------------------------ settings
 
@@ -240,6 +242,7 @@ typedef struct {
   int views, fpv;
   int shadow;        // index of <name>Shadow.flc, -1
   int clubhouse;     // approved render pack beside the executable
+  int bundled_paths;
   int bundled_terrain;
 } ArtFile;
 
@@ -349,6 +352,17 @@ static int find_file(const char *path, const char *ext) {
   return i;
 }
 
+static int is_path_slot(const char *name) {
+  if (strncmp(name, "data/textures/", 14)) return 0;
+  const char *base = strrchr(name, '/');
+  if (!base) return 0;
+  base++;
+  static const char *const names[] = {"path.tga", "pathx.tga", "pathcap.tga", "pathcapx.tga",
+    "pathcurve.tga", "pathcurvex.tga", "pathinside.tga", "pathinsidex.tga"};
+  for (int i = 0; i < 8; i++) if (!strcmp(base, names[i])) return 1;
+  return 0;
+}
+
 static int load_index(void) {
   char path[MAX_PATH + 32];
   snprintf(path, sizeof path, "%s/index.tsv", g_dir);
@@ -357,7 +371,7 @@ static int load_index(void) {
   int cap = 0;
   int custom = clubhouse_pack_ready();
   g_clubhouse_active = custom;
-  for (int pass = 0; pass < 3; pass++) {
+  for (int pass = 0; pass < 4; pass++) {
   if (pass == 1) {
     if (!custom) continue;
     snprintf(path, sizeof path, "%s/index.tsv", g_clubhouse_dir);
@@ -366,6 +380,9 @@ static int load_index(void) {
     const char *enabled = mods_get("art.terrain");
     if (enabled && !atoi(enabled)) continue;
     snprintf(path, sizeof path, "%s/ui/terrain/index.tsv", host_exe_dir());
+    f = fopen(path, "r");
+  } else if (pass == 3) {
+    snprintf(path, sizeof path, "%s/ui/path-styles/index.tsv", host_exe_dir());
     f = fopen(path, "r");
   }
   if (!f) continue;
@@ -379,6 +396,7 @@ static int load_index(void) {
     normalize(col[0], nm, sizeof nm);
     if (pass == 1 && clubhouse_slot(nm) < 0) continue;
     if (pass == 2 && (strcmp(col[1], "texture") || strcmp(col[2], "terrain"))) continue;
+    if (pass == 3 && (!is_path_slot(nm) || strcmp(col[1], "texture") || strcmp(col[2], "terrain"))) continue;
     int replace = -1;
     if (pass) for (int i = 0; i < g_nfiles; i++)
       if (!strcmp(g_files[i].norm, nm)) { replace = i; break; }
@@ -404,6 +422,7 @@ static int load_index(void) {
     a->fpv = atoi(col[8]);
     a->shadow = -1;
     a->clubhouse = pass == 1;
+    a->bundled_paths = pass == 3;
     a->bundled_terrain = pass == 2;
   }
   fclose(f);
@@ -1707,6 +1726,7 @@ static void ensure_hooks(void) {
 // ------------------------------------------------------------------ settings while running
 
 static unsigned g_seen_serial;
+static int g_path_styles_enabled;
 
 static void update_any(void) {
   g_any = 0;
@@ -1718,6 +1738,8 @@ static void update_any(void) {
 static void live_settings(void) {
   if (mods_serial() == g_seen_serial) return;
   g_seen_serial = mods_serial();
+  int old_path_styles_enabled = g_path_styles_enabled;
+  g_path_styles_enabled = mods_get_int("art.path_styles",1);
   int before[NCAT];
   memcpy(before, g_look, sizeof before);
   memcpy(g_look, g_look_base, sizeof g_look);
@@ -1733,7 +1755,8 @@ static void live_settings(void) {
     for (int i = 0; i < NCAT; i++) fprintf(stderr, " %s=%s", k_cat[i], k_look[g_look[i]]);
     fprintf(stderr, " pixel=%d textures=%s\n", g_pixel, hd_art_textures_name());
   }
-  if ((before[C_TERRAIN] == L_ORIGINAL) != (g_look[C_TERRAIN] == L_ORIGINAL)) hdt_resend();
+  if (old_path_styles_enabled != g_path_styles_enabled ||
+      (before[C_TERRAIN] == L_ORIGINAL) != (g_look[C_TERRAIN] == L_ORIGINAL)) hdt_resend();
 }
 
 // ------------------------------------------------------------------ terrain textures (game thread)
@@ -1761,10 +1784,11 @@ uint32_t *hd_art_load_png(const char *path, int *w, int *h) {
   return o;
 }
 
-uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh) {
+uint8_t *hd_art_terrain_style(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh, int path_style) {
   if (!g_on || !src || !*src || g_look[C_TERRAIN] == L_ORIGINAL) return NULL;
   int f = find_file(src, NULL);
   if (f < 0 || g_files[f].kind != K_TEXTURE) return NULL;
+  if (g_files[f].bundled_paths && (path_style<1 || path_style>=PATH_STYLE_COUNT || !g_path_styles_enabled)) return NULL;
   if (!g_wic) {   // this thread's own imaging factory
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (FAILED(CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, &IID_IWICImagingFactory, (void **)&g_wic)))
@@ -1772,7 +1796,9 @@ uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int 
   }
   double t0 = host_now_ms();
   char path[MAX_PATH * 2];
-  if (g_files[f].bundled_terrain)
+  if (g_files[f].bundled_paths)
+    snprintf(path, sizeof path, "%s/ui/path-styles/%s/%s.png", host_exe_dir(), path_style_id(path_style), g_files[f].out);
+  else if (g_files[f].bundled_terrain)
     snprintf(path, sizeof path, "%s/ui/terrain/%s.png", host_exe_dir(), g_files[f].out);
   else
     snprintf(path, sizeof path, "%s/%s.png", g_dir, g_files[f].out);
@@ -1798,7 +1824,9 @@ uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int 
       const uint8_t *o = rgba + ((size_t)y * w + x) * 4;
       const uint8_t *a = up + ((size_t)(y * ky + ky / 2) * W + x * kx + kx / 2) * 4;
       const uint8_t *b = up + ((size_t)((h - 1 - y) * ky + ky / 2) * W + x * kx + kx / 2) * 4;
-      for (int c = 0; c < 3; c++) {
+      // Regional materials deliberately differ in colour. Their target-theme
+      // alpha silhouette, rather than colour, determines the stored orientation.
+      for (int c = g_files[f].bundled_paths ? 3 : 0; c < (g_files[f].bundled_paths ? 4 : 3); c++) {
         same += abs(o[c] - a[c]);
         flip += abs(o[c] - b[c]);
       }
@@ -1831,9 +1859,12 @@ uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int 
   return up;
 }
 
+uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh) {
+  return hd_art_terrain_style(src,rgba,w,h,ow,oh,0);
+}
 static void terrain_job(void *user, int i) {
   HdTerrainJob *j = (HdTerrainJob *)user + i;
-  j->up = hd_art_terrain(j->src, j->rgba, j->w, j->h, &j->uw, &j->uh);
+  j->up = hd_art_terrain_style(j->src, j->rgba, j->w, j->h, &j->uw, &j->uh,j->path_style);
 }
 static void terrain_job_finish(void) {
   if (g_wic) { IWICImagingFactory_Release(g_wic); g_wic = NULL; CoUninitialize(); }
@@ -1845,7 +1876,7 @@ void hd_art_terrain_jobs(HdTerrainJob *jobs, int count) {
     for (int i = 0; i < count; i++) {
       HdTerrainJob *j = jobs + i;
       int w = 0, h = 0;
-      uint8_t *reference = hd_art_terrain(j->src, j->rgba, j->w, j->h, &w, &h);
+      uint8_t *reference = hd_art_terrain_style(j->src, j->rgba, j->w, j->h, &w, &h,j->path_style);
       if ((reference != NULL) != (j->up != NULL) ||
           (reference && (w != j->uw || h != j->uh || memcmp(reference, j->up, (size_t)w * h * 4)))) {
         fprintf(stderr, "terrain-loading: pixel comparison FAILED for %s\n", j->src);
@@ -2032,6 +2063,7 @@ int hd_art_pick(int x, int y, HdArtPick *o) {
 }
 
 void hd_art_publish(int layered, const uint16_t *screen) {
+  path_styles_frame();
   live_settings();   // also with the pack off: Pixel HD is a grid over whatever the course shows
   if (!g_on) return;
   issue44_cutoff_trace("publish_enter");
@@ -2486,6 +2518,10 @@ int hd_art_draw_shadows(SDL_Renderer *r, SDL_Rect clip, double ox, double oy, do
   double p1=profile?host_now_ms():0;
   g_cast.relief=relief;g_cast.softness=g_light.softness;g_cast.contact=g_light.contact;g_cast.linear=g_light.linear;
   int drawn = 0;
+  int audit=getenv("SIMGOLF_SHADOW_CASTER_LOG")!=NULL;
+  static double audit_last;
+  audit=audit&&host_now_ms()-audit_last>250;
+  if(audit)audit_last=host_now_ms();
   for (int i = 0; i < c->n; i++) {
     const Entry *e = &c->e[i];
     const ArtFile *a = &g_files[e->file];
@@ -2505,11 +2541,20 @@ int hd_art_draw_shadows(SDL_Renderer *r, SDL_Rect clip, double ox, double oy, do
       double lift=course_relief_sample(relief,gx,gy)*k;
       d.x+=(float)(slope_x*lift);d.y+=(float)((1+slope_y)*lift);
     }
-    Key key = entry_key(e, 0);
-    uint64_t id = (uint64_t)key.a << 32 | key.b;
-    g_cast_replaced[i] = (uint8_t)(a->cat==C_BUILDINGS ?
-      cast_shadow_building(&g_cast,ax/fw,ay/fh,d,e->flip):cast_shadow_draw(&g_cast,id,tex_of(e,0),fw,fh,ax,ay,d,e->flip));
-    drawn += g_cast_replaced[i];
+    // A shadow needs one alpha silhouette per asset/view, not a new mask
+    // for every walking/swaying frame or shirt palette. The latter evicts
+    // tree masks and alternates solar shadows with fixed painted shadows.
+    // Keep the live destination/feet, but retain the first prepared pose.
+    Key body_key=entry_key(e,0);
+    uint64_t id=hd_art_shadow_shape_key(body_key.a,body_key.b);
+    int projected = a->cat==C_BUILDINGS ?
+      cast_shadow_building(&g_cast,ax/fw,ay/fh,d,e->flip):cast_shadow_draw(&g_cast,id,tex_of(e,0),fw,fh,ax,ay,d,e->flip);
+    // A deferred mask must never restore an unrelated midday direction.
+    // Masks prepare within the existing per-frame budget and appear once ready.
+    g_cast_replaced[i]=1;
+    drawn += projected;
+    if(audit)fprintf(stderr,"shadow caster: serial %ld cat %d file %d view %d frame %d x %.2f y %.2f anchor %.2f %.2f size %d %d projected %d old %d\n",
+      (long)g_cur_serial,a->cat,e->file,e->view,e->frame,e->x,e->y,ax,ay,fw,fh,projected,e->shadow_file>=0);
   }
   double p2=profile?host_now_ms():0;
   if (cast_shadow_end(&g_cast, ground, width, height, ox, oy, k)) g_cast_serial = g_cur_serial;
@@ -2582,6 +2627,24 @@ void hd_art_lamps(SDL_Renderer *r,SDL_Rect clip,const uint8_t *receiver,int w,in
   SDL_RenderSetClipRect(r,clipped?&old:NULL);
   if(getenv("SIMGOLF_ATMOSPHERE_LOG")){static double last;double now=host_now_ms();if(now-last>1000){last=now;fprintf(stderr,"lighting: local lights %d gain %.3f spill_cells %d\n",lamps,gain,spill_cells);}}
 }
+int hd_art_reflections(SDL_Renderer *r,const uint8_t *receiver,int w,int h,
+ double ox,double oy,double k,double seconds,double strength,double ripple){
+ if(!g_on||!g_cur_ok[LC]||!receiver||strength<=0||w!=g_cur[LC].w||h!=g_cur[LC].h)return 0;
+ List *c=&g_cur[LC];int casters=0,spans=0;
+ for(int i=0;i<c->n&&casters<192;i++){
+  const Entry *e=&c->e[i];const ArtFile *a=&g_files[e->file];
+  if(!g_drawable[LC][i+1]||e->view<0||a->kind!=K_SPRITE||
+    (a->cat!=C_TREES&&a->cat!=C_BUILDINGS&&a->cat!=C_PEOPLE)||
+    (a->cat==C_BUILDINGS&&(strstr(a->norm,"_base")||strstr(a->norm,"_anim"))))continue;
+  int fh=a->h4/4;if(fh<=0)continue;SDL_Texture *tx=tex_of(e,0);if(!tx)continue;
+  double ay=(240.-a->crop_y)/fh,anchor=e->y+(e->flip&2?1-ay:ay)*e->h;
+  SDL_FRect d={e->x,e->y,e->w,e->h};
+  int n=scenery_reflect_draw(r,tx,d,anchor,e->flip,receiver,w,h,ox,oy,k,seconds,strength,ripple);
+  if(n>0){spans+=n;casters++;}
+ }
+ if(getenv("SIMGOLF_REFLECTION_LOG")){static double last;double now=host_now_ms();if(now-last>1000){last=now;fprintf(stderr,"reflections: casters %d spans %d strength %.3f\n",casters,spans,strength);}}
+ return spans;
+}
 static int g_wind_on;static double g_wind_seconds,g_wind_x;
 void hd_art_wind(int enabled,double seconds,double wind_x){g_wind_on=enabled;g_wind_seconds=seconds;g_wind_x=wind_x;}
 static int wind_flag(SDL_Renderer *r,SDL_Texture *tx,SDL_FRect d,int flip,const char *name){
@@ -2602,6 +2665,12 @@ static int wind_flag(SDL_Renderer *r,SDL_Texture *tx,SDL_FRect d,int flip,const 
     if(now-last_flag_log>1000){last_flag_log=now;fprintf(stderr,"weather: flag cloth seconds %.3f wind %.3f asset %s\n",g_wind_seconds,g_wind_x,name);}
   }
   return ok;
+}
+int hd_art_lamp_occluded(int x,int y,float ground_y) {
+  if(!g_on||!g_cur_ok[LC])return 0;
+  List *c=&g_cur[LC];if(x<0||y<0||x>=c->w||y>=c->h||!c->owner)return 0;
+  unsigned id=c->owner[y*c->w+x];if(!id||id>(unsigned)c->n)return 0;
+  const Entry *e=&c->e[id-1];return e->y+e->h>ground_y+2;
 }
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
   if (!g_on || !g_cur_ok[which]) return;
@@ -2689,6 +2758,7 @@ void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k) {
 
 void hd_art_init(int presenter_on) {
   g_on = 0;
+  g_path_styles_enabled = mods_get_int("art.path_styles",1);
   update_any();
   if (!g_pack) {
     fprintf(stderr, "art: pack off (art_pack=0)\n");

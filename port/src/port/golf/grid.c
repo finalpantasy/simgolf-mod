@@ -1,3 +1,4 @@
+#include "port/course_lamps.h"
 // Map size: storage for the per-tile arrays tools/translate/grid.py relocated.
 // map_scale (golf.ini, or SIMGOLF_MAP_SCALE) is the land area as a multiple
 // of the original: 1 = 50 x 50 tiles, 2 = 70 x 70, 4 = 100 x 100, 10 = 158 x 158.
@@ -83,6 +84,11 @@ void grid_resize(int w, int h) {
 }
 
 void grid_resize_default(void) {
+  lamps_game_reset();
+#ifndef __EMSCRIPTEN__
+  extern void path_styles_reset(void);
+  path_styles_reset();
+#endif
   if (g_map_w != g_default_side || g_map_h != g_default_side) grid_resize(g_default_side, g_default_side);
 }
 

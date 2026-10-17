@@ -135,6 +135,14 @@ void ui_set_tokens(UiCtx *c, const UiTokens *t) { c->tok = *t; }
 
 // ------------------------------------------------------------------ input
 
+int ui_blocks_point(UiCtx *c, float x, float y) {
+  SDL_LockMutex(c->lock);
+  int blocked = ui_hits_modal(&c->router.published) ||
+    ui_hits_test(&c->router.published, x, y, UI_HIT_BLOCK) >= 0;
+  SDL_UnlockMutex(c->lock);
+  return blocked;
+}
+
 int ui_route_event(UiCtx *c, const UiEvent *e) {
   SDL_LockMutex(c->lock);
   int to = ui_route(&c->router, e);
@@ -689,6 +697,7 @@ int ui_tile_row(UiCtx *c, uint32_t id, UiRect r, SDL_Texture *art, UiIcon icon, 
 int ui_tile_mini(UiCtx *c, uint32_t id, UiRect r, SDL_Texture *art, UiIcon icon, int flags, const char *tooltip) {
   const UiTokens *t = &c->tok;
   int sel = flags & UI_SELECTED, dis = flags & UI_DISABLED;
+  int cover = flags & UI_TILE_COVER;
   float rad = ui_s(c, 14);
   ui_hits_add(&c->cur, r, rad, id, UI_HIT_BLOCK | UI_HIT_INTERACT);
   float hov = ui_anim(c, id, ui_is_hot(c, id) ? 1.0f : 0.0f, t->motion_hover);
@@ -700,14 +709,24 @@ int ui_tile_mini(UiCtx *c, uint32_t id, UiRect r, SDL_Texture *art, UiIcon icon,
     uid_rrect(&c->d, b, rad, t->tile_fill_on);
   } else {
     uid_rrect(&c->d, b, rad, uid_alpha(uid_mix(t->tile_fill, t->tile_fill_on, hov), a));
-    uid_rrect_stroke(&c->d, b, rad, hair(c), uid_alpha(t->surface_inset_border, a));
+    UiColor border = cover ? uid_mix(t->surface_inset_border, t->accent, hov) : t->surface_inset_border;
+    uid_rrect_stroke(&c->d, b, rad, hair(c), uid_alpha(border, a));
   }
-  UiRect in = ui_inset_all(b, ui_s(c, 5));
+  float inset = ui_s(c, cover ? 1 : 5);
+  UiRect in = ui_inset_all(b, inset);
   if (art) {
     int tw = 1, th = 1;
     SDL_QueryTexture(art, NULL, NULL, &tw, &th);
-    float k = fminf(in.w / tw, in.h / th);
-    uid_image(&c->d, art, NULL, ui_rect_round(ui_center(in, tw * k, th * k)), 0, (UiColor){255, 255, 255, (uint8_t)(255 * a)});
+    if (cover) {
+      float k = fmaxf(in.w / tw, in.h / th);
+      int sw = (int)fminf(tw, floorf(in.w / k + .5f));
+      int sh = (int)fminf(th, floorf(in.h / k + .5f));
+      SDL_Rect src = {(tw - sw) / 2, (th - sh) / 2, sw, sh};
+      uid_image(&c->d, art, &src, ui_rect_round(in), fmaxf(0, rad - inset), (UiColor){255, 255, 255, (uint8_t)(255 * a)});
+    } else {
+      float k = fminf(in.w / tw, in.h / th);
+      uid_image(&c->d, art, NULL, ui_rect_round(ui_center(in, tw * k, th * k)), 0, (UiColor){255, 255, 255, (uint8_t)(255 * a)});
+    }
   } else if (icon) {
     ui_icon(c, icon, in, floorf(in.h * 0.55f), uid_alpha(t->accent_soft_text, a));
   }

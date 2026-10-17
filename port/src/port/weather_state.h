@@ -28,6 +28,7 @@ typedef struct WeatherState {
   double material_gloss[4],material_power[4],material_absorb[4];
   int material_tuning_valid;
   int wildlife_legacy; // Internal A/B: preserve old night-only insects when requested.
+  double readability;
 } WeatherState;
 // Shared weather shelter for visual and audible night insects. The exposure
 // curve is continuous over normalized rain, storm and wind. No random state,

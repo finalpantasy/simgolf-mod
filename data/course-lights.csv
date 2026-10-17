@@ -1,0 +1,9 @@
+# Stable order is part of saved style IDs. Prices are in the game's $100 units.
+# Starting values: compare with bench $200, flower bed $500, landmark $1500.
+# id,name,cost,radius_tiles,height_at_zoom4,red,green,blue
+traditional,Traditional lantern,5,2.5,32,255,219,162
+modern,Modern post,5,2.5,33,247,235,207
+resort,Resort lantern,5,2.5,30,255,218,157
+rustic,Rustic timber lamp,5,2.5,30,255,202,124
+bollard,Path bollard,2,1.25,13,255,220,160
+floodlight,Double floodlight,20,5,48,236,243,255

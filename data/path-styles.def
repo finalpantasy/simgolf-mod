@@ -1,0 +1,23 @@
+// Stable save IDs. Append new entries; never reorder or reuse an existing ID.
+PATH_STYLE(0, original, "Original", "")
+PATH_STYLE(1, golden_gravel, "Golden Gravel", "")
+PATH_STYLE(2, flagstone, "Flagstone", "")
+PATH_STYLE(3, parkland, "Parkland Gravel", "Parkland")
+PATH_STYLE(4, desert, "Desert Clay", "Desert")
+PATH_STYLE(5, tropical, "Tropical Stone", "Tropical")
+PATH_STYLE(6, scottish, "Scottish Trail", "Links")
+PATH_STYLE(7, red_brick, "Red Brick", "")
+PATH_STYLE(8, dark_slate, "Dark Slate", "")
+// Additional Parkland designs, available on every course.
+PATH_STYLE(9, honey_cobble, "Honey Cobble", "")
+PATH_STYLE(10, garden_pavers, "Garden Pavers", "")
+// Additional Desert designs, available on every course.
+PATH_STYLE(11, sandstone, "Sandstone", "")
+PATH_STYLE(12, adobe_tile, "Adobe Tile", "")
+// Additional Tropical designs, available on every course.
+PATH_STYLE(13, coral_gravel, "Coral Gravel", "")
+PATH_STYLE(14, lava_stone, "Lava Stone", "")
+// Additional Scottish Links designs, available on every course.
+PATH_STYLE(15, granite_setts, "Granite Setts", "")
+PATH_STYLE(16, highland_shale, "Highland Shale", "")
+PATH_STYLE(17, limestone, "Limestone", "")

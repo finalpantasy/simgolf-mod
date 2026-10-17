@@ -2,6 +2,7 @@
 // section 4 (D5); what each control does in the game: docs/ui/HUD_DISPATCH.md.
 #include "port/ui/ui_hud.h"
 #include "port/ui/ui_rules.h"
+#include "port/path_style_catalog.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -18,11 +19,11 @@ static const char *const k_terrain_default[16] = {"Tee", "Green", "Sand trap", "
                                                   "Brush", "Rocks", "Tree", "Tree", "Tree"};
 static const int k_terrain_id[16] = {0, 1, 7, 4, 9, 10, 17, 2, 3, 5, 8, 11, 12, 13, 14, 15};
 // Course tray tabs -> terrain slots
-static const int k_tab_holes[] = {0, 1, -1};
-static const int k_tab_fairway[] = {7, 8, 3, 9, -1};
-static const int k_tab_hazards[] = {2, 4, 10, 6, 5, 11, 12, -1};
+enum { COURSE_TERRAIN, COURSE_TREES, COURSE_EXTRAS, COURSE_LIGHTS };
+// Keep the full hole-building palette visible, in playing order, without sub-tabs.
+static const int k_tab_terrain[] = {0, 7, 8, 1, 3, 9, 2, 4, 10, 6, 5, 11, 12, -1};
 static const int k_tab_trees[] = {13, 14, 15, -1};
-static const int *const k_tabs[4] = {k_tab_holes, k_tab_fairway, k_tab_hazards, k_tab_trees};
+static const int *const k_tabs[2] = {k_tab_terrain, k_tab_trees};
 
 typedef struct { const char *name; short x, y; int tool; UiIcon icon; } Ctl;
 static const Ctl k_amenities[] = {
@@ -1432,19 +1433,32 @@ static void price(char *buf, int cap, int dollars) {
 }
 
 static void course_tray(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, UiRect dock_r, Acts *a) {
-  static const char *const tabs[5] = {"Holes", "Fairway", "Hazards", "Trees", "Extras"};
+  static const char *const tabs[4] = {"Terrain", "Trees", "Extras", "Lights"};
   if (s->terrain_tool != h->last_terrain) {   // a tool picked by hotkey: show its tab
     h->last_terrain = s->terrain_tool;
-    for (int k = 0; k < 4; k++)
+    for (int k = 0; k < 2; k++)
       for (const int *p = k_tabs[k]; *p >= 0; p++)
         if (k_terrain_id[*p] == s->terrain_tool) h->course_tab = k;
   }
-  int tab = s->amenities_on ? 4 : h->course_tab;
+  int tab = h->course_tab == COURSE_LIGHTS ? (s->lights_enabled ? COURSE_LIGHTS : COURSE_TERRAIN)
+            : s->amenities_on ? COURSE_EXTRAS : h->course_tab;
   int before = tab;
   Tile tiles[16];
   char prices[16][24];
+  char light_tips[7][96];
   int n = 0;
-  if (tab < 4) {
+  if(tab==COURSE_LIGHTS){
+    for(int i=0;i<7;i++){Tile *tl=&tiles[n];memset(tl,0,sizeof *tl);
+      tl->name=i<6?s->light_names[i]:"Remove light";
+      if(i<6)price(prices[n],sizeof prices[n],s->light_cost[i]);else snprintf(prices[n],sizeof prices[n],"No refund");
+      tl->price=prices[n];tl->art=i<6&&art?art[HUD_ART_LIGHT+i]:NULL;tl->icon=UI_ICON_WEATHER_SUN;tl->selected=s->lights_selected==i;
+      tl->act=(HudAction){HUD_ACT_LIGHT,i,0,0,0};
+      if(i<6)snprintf(light_tips[i],sizeof light_tips[i],"%s installed. Free placement, %.2g tile reach. No running charge.",prices[n],s->light_radius[i]);
+      else snprintf(light_tips[i],sizeof light_tips[i],"Remove a light. No refund.");
+      tl->tip=light_tips[i];
+      n++;
+    }
+  } else if (tab <= COURSE_TREES) {
     for (const int *p = k_tabs[tab]; *p >= 0; p++) {
       int slot = *p;
       Tile *tl = &tiles[n];
@@ -1474,10 +1488,12 @@ static void course_tray(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
     }
   }
   for (int i = 0; i < n; i++)   // Trees: a tree armed; Extras: an amenity armed
-    if (tiles[i].selected && (tab == 3 || tab == 4 || (tab == 0 && s->terrain_tool == 1))) g_rotate = 1;   // green: its shape
-  tray(c, h, "Course", tabs, 5, &tab, tiles, n, 8, s->amenities_on ? 248 : 261, s->amenities_on ? 567 : 578, dock_r, a);
+    if (tiles[i].selected && (tab == COURSE_TREES || tab == COURSE_EXTRAS || (tab == COURSE_TERRAIN && s->terrain_tool == 1))) g_rotate = 1;   // green: its shape
+  tray(c, h, "Course", tabs, s->lights_enabled?4:3, &tab, tiles, n, 13, s->amenities_on ? 248 : 261, s->amenities_on ? 567 : 578, dock_r, a);
   if (tab != before) {
-    if (tab == 4) goal(a, HUD_GOAL_EXTRAS, -1, -1);
+    h->course_tab=tab;
+    if(tab==COURSE_LIGHTS){h->course_tab=COURSE_LIGHTS;act(a,(HudAction){HUD_ACT_LIGHT,-1,0,0,0});}
+    else if (tab == COURSE_EXTRAS) goal(a, HUD_GOAL_EXTRAS, -1, -1);
     else {
       h->course_tab = tab;
       if (s->amenities_on) goal(a, HUD_GOAL_COURSE, -1, -1);
@@ -2126,6 +2142,7 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
   const UiTokens *t = ui_tokens(c);
   UiRect scr = ui_screen(c);
   const char *title = club ? "Place your clubhouse"
+                    : tool == 0 ? "Path material"
                     : lot ? (s->building_name[tool - 6][0] ? s->building_name[tool - 6] : k_building_default[tool - 6])
                     : tool == 1 ? "Bench design" : tool == 2 ? "Flower bed design" : tool == 4 ? "Landmark"
                     : tool == 16 ? "Scenic tree" : "Scenic bridge";
@@ -2138,26 +2155,38 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
     else ui_hud_money(cost, sizeof cost, (s->design * 5 + 25) * 200);
     const char *perk = s->landmark_perk[s->design & 3];
     snprintf(hint, sizeof hint, "%s, %s%s%s", s->landmark_name[s->design], cost, perk[0] ? " - " : "", perk);
+  } else if(tool==0) {
+    snprintf(hint,sizeof hint,"Click the course to place.");
   } else snprintf(hint, sizeof hint, "Pick a design, then click the course.");
   float pad = ui_s(c, 12), segh = ui_s(c, 34), g = ui_s(c, 6), cw = ui_s(c, 58), ch = ui_s(c, 58);
+  if(tool==0){pad=ui_s(c,10);segh=ui_s(c,28);g=ui_s(c,4);cw=ui_s(c,92);ch=ui_s(c,84);}
   float title_w = ui_text_width(c, UI_TYPE_HEADING, title) + ui_s(c, 14), rw = rot_width(c);
   float max_w = scr.w - 2 * ui_s(c, t->edge_margin);
-  int per = n;
-  if (per > 1 && per * cw + (per - 1) * g + 2 * pad > max_w) per = (n + 1) / 2;   // two rows on a narrow screen
-  int rows = n > 0 ? (n + per - 1) / per : 0;
+  int shown=n;
+  int per = tool==0?(n>9?6:3):n;
+  if (per > 1 && per * cw + (per - 1) * g + 2 * pad > max_w)
+    per = tool==0 ? (int)((max_w-2*pad+g)/(cw+g)) : (n+1)/2;
+  if(per<1)per=1;
+  int rows = n > 0 ? (shown + per - 1) / per : 0;
   float chips_w = n > 0 ? per * cw + (per - 1) * g : 0;
   float hint_w = ui_text_width(c, UI_TYPE_BODY, hint);
-  float inner = fmaxf(fmaxf(chips_w, title_w + ui_s(c, 16) + rw), hint_w);
+  float inner = fmaxf(fmaxf(chips_w, tool==0?title_w:title_w + ui_s(c, 16) + rw), hint_w);
   float hh = pad + segh + ui_s(c, 8) + (rows ? rows * ch + (rows - 1) * g + ui_s(c, 8) : 0) +
              ui_font(c, UI_TYPE_BODY).line + pad;
   float w = inner + 2 * pad;
   float margin = h->density == HUD_JWE ? ui_s(c, 160) : ui_s(c, 250);
   float k = ui_anim(c, ui_id("hud.place") ^ 0x91ace1u, 1, t->motion_open);
-  UiRect r = ui_rect_round(ui_anchor(scr, w, hh, UI_BOTTOM, 0, margin - (1 - k) * ui_s(c, 16)));
+  UiRect r = ui_rect_round(ui_anchor(scr, w, hh, tool==0?UI_BOTTOM_LEFT:UI_BOTTOM, tool==0?ui_s(c,16):0, margin - (1 - k) * ui_s(c, 16)));
   ui_panel(c, r, ui_s(c, 20), 0);
   float x = r.x + pad, y = r.y + pad;
   ui_text_in(c, ui_rect(x + ui_s(c, 2), y, title_w, segh), UI_TYPE_HEADING, t->text_primary, title, 0);
   UiRect rr = ui_rect(r.x + r.w - pad - rw, y, rw, segh);
+  if(tool==0&&getenv("SIMGOLF_PATH_STYLE_LOG")) {
+    static float logged_w;
+    if(logged_w!=scr.w){logged_w=scr.w;
+      fprintf(stderr,"hud: pathpalette %d columns %d rows panel %.0f,%.0f %.0fx%.0f preview %.0f square labels centered target %.0fx%.0f\n",
+              per,rows,r.x,r.y,r.w,r.h,ui_s(c,64),scr.w,scr.h);}
+  }
   uint32_t rid = ui_id("hud.place.rotate");
   if (club && getenv("SIMGOLF_FRONTEND_LOG")) {
     static int old_x = -1, old_y = -1;
@@ -2167,11 +2196,12 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
       fprintf(stderr, "hud: clubhouse rotate at %d,%d target %.0fx%.0f\n", rx, ry, scr.w, scr.h);
     }
   }
-  if (ui_button(c, rid, rr, k_rot_label, UI_ICON_ROTR, UI_BTN_PILL, 0)) act(a, (HudAction){HUD_ACT_KEY, 0, 0, 0, 9});
-  ui_tooltip(c, rid, rr, "Rotate what you are placing (the Tab key does the same)");
+  if (tool!=0&&ui_button(c, rid, rr, k_rot_label, UI_ICON_ROTR, UI_BTN_PILL, 0)) act(a, (HudAction){HUD_ACT_KEY, 0, 0, 0, 9});
+  if(tool!=0)ui_tooltip(c, rid, rr, "Rotate what you are placing (the Tab key does the same)");
   y += segh + ui_s(c, 8);
-  for (int i = 0; i < n; i++) {
-    UiRect cr = ui_rect(x + (i % per) * (cw + g), y + (i / per) * (ch + g), cw, ch);
+  for (int local = 0; local < shown; local++) {
+    int i=local;
+    UiRect cr = ui_rect(x + (local % per) * (cw + g), y + (local / per) * (ch + g), cw, ch);
     char lab[8], tip[80];
     snprintf(lab, sizeof lab, "%d", i + 1);
     int f = place_chip_flags(s, tool, i);
@@ -2180,10 +2210,21 @@ static void place_panel(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
       snprintf(tip, sizeof tip, "%s%s%s%s", s->landmark_name[i],
                f & UI_DISABLED ? ": not earned yet" : "", perk[0] ? " - " : "", perk);
     } else snprintf(tip, sizeof tip, "%s %d", title, i + 1);
-    int slot = tool == 1 ? HUD_ART_BENCH : tool == 2 ? HUD_ART_FLOWER : tool == 4 ? HUD_ART_LANDMARK : tool == 16 ? HUD_ART_TREE : HUD_ART_BRIDGE;
+    int slot = tool == 0 ? HUD_ART_PATH : tool == 1 ? HUD_ART_BENCH : tool == 2 ? HUD_ART_FLOWER : tool == 4 ? HUD_ART_LANDMARK : tool == 16 ? HUD_ART_TREE : HUD_ART_BRIDGE;
+    UiRect picture=cr;
+    if(tool==0) {
+      f|=UI_TILE_COVER;
+      snprintf(tip,sizeof tip,"%s",path_style_name(i));
+      picture.w=picture.h=ui_s(c,64);picture.x+=(cr.w-picture.w)/2;
+      ui_text_in(c,ui_rect(cr.x,cr.y+picture.h,cr.w,ui_s(c,20)),UI_TYPE_CAPTION,t->text_primary,path_style_name(i),0.5f);
+      if(getenv("SIMGOLF_PATH_STYLE_LOG")) {
+        static int last_x[PATH_STYLE_COUNT],last_y[PATH_STYLE_COUNT];int px=(int)(cr.x+cr.w/2),py=(int)(cr.y+picture.h/2);
+        if(last_x[i]!=px||last_y[i]!=py){fprintf(stderr,"hud: pathstyle %d at %d,%d target %.0fx%.0f\n",i,px,py,scr.w,scr.h);last_x[i]=px;last_y[i]=py;}
+      }
+    }
     SDL_Texture *pic = art ? art[slot + i] : NULL;   // the design as the original strip drew it; a number if none
-    int hit = pic ? ui_tile_mini(c, ui_idi(ui_id("hud.place"), i), cr, pic, UI_ICON_NONE, f, tip)
-                  : ui_tile_mini_label(c, ui_idi(ui_id("hud.place"), i), cr, (f & UI_DISABLED) ? UI_ICON_LOCK : UI_ICON_NONE, lab, f, tip);
+    int hit = pic ? ui_tile_mini(c, ui_idi(ui_id("hud.place"), i), picture, pic, UI_ICON_NONE, f, tip)
+                  : ui_tile_mini_label(c, ui_idi(ui_id("hud.place"), i), picture, (f & UI_DISABLED) ? UI_ICON_LOCK : UI_ICON_NONE, lab, f, tip);
     if (hit && !(f & UI_DISABLED))
       act(a, (HudAction){HUD_ACT_DESIGN, tool, i, 0, 0});
   }

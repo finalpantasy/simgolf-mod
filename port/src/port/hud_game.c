@@ -13,11 +13,14 @@
 
 #include "port/dialogs_frosted.h"
 #include "port/hud_frosted.h"
+#include "port/course_lamps.h"
 #include "port/hd_art.h"
+#include "port/runtime.h"
 #include "port/host.h"
 #include "mods/mdata.h"
 #include "mods/mods.h"
 #include "port/grid.h"
+#include "port/path_styles.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
@@ -700,6 +703,9 @@ static void read_design(HudSnap *s, int flags) {
               : tool == 2 ? 15 : tool == 4 ? mdata_cell(&c_land, "trays", "amenities", "landmark_designs", 14)
               : tool == 16 ? 7 : tool == 19 ? 8 : 0;
   if (s->design_n > 16) s->design_n = 16;
+#ifdef SIMGOLF_PATH_STYLE_ASSETS
+  if(tool==0&&mods_get_int("art.path_styles",1)) {s->design_n=PATH_STYLE_COUNT;s->design=path_styles_selected();}
+#endif
   memset(s->landmark_perk, 0, sizeof s->landmark_perk);
   if (tool == 4 && mods_get_int("fixes.landmark_perks", 1)) {
     // drawAmenitiesPanel/FUN_00434cf0 selects these original strings by design & 3.
@@ -861,6 +867,16 @@ static void read_state(HudSnap *s) {
   int flags = G32(FLAGS);
   s->canvas_w = win_screen_w;
   s->canvas_h = win_screen_h;
+  static int lights_art;
+  if(lamps_game_enabled()&&!lights_art){uint32_t pix[32*64];for(int i=0;i<LAMP_STYLES;i++){
+    char path[1024];uint32_t *model=NULL;int w=0,h=0;
+    snprintf(path,sizeof path,"%s/%s-v0-day.png",port_host_path("/ui/../data/course-lamps"),lamps_art_id(i));model=hd_art_load_png(path,&w,&h);
+    if(model){hudf_publish_art(HUD_ART_LIGHT+i,model,w,h);free(model);}
+    else{lamps_sprite_rgba(i,pix);hudf_publish_art(HUD_ART_LIGHT+i,pix,32,64);}
+  }lights_art=1;}
+  s->lights_enabled=lamps_game_enabled();s->lights_selected=lamps_game_selected();
+  const LampStyle *ls=lamps_game_styles();
+  for(int i=0;i<LAMP_STYLES;i++){snprintf(s->light_names[i],sizeof s->light_names[i],"%s",ls[i].name);s->light_cost[i]=ls[i].cost*100;s->light_radius[i]=ls[i].radius;}
   s->money = G32(0x571fd4) * 100;
   s->sandbox = (flags & 0x1000000) != 0;
   s->cheat = (flags & 0x20000000) != 0;
@@ -1091,7 +1107,12 @@ static void run_actions(void) {
   }
   HudAction a;
   if (!hudf_take_action(&a)) return;
+  if(a.kind!=HUD_ACT_LIGHT)lamps_game_select(-1);
   switch (a.kind) {
+    case HUD_ACT_LIGHT:
+      G32(0x4c2854)=-1;G32(0x4c2848)=-1;G32(0x59e7b8)&=~2;
+      lamps_game_select(a.x);break;
+    case HUD_ACT_CLICK: lamps_game_select(-1);inject(a.x, a.y); break;
     case HUD_ACT_SPEED:
       if (a.x >= 1 && a.x <= 4) {
         char value[8];
@@ -1100,7 +1121,6 @@ static void run_actions(void) {
         bridge_set_game_speed(a.x);
       }
       break;
-    case HUD_ACT_CLICK: inject(a.x, a.y); break;
     case HUD_ACT_KEY: G32(0x822b9c) = a.key; break;
     case HUD_ACT_VKEY: G32(0x822b98) = a.key; break;
     case HUD_ACT_SHOW:
@@ -1150,6 +1170,7 @@ static void run_actions(void) {
       }
       break;
     case HUD_ACT_DESIGN:   // the strip's pick: what FUN_00434ac0's default case stores for the next map click
+      if(a.x==0&&G32(0x4c2854)==0) {path_styles_select(a.y);break;}
       if (a.x == G32(0x4c2854)) {
         G32(0x5a9f50) = G32(0x5a9f60) = G32(0x56a514) = a.y;
         fprintf(stderr, "hud: design tool %d design %d\n", a.x, a.y);

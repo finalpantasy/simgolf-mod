@@ -21,6 +21,12 @@ A=$STAGE/app
 cp $N/golf.exe $N/SDL2.dll $N/sgsetup.exe $N/sgupdate.exe $N/jgld-nops.json "$A/"
 cp "$N/golf.exe" "$A/Sim Golf Remastered.exe"
 cp -r "$N/fonts" "$A/"
+cp -r "$N/data/." "$A/data/"
+for family in portraits characters; do
+  [ -d "art_local/release-$family" ] || { echo "bundled $family assets missing"; exit 3; }
+  mkdir -p "$A/ui/$family"
+  cp -r "art_local/release-$family/." "$A/ui/$family/"
+done
 mkdir -p "$A/ui"
 # New terrain is an optional mod download, not part of every bug-fix update.
 for ui_entry in "$N/ui/"*; do
@@ -42,6 +48,8 @@ cp data/lighting-windows.csv data/weather-air.csv data/weather-atmosphere.csv da
 # Compatibility copies for the fixed data/tables whitelist in the 0.1.16 updater.
 mkdir -p "$A/data/tables/_release"
 cp data/living_club.json data/lighting-windows.csv data/weather-air.csv data/weather-atmosphere.csv data/weather-climate.csv data/weather-surfaces.csv "$A/data/tables/_release/"
+cp data/course-lights.csv "$A/data/tables/_release/"
+cp -r data/course-lamps "$A/data/tables/_release/"
 cp data/mods.ini "$A/mods.ini.default"   # never mods.ini: unzipping over an install would replace the player's (task-114i)
 cp tools/release/setup/golf.ini.template "$A/golf.ini.template"
 echo "SimGolf Remastered $VER (git $(git rev-parse --short HEAD))" > "$A/version.txt"

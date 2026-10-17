@@ -156,7 +156,11 @@ static void fill_shape(UiDraw *d, UiRect r, float rad, ColorFn fn, const void *c
     UiColor c = fn(ctx, in.x[i], in.y[i], in.nx[i], in.ny[i]);
     vert(d, in.x[i], in.y[i], c, u0 + (in.x[i] - r.x) * us, v0 + (in.y[i] - r.y) * vs);
     c.a = 0;
-    vert(d, out.x[i], out.y[i], c, u0 + (out.x[i] - r.x) * us, v0 + (out.y[i] - r.y) * vs);
+    float u = u0 + (out.x[i] - r.x) * us, v = v0 + (out.y[i] - r.y) * vs;
+    // The transparent AA fringe extends beyond the image. SDL rejects the
+    // entire textured draw if any fringe UV lies outside its normalized bounds.
+    if (tex) { u = fminf(1, fmaxf(0, u)); v = fminf(1, fmaxf(0, v)); }
+    vert(d, out.x[i], out.y[i], c, u, v);
   }
   for (int i = 0; i < n; i++) {
     int j = (i + 1) % n;

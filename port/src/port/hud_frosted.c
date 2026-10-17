@@ -4,6 +4,8 @@
 // published, routes the pointer (UI first, the rest to the game), and queues
 // what the player clicked for hud_game.c.
 #include "port/hud_frosted.h"
+#include "port/course_lamps_native.h"
+#include "port/path_style_catalog.h"
 #include "port/hud_tuck_policy.h"
 
 #include <SDL.h>
@@ -434,6 +436,21 @@ static void draw(const HdUiFrame *f, void *user) {
       if (hd) pictures[slot + i] = hd;
     }
   }
+  if(draw_snap->build_tool==0&&draw_snap->design_n>0) {
+    static SDL_Texture *path_pictures[PATH_STYLE_COUNT];
+    for(int i=0;i<draw_snap->design_n&&i<PATH_STYLE_COUNT;i++) {
+      if(!path_pictures[i]) {
+        char file[512];snprintf(file,sizeof file,"%s/ui/path-styles/previews/%d.png",host_exe_dir(),i);
+        int w=0,h=0;uint32_t *pixels=hd_art_load_png(file,&w,&h);
+        if(pixels) {
+          path_pictures[i]=SDL_CreateTexture(r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STATIC,w,h);
+          if(path_pictures[i])SDL_UpdateTexture(path_pictures[i],NULL,pixels,w*4);
+          free(pixels);
+        }
+      }
+      pictures[HUD_ART_PATH+i]=path_pictures[i];
+    }
+  }
   int n = ui_hud_draw(g_ui, draw_hud, draw_snap, pictures, acts, 16);
   ui_end(g_ui);
   // X and row actions close after drawing the panel. Keep later layers clear
@@ -475,6 +492,12 @@ static void draw(const HdUiFrame *f, void *user) {
 }
 
 // Game thread, before golf sees the event; mouse positions in canvas pixels.
+int hudf_blocks_course_point(int x, int y) {
+  if (!g_ui || !g_visible || SDL_AtomicGet(&g_mode) == HUD_MODE_OFF) return 0;
+  return ui_blocks_point(g_ui, g_view_x + (x + 0.5f) * g_view_px,
+                         g_view_y + (y + 0.5f) * g_view_px);
+}
+
 static int input(SDL_Event *e, int course, void *user) {
   (void)user, (void)course;
   int mode = SDL_AtomicGet(&g_mode);
@@ -507,6 +530,7 @@ static int input(SDL_Event *e, int course, void *user) {
       if (e->window.event == SDL_WINDOWEVENT_LEAVE || e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) ui_input_reset(g_ui);
       return 0;
     case SDL_KEYDOWN: {
+      if(g_visible && e->key.keysym.sym==SDLK_ESCAPE && lamps_game_event(e))return 1;
       if (e->key.keysym.sym == SDLK_ESCAPE && !opt_is_open() && gwf_escape(e->key.repeat)) return 1;
       if (e->key.keysym.sym == SDLK_ESCAPE) fprintf(stderr, "hud: esc key (visible %d, options %d, dialog %d)\n", g_visible, opt_is_open(), dlgf_active());
       if (e->key.keysym.sym == SDLK_ESCAPE && g_visible && !opt_is_open() && !dlgf_active()) {
@@ -544,6 +568,7 @@ static int input(SDL_Event *e, int course, void *user) {
     return 0;
   }
   int to = ui_route_event(g_ui, &u);
+  if((to & UI_ROUTE_GAME) && lamps_game_event(e))return 1;
   if (mode == HUD_MODE_FROSTED && u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
     lock();
     int placing = hudf_keep_tray_on_world_click(&g_snap);

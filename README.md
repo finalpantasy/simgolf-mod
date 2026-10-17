@@ -16,6 +16,19 @@ it on your PC and nothing from it ever leaves your computer.
 
 ![The showcase course in HD with the new HUD](screenshots/course-hd.jpg)
 
+## New in 0.1.18
+
+Choose from 18 cosmetic path materials, use the consolidated Course build menu,
+and optionally add six kinds of course lamps. The optional atmosphere gains
+clearer sunlight, water reflections and stable directional shadows while paused.
+Click-and-drag construction is available as an opt-in feature; normal placement
+and original per-tile prices remain available.
+
+Path materials are in the build menu. Enable lamps with `[course_lights] enabled=1`
+in `mods.ini`; enable optional dragging with `[ui] drag_placement=1`. The atmosphere
+controls described below remain optional. Rainbows and gameplay effects stay off
+by default. Existing settings, custom mods and saves are preserved by updates.
+
 ## New in 0.1.17
 
 ### A course that changes with the light and weather
@@ -77,7 +90,7 @@ long welcome messages, theme memory and the modern Routing Map.
 
 ![The new Parkland clubhouse and garden in the Windows game](screenshots/clubhouse-parkland.jpg)
 
-Download [0.1.17 for Windows](https://github.com/finalpantasy/simgolf-mod/releases/tag/v0.1.17)
+Download [0.1.18 for Windows](https://github.com/finalpantasy/simgolf-mod/releases/tag/v0.1.18)
 or use the in-game updater. The separate experimental Terrain Mod is optional
 and is not needed for the clubhouse, lighting, weather or new golfers.
 

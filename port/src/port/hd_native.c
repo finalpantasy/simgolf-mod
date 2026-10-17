@@ -81,6 +81,7 @@
 #include "mods/mods.h"
 #include "port/golf/hd_ui.h"
 #include "port/hd_art.h"
+#include "port/course_lamps_native.h"
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
 #include "port/ui/ui_course_map.h"
@@ -101,6 +102,7 @@
 #include "port/hd_zoom.h"
 #include "port/hdball_render.h"
 #include "port/water_native.h"
+#include "port/rainbow.h"
 #include "port/host.h"
 
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
@@ -163,6 +165,7 @@ static uint8_t g_frame_note2[HD_NOTE_MAX];   // task-53: the second note channel
 static int g_frame_note2_size;
 static uint8_t g_frame_note3[HD_NOTE3_MAX];   // task-115: the third note channel (shot aim arrows)
 static int g_frame_note3_size;
+static LampFrame g_frame_lamps;
 static uint8_t g_note3_pending[HD_NOTE3_MAX];
 static int g_note3_pending_size;
 static uint8_t g_note2_pending[HD_NOTE_MAX];
@@ -414,6 +417,8 @@ typedef struct {
   CourseRelief relief;
   uint8_t *weather_features;
   WeatherSurfaceState surface;
+  RainbowState rainbow;
+  RainbowDraw rainbow_draw;
   double surface_time;
   double surface_log_time;
   HANDLE timer;
@@ -428,6 +433,7 @@ typedef struct {
   int note2_size;
   uint8_t note3[HD_NOTE3_MAX];
   int note3_size;
+  LampFrame lamps;
   double off_x, off_y, off_t0, off_dur, prev_dx, prev_dy;
   double last_arrival, interval;   // course frames: arrival time, interval (running mean)
   // smooth zoom (task-56). zsnap: the course picture (terrain, sprites, ball; not golf's UI) as it
@@ -456,6 +462,20 @@ typedef struct {
   FILE *dump_f, *dump_csv;
   long dump_n;
 } Rt;
+static int weather_receiver(Rt *t);
+static double environment_time(const Rt *t,double now);
+
+static void draw_reflections(Rt *t,SDL_Rect clip,double x,double y,double k,double now){
+ if(!t->environment.enabled||t->environment.reflections<=0||!weather_receiver(t))return;
+ SDL_Rect old,combined;SDL_bool clipped=SDL_RenderIsClipEnabled(t->r);SDL_RenderGetClipRect(t->r,&old);
+ if(clipped){if(!SDL_IntersectRect(&old,&clip,&combined))return;clip=combined;}
+ SDL_RenderSetClipRect(t->r,&clip);
+ EnvironmentSample sun=environment_sample(&t->environment,environment_time(t,now));
+ double strength=t->environment.reflections*(.2+.8*sun.daylight)*(1-.45*sun.rain);
+ hd_art_reflections(t->r,t->weather_receiver,FRAME_W,FRAME_H,x,y,k,
+   t->environment_seconds,strength,t->environment.reflection_ripple);
+ SDL_RenderSetClipRect(t->r,clipped?&old:NULL);
+}
 
 enum { FILL_FRAME, FILL_OVERLAY, FILL_UI };
 
@@ -516,6 +536,7 @@ static void upload(Rt *t, double now) {
   if (t->note2_size > 0) memcpy(t->note2, g_frame_note2, (size_t)t->note2_size);
   t->note3_size = t->layered && t->course_view ? g_frame_note3_size : 0;
   if (t->note3_size > 0) memcpy(t->note3, g_frame_note3, (size_t)t->note3_size);
+  t->lamps=g_frame_lamps;
   memcpy(&t->ball, &g_frame_ball, sizeof t->ball);
   t->environment = g_frame_environment;
   t->environment_seconds = g_environment_seconds;
@@ -530,7 +551,7 @@ static void upload(Rt *t, double now) {
   int layered = t->layered && t->course_view;
   // Pause and modal redraws can briefly publish an unlayered frame. Moisture
   // belongs to the weather session and must survive those presentation changes.
-  if (!t->environment.enabled) { memset(&t->surface, 0, sizeof t->surface); t->surface_time = 0; }
+  if (!t->environment.enabled) { memset(&t->surface, 0, sizeof t->surface);memset(&t->rainbow,0,sizeof t->rainbow); t->surface_time = 0; }
   hdball_ingest(&t->ball, &t->cam, layered, now);   // task-41: the round ball's positions
   double cx, cy;
   slide_offset(t, now, &cx, &cy);
@@ -711,6 +732,7 @@ static void draw_live(Rt *t, SDL_Texture *target, Rect d, double s, double x, do
   }
   SDL_Rect shadow_clip = {d.x, d.y, d.w, d.h};
   draw_cast_shadows(t, shadow_clip, cd.x, cd.y, kk, terrain != NULL, now, snapshot);
+  if(!snapshot)draw_reflections(t,shadow_clip,cd.x,cd.y,kk,now);
   if (t->art_main >= 0) hd_art_draw(t->art_main, t->r, cd.x, cd.y, kk);
   if (terrain || t->art_main >= 0) draw_layer_ref(t, &t->overlay, target, cd, sw, sh, t->premul, d.w);
   if (t->course_view) {
@@ -765,7 +787,7 @@ static void glide_course(Rt *t, SDL_Texture *target, Rect d, int sw, int sh, SDL
   // A clean snapshot cannot cover the live cast pass. With dynamic shadows
   // the current scene alone follows the same glide transform.
   int back = t->zsnap_ok && t->zsnap && t->zsnap_zoom != t->cam.zoom &&
-             !(t->environment.enabled && t->environment.cast_shadows);
+             !(t->environment.enabled && (t->environment.cast_shadows||t->environment.reflections>0));
   double sb = 0, xb = 0, yb = 0;
   if (back) hdz_xform(&t->zg, t->zg.last_t, t->zsnap_zoom, t->zsnap_cx, t->zsnap_cy, &sb, &xb, &yb);
   SDL_Rect bd = {d.x + (int)lround(xb * k), d.y + (int)lround(yb * k), (int)lround(d.w * sb), (int)lround(d.h * sb)};
@@ -1115,6 +1137,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
   }
   SDL_Rect shadow_clip = {d.x, d.y, d.w, d.h};
   draw_cast_shadows(t, shadow_clip, cd.x, cd.y, k, terrain != NULL, now, 0);
+  draw_reflections(t,shadow_clip,cd.x,cd.y,k,now);
   if (art >= 0) hd_art_draw(art, t->r, cd.x, cd.y, k);   // hi-res sprites (hd_art.c), in golf's order
   if (terrain || art >= 0) draw_layer(t, &t->overlay, dest, cd, *sw, *sh, t->premul);
   if (sliding) SDL_RenderSetClipRect(t->r, NULL);
@@ -1151,6 +1174,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
                      seconds, view.x, view.y, view.scale);
     if (fx_ready) {
       WeatherState weather = sample_weather(&t->environment, 1, seconds, sun.hour);
+      weather.readability=t->environment.readability*sun.daylight;
         weather.cloud = sun.cloud;
       weather.material_wetness=t->environment.material_wetness;weather.valley_mist=t->environment.valley_mist;
       weather.light[0]=sun.sun_x;weather.light[1]=sun.sun_y;weather.light[2]=sun.sun_z;weather.light_strength=sun.sun_strength;
@@ -1175,6 +1199,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
         weather.rain, weather.cloud, weather.night, weather.wind, dt);
       else memset(&t->surface, 0, sizeof t->surface);
       weather.wetness = t->surface.wetness; weather.puddles = t->surface.puddles;
+      rainbow_update(&t->rainbow,weather.rain,weather.cloud,sun.daylight,dt,t->environment.cloud_seed);
       weather.evaporation = t->surface.evaporation;
       weather.impact_strength = t->environment.splashes ? tuning.splash_strength : 0;
       weather.flash_gain = tuning.flash_gain;
@@ -1201,6 +1226,13 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
       environment_fx_draw(&t->environment_fx, t->r, course, &receiver, &weather,
         view.x, view.y, view.scale, t->environment.quality, t->environment.glowbugs,
         t->environment.night_sky, t->environment.reduced_flashes, t->environment.shader);
+      if(t->environment.rainbows){
+        double amount=t->environment.rainbow_preview?sun.daylight:t->rainbow.intensity;
+        double sx=-(t->cam.ax*sun.sun_x+t->cam.bx*sun.sun_z);
+        double basis=hypot(t->cam.ax,t->cam.bx);
+        rainbow_draw(&t->rainbow_draw,t->r,course,t->weather_receiver,FRAME_W,FRAME_H,
+          receiver_x,receiver_y,receiver_scale,amount*t->environment.rainbow_strength,basis>0?sx/basis:0);
+      }
       if(t->profile)t->profile_fx=host_now_ms()-fx_started;
       if(getenv("SIMGOLF_WILDLIFE_LOG")){
         static double last; if(now-last>1000){last=now;fprintf(stderr,"weather: wildlife seconds %.3f night %.3f rain %.3f storm %.3f wind %.3f activity %.5f legacy %d\n",seconds,weather.night,weather.rain,weather.storm,weather.wind,weather_night_activity(&weather),weather.wildlife_legacy);}
@@ -1215,6 +1247,13 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     } else {
       environment_fx_destroy(&t->environment_fx);
     }
+  }
+  if(layered && t->course_view && weather_receiver(t)) {
+    double lamp_scale=glide?k*t->zs:k;
+    double lamp_x=glide?d.x+t->zx*k:cd.x, lamp_y=glide?d.y+t->zy*k:cd.y;
+    double night=t->environment.enabled?fmax(0,fmin(1,(.65-sun.daylight)/.65)):0;
+    night=night*night*(3-2*night);
+    lamps_render(t->r,&t->lamps,(SDL_Rect){d.x,d.y,d.w,d.h},t->weather_receiver,FRAME_W,FRAME_H,lamp_x,lamp_y,lamp_scale,night);
   }
   if (layered && (g_dump_on || t->dump_f)) dump_course(t, target, d, ox, oy, now);   // complete course, before UI
   if (layered && g_show_golf_ui) {
@@ -1485,7 +1524,7 @@ static DWORD WINAPI render_main(void *arg) {
     SDL_Texture *target = NULL;
     if (g_cfg.render_w || g_n_ui_layers) {   // task-26: native UI layers frost the picture, so it must be a texture
       if (!t->canvas || t->canvas_w != cw || t->canvas_h != ch) {
-        if (t->canvas) { environment_fx_destroy(&t->environment_fx); SDL_DestroyTexture(t->canvas); }
+        if (t->canvas) { environment_fx_destroy(&t->environment_fx);rainbow_destroy(&t->rainbow_draw); SDL_DestroyTexture(t->canvas); }
         t->canvas = SDL_CreateTexture(t->r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, cw, ch);
         t->canvas_w = cw;
         t->canvas_h = ch;
@@ -1795,6 +1834,12 @@ int hd_present(const uint16_t *screen) {
   environment.shadow_cache=mods_get_int("environment.shadow_cache",1)!=0;
   environment.lighting_hz=mods_get_num("environment.lighting_hz",15);
   environment.edge_aa=mods_get_num("environment.edge_aa",.65);
+  environment.readability=mods_get_num("environment.readability",.8);
+  environment.reflections=mods_get_num("environment.reflections",.44);
+  environment.reflection_ripple=mods_get_num("environment.reflection_ripple",.8);
+  environment.rainbows=mods_get_int("environment.rainbows",0)!=0;
+  environment.rainbow_strength=mods_get_num("environment.rainbow_strength",.075);
+  environment.rainbow_preview=mods_get_int("environment.rainbow_preview",0)!=0;
   environment.relief_shadows=mods_get_int("environment.relief_shadows",1)!=0;
   environment.weather_shadows=mods_get_int("environment.weather_shadows",1)!=0;
   environment.enclosure_shade=mods_get_num("environment.enclosure_shade",.55);
@@ -1835,8 +1880,9 @@ int hd_present(const uint16_t *screen) {
     if ((v = mods_get("display.zoom_ms")) && *v) set_key("zoom_ms", v);
   }
   if (!g_active) return 0;
-  if (HD_PRESENT_SHOULD_HOLD_COURSE(g_snap_fresh, g_frame_layered, g_frame_course,
-                                    hud_course_transition(), opt_is_open(), dlg_game_active(), rp_game_active(),
+  int hud_game_paused(void);
+  if (hd_present_hold_course(g_snap_fresh, g_frame_layered, g_frame_course,
+                                    hud_course_transition(), opt_is_open(), hud_game_paused(), dlg_game_active(), dlgf_active(), rp_game_active(),
                                     fef_cover_screen() >= 0, mods_get_int("fixes.hud_transitions", 1))) {
     // Original tray handlers and the paused Options page can present partial
     // back-buffer updates. Keep the complete course publication until redraw.
@@ -1973,6 +2019,8 @@ int hd_present(const uint16_t *screen) {
   if (g_frame_note3_size > 0) memcpy(g_frame_note3, g_note3_pending, (size_t)g_frame_note3_size);
   g_note3_pending_size = 0;
   if (course) memcpy(g_mask, mask, (size_t)FRAME_W * FRAME_H);
+  lamps_game_frame(&g_frame_lamps);
+  if(!layered||!course)g_frame_lamps.enabled=0;
   hd_art_publish(layered, screen);
   InterlockedIncrement(&g_frame_serial);
   LeaveCriticalSection(&g_lock);

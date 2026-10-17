@@ -30,6 +30,8 @@ typedef struct {
   double ambient_fill, surface_light, contact_shadow, shadow_softness, night_lights, light_radius;
   int relief_shadows,weather_shadows;
   double enclosure_shade,material_wetness,valley_mist;
+  double readability,reflections,reflection_ripple,rainbow_strength;
+  int rainbows,rainbow_preview;
 } EnvironmentConfig;
 
 typedef struct {

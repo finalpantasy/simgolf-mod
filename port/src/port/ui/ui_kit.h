@@ -42,6 +42,8 @@ void ui_tokens_load_all(UiTokens *t, const char *base_path, const char *const *o
 // Decides where an event goes (UI_ROUTE_GAME / UI / BOTH) and queues it for
 // the UI when the UI gets it. Pointer coordinates in target pixels.
 int ui_route_event(UiCtx *c, const UiEvent *e);
+// Read the last finished frame's blocking regions without queuing input.
+int ui_blocks_point(UiCtx *c, float x, float y);
 // The pointer left the window or the layer is hidden: drop hover.
 void ui_input_reset(UiCtx *c);
 
@@ -103,7 +105,7 @@ enum { UI_PANEL_STRONG = 1, UI_PANEL_NOBLOCK = 2, UI_PANEL_NOSHADOW = 4, UI_PANE
 void ui_panel(UiCtx *c, UiRect r, float radius, int flags);
 
 enum { UI_BTN_PRIMARY, UI_BTN_PILL, UI_BTN_GHOST };
-enum { UI_DISABLED = 1, UI_SELECTED = 2, UI_COMPACT = 4, UI_ROUND = 8 };
+enum { UI_DISABLED = 1, UI_SELECTED = 2, UI_COMPACT = 4, UI_ROUND = 8, UI_TILE_COVER = 16 };
 int ui_button(UiCtx *c, uint32_t id, UiRect r, const char *label, UiIcon icon, int kind, int flags);
 int ui_icon_button(UiCtx *c, uint32_t id, UiRect r, UiIcon icon, int flags, const char *tooltip);
 // Segmented control (tabs): n segments, *sel changes on a click; returns 1 then.
@@ -120,6 +122,7 @@ int ui_tile(UiCtx *c, uint32_t id, UiRect r, SDL_Texture *art, UiIcon icon, cons
             const char *tooltip);
 float ui_tile_height(const UiCtx *c);
 // The same tool as art only (the compact strip): name and price go in the tooltip.
+// UI_TILE_COVER fills the mini tile with cropped art inside its rounded border.
 int ui_tile_mini(UiCtx *c, uint32_t id, UiRect r, SDL_Texture *art, UiIcon icon, int flags, const char *tooltip);
 int ui_tile_mini_label(UiCtx *c, uint32_t id, UiRect r, UiIcon icon, const char *label, int flags, const char *tooltip);
 // The same tool as one row of a list: art at the left, name, price at the right.

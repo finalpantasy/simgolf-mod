@@ -19,6 +19,10 @@
 #include "platform/terrain_gl.h"
 #include "platform/terrain_lighting.h"
 #include "platform/terrain_port.h"
+#include "port/path_style_catalog.h"
+#ifndef __EMSCRIPTEN__
+#include "port/path_styles.h"
+#endif
 
 namespace {
 
@@ -35,6 +39,8 @@ float g_rot;
 std::vector<tgl::RecordedVertex> g_verts;
 std::vector<Batch> g_batches;
 std::vector<const tgl::Texture *> g_batchTex;
+std::vector<int> g_batchPathStyle;
+int g_path_material = -1;
 std::vector<float> g_world;   // task-78: x, y, z per vertex, before the modelview
 std::vector<float> g_normals;
 TerrainLightingModel g_light_model;
@@ -89,9 +95,11 @@ void record(void *, const tgl::RecordedVertex v[3], const tgl::Texture *tex, boo
   int flags = (blend ? kBlend : 0) | (tex ? kTextured | (tex->hasAlpha ? kTexAlpha : 0) : 0) | (isWater(tex) ? kWater : 0);
   if (g_verts.empty()) noteView();
   int serial = tex ? (int)tex->serial : 0;
+  serial = serial * PATH_STYLE_SERIAL_STRIDE + (g_path_material > 0 ? g_path_material : 0);
   if (g_batches.empty() || g_batches.back().serial != serial || g_batches.back().flags != flags) {
     g_batches.push_back({(int32_t)g_verts.size(), 0, (int32_t)g_batchTex.size(), serial, flags});
     g_batchTex.push_back(tex);
+    g_batchPathStyle.push_back(g_path_material);
   }
   g_verts.insert(g_verts.end(), v, v + 3);
   g_world.insert(g_world.end(), world, world + 9);
@@ -102,6 +110,15 @@ void record(void *, const tgl::RecordedVertex v[3], const tgl::Texture *tex, boo
 }  // namespace
 
 extern "C" {
+
+void terrain_hd_path_tile(int x,int y) {
+#ifndef __EMSCRIPTEN__
+  g_path_material=x<0?-1:path_styles_at(x,y);
+#else
+  g_path_material=-1;
+#endif
+}
+int terrain_hd_texture_path_style(int i) { return g_batchPathStyle[i]; }
 
 // Called by terrain_bridge.cpp for every call that draws terrain.
 void terrain_hd_note(void *centre, float rot) {
@@ -132,6 +149,7 @@ int terrain_hd_build(void) {
   g_normals.clear();
   g_batches.clear();
   g_batchTex.clear();
+  g_batchPathStyle.clear();
   tgl::Context &gl = terrain_gl();
   gl.record_pad_x = g_scroll_padding ? gl.targetWidth() : 0;
   gl.record_pad_y = g_scroll_padding ? gl.targetHeight() : 0;

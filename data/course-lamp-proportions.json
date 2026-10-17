@@ -1,0 +1,49 @@
+{
+  "source": "Frozen camera reference and shorter posts from V4; V5 traditional head scale 0.8",
+  "styles": {
+    "traditional": {
+      "ratio": 0.8,
+      "previous_height": 40,
+      "height": 32.0,
+      "shaft_bottom": 0.82,
+      "shaft_top": 2.92,
+      "reference_views": {
+        "0": {
+          "visible_height": 589.2773094177246
+        },
+        "1": {
+          "visible_height": 589.6354713439941
+        },
+        "2": {
+          "visible_height": 589.6357917785645
+        },
+        "3": {
+          "visible_height": 589.2776184082031
+        }
+      },
+      "head_scale": 0.8,
+      "head_mount_z": 3.08
+    },
+    "modern": {
+      "ratio": 0.75,
+      "previous_height": 44,
+      "height": 33.0,
+      "shaft_bottom": 0.82,
+      "shaft_top": 3.79,
+      "reference_views": {
+        "0": {
+          "visible_height": 556.2773094177246
+        },
+        "1": {
+          "visible_height": 639.6354713439941
+        },
+        "2": {
+          "visible_height": 639.6357917785645
+        },
+        "3": {
+          "visible_height": 556.2776184082031
+        }
+      }
+    }
+  }
+}

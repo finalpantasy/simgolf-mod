@@ -623,8 +623,10 @@ void quad(const tgl::Vertex &a, const tgl::Vertex &b, const tgl::Vertex &c, cons
 
 // FUN_100108f0: alpha-blended path strips from the centre toward each
 // neighbour that also has a path, then the corner pieces.
+extern "C" void terrain_hd_path_tile(int x,int y);
 void drawPath(Tile *t) {
   if (!t->drawPathOverlay) return;
+  terrain_hd_path_tile(t->x,t->y);
   const float w = 16.67f, lo = 0.333f, hi = 0.667f;  // 0x3eaa7efa, 0x3f2ac083
   bool p0 = t->nbr[0] && t->nbr[0]->hasPath, p2 = t->nbr[2] && t->nbr[2]->hasPath;
   bool p3 = t->nbr[3] && t->nbr[3]->hasPath, p1 = t->nbr[1] && t->nbr[1]->hasPath;
@@ -665,6 +667,7 @@ void drawPath(Tile *t) {
          vertex(c[0], c[1], c[2] + w, cn, lo, lo));
   }
   drawPathCorners(t, mask, set);
+  terrain_hd_path_tile(-1,-1);
   g_gl.blend = false;
 }
 

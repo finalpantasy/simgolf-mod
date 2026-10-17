@@ -14,6 +14,7 @@
 void hd_art_set_key(const char *key, const char *value);
 // Game thread, from hd_native_prepare (images loaded, before any drawing).
 void hd_art_init(int presenter_on);
+int hd_art_lamp_occluded(int x,int y,float ground_y);
 int hd_art_active(void);   // any category not original
 // Game thread: current people-art source for the separate native portrait.
 int hd_art_portrait_source(char *dir, int cap);
@@ -73,6 +74,8 @@ void hd_art_lamps(SDL_Renderer *r,SDL_Rect clip,const uint8_t *receiver,int w,in
 void hd_art_wind(int enabled,double seconds,double wind_x);
 // Draws a list: canvas px -> target via (ox, oy) + px * k.
 void hd_art_draw(int which, SDL_Renderer *r, double ox, double oy, double k);
+int hd_art_reflections(SDL_Renderer *r,const uint8_t *receiver,int width,int height,
+ double ox,double oy,double scale,double seconds,double strength,double ripple);
 // Course-only ground pass, immediately before hd_art_draw. The terrain mask
 // uses canvas coordinates. Slopes are screen-ground displacement per pixel
 // of displayed sprite height, after applying the camera's sun projection.
@@ -85,12 +88,14 @@ int hd_art_draw_shadows(SDL_Renderer *r, SDL_Rect clip, double ox, double oy, do
 // (rgba w x h, rows as the terrain renderer keeps them) in the terrain look:
 // a malloc'd 4x replacement (*ow x *oh), or NULL to keep the original.
 uint8_t *hd_art_terrain(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh);
+uint8_t *hd_art_terrain_style(const char *src, const uint8_t *rgba, int w, int h, int *ow, int *oh, int path_style);
 typedef struct HdTerrainJob {
   const char *src;
   const uint8_t *rgba;
   int w, h;
   uint8_t *up;
   int uw, uh;
+  int path_style;
 } HdTerrainJob;
 // Native new-course preparation. Inputs stay immutable until all jobs join.
 void hd_art_terrain_jobs(HdTerrainJob *jobs, int count);

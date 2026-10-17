@@ -11,7 +11,7 @@
 #include "port/ui/ui_kit.h"
 
 typedef struct {
-  int course_tab;     // 0 Holes, 1 Fairway, 2 Hazards, 3 Trees (4 Extras follows amenities_on)
+  int course_tab;     // 0 Terrain, 1 Trees, 2 Extras (follows amenities_on), 3 Lights
   int density;        // ui.hud_density: 0 regular, 1 compact (one bottom strip), 2 minimal,
                       // 3 compact_column (the strip's dock, the tray as a column on the right edge)
   int tray_hidden;    // compact and minimal: the tray tucked away after a click on the course or Esc

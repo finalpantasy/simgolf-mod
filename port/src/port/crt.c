@@ -1,3 +1,4 @@
+#include "port/course_lamps.h"
 // Native replacements for the MSVC 6 CRT functions golf.exe calls (see
 // native.h). stdio keeps MSVC's FILE layout because the game's inlined getc,
 // putc and feof macros read the struct directly: _cnt stays 0 so every inline
@@ -21,6 +22,9 @@
 #include "port/native.h"
 #include "port/runtime.h"
 #include "port/camera_tiles.h"
+#ifndef __EMSCRIPTEN__
+#include "port/path_styles.h"
+#endif
 
 #define P(x) ((void *)(uintptr_t)(x))
 #define S(x) ((char *)(uintptr_t)(x))
@@ -283,11 +287,19 @@ int crt_close(nu fd) {
   }
   if (fd < 256 && g_fd_written[fd]) {
     if (!r && !camera_tiles_written((int)fd, g_fd_written[fd])) r = -1;
+    if (!r && !lamps_game_written((int)fd, g_fd_written[fd])) r = -1;
+#ifndef __EMSCRIPTEN__
+    if (!r && !path_styles_written((int)fd, g_fd_written[fd])) r = -1;
+#endif
     if (!r) fs_written(g_fd_written[fd]);
     free(g_fd_written[fd]);
     g_fd_written[fd] = NULL;
   }
   camera_tiles_closed((int)fd);
+  lamps_game_closed((int)fd);
+#ifndef __EMSCRIPTEN__
+  path_styles_closed((int)fd);
+#endif
   if (fd < 256) { free(g_fd_path[fd]); g_fd_path[fd] = NULL; }
   return r;
 }

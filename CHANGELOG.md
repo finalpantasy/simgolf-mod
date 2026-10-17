@@ -1,4 +1,18 @@
-# SimGolf Remastered for Windows 0.1.17
+# SimGolf Remastered for Windows 0.1.18
+
+## 0.1.18 - 2026-10-17
+
+New course-building choices, optional lamps, and refined sunlight and reflections.
+
+- Choose from 18 cosmetic path materials in a compact picture picker. Materials survive saving and loading; the original look remains available.
+- The Course build menu groups the terrain tools together, with Trees, Extras and optional Lights kept accessible.
+- Added six optional course-light designs with day/night artwork and saved placement. They are off by default.
+- Refined optional sunlight clarity, water reflections and directional shadows, including stable lighting while paused. Rainbows remain off by default.
+- Optional click-and-drag placement keeps the original per-tile prices and rules. Individual placement remains the default.
+- Preserves the 0.1.17 golfer roster, Living Club, clubhouse, save-name, construction, pro-shot and updater fixes.
+- Keeps original visitor skill progression, mood reactions and weather gameplay effects as the default. Optional appearance and gameplay switches remain independent.
+- Includes compatibility delivery of lamp assets and data for existing updater versions.
+
 
 ## 0.1.17 - 2026-10-16
 

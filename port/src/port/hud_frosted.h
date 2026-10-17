@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define HUD_ART_MAX 96
+#define HUD_ART_MAX 128
 
 // Bottom of the original top-right money, fun, and skill plates in game-canvas pixels.
 #define HUD_ORIGINAL_STATS_BOTTOM 142
@@ -38,7 +38,9 @@ enum {   // art slots (game sprites read back with alpha)
   HUD_ART_LANDMARK = 44,    // 16
   HUD_ART_FLOWER = 60,      // 15
   HUD_ART_TREE = 75,        // 7
+  HUD_ART_LIGHT = 90,       // six locally authored optional light designs
   HUD_ART_BRIDGE = 82,      // 8, up to 89
+  HUD_ART_PATH = 96,        // after six lights; up to 32 stable material IDs
 };
 
 // One game message (task-62): what the game's news strip said, kept for the HUD's history.
@@ -64,6 +66,10 @@ typedef struct HudSnap {
   int canvas_w, canvas_h;
   int visible;            // course view running, no dialog or info screen over it
   int capsule_visible;    // no golfer card / hole stats at the top
+  int lights_enabled, lights_selected;
+  char light_names[6][32];
+  int light_cost[6];
+  float light_radius[6];
   int money;              // dollars
   int sandbox, cheat;
   int fun, skill_x100, golfers, waiting;
@@ -132,7 +138,8 @@ enum { HUD_ACT_CLICK = 1, HUD_ACT_KEY = 2, HUD_ACT_VKEY = 3, HUD_ACT_GOAL = 4,
        HUD_ACT_DESIGN = 7,   // task-96: x = amenity build tool (1 bench, 2 flower, 4 landmark, 16 tree, 19 bridge), y = design
        HUD_ACT_STAFF = 8,   // task-94: x = HUD_STAFF_*, y = employee record (SELECT)
        HUD_ACT_PATH_VIEW = 9, // render-side cart path view toggle
-       HUD_ACT_SPEED = 10 }; // x = player multiplier (1 through 4)
+       HUD_ACT_SPEED = 10,
+       HUD_ACT_LIGHT = 11 }; // x = player multiplier (1 through 4)
 enum { HUD_STAFF_SELECT = 1, HUD_STAFF_FIRE = 2, HUD_STAFF_MOVE = 3, HUD_STAFF_RENAME = 4, HUD_STAFF_SCROLL = 5 };
 enum { HUD_PRO_SKILLS = 1,   // the skill dialog: the first setup (10 points, 3 more per accomplishment) or the skills with OK
        HUD_PRO_PROFILE = 2,  // the pro's profile page (name, look, bio)
@@ -151,6 +158,7 @@ typedef struct {
 
 // render side (hud_frosted.c), called from the game thread
 int hudf_history_visible(void);               // drawn history panel; does not change the HUD
+int hudf_blocks_course_point(int x, int y);    // canvas point covered by the last drawn HUD; no input side effects
 int hudf_enabled(void);                       // ui.hud=frosted_mint and the native layer is up
 void hudf_early(void);                        // register before the first course frame
 int hudf_original_rotate_enabled(void);       // ui.hud=original and its optional Rotate pill is enabled

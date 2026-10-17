@@ -14,8 +14,9 @@ static double smooth(double x) { return x * x * (3 - 2 * x); }
 static double mix(double a, double b, double t) { return a + (b - a) * t; }
 
 EnvironmentConfig environment_defaults(void) {
-  EnvironmentConfig c = {0, 0, 0, 14, 30, 0.65, 0.65, 1, 1, 1, 1, 1,
-                         1, 1, 1, 1, 1, 1, 1, 0.5};
+  EnvironmentConfig c = {.hour=14,.cycle_minutes=30,.cloud_strength=.65,.rain_strength=.65,
+    .lighting=1,.cast_shadows=1,.terrain_shadows=1,.occlusion=1,.quality=1,.shader=1,
+    .glowbugs=1,.night_sky=1,.lightning=1,.reduced_flashes=1,.sound=1,.gameplay=0,.weather_volume=.5};
   c.black_background = 1;
   c.mist=c.haze=c.gusts=c.golden_hour=c.distant_thunder=1;
   c.celsius=18;c.humidity=65;c.atmosphere=atmosphere_defaults();
@@ -27,6 +28,7 @@ EnvironmentConfig environment_defaults(void) {
   c.lighting_hz=15;
   c.ambient_fill=.7;c.surface_light=.65;c.contact_shadow=.6;c.shadow_softness=1.8;c.night_lights=0;c.light_radius=22;
   c.day_minutes=20; c.night_minutes=10; c.moon_strength=.18;
+  c.readability=.8;c.reflections=.44;c.reflection_ripple=.8;c.rainbows=0;c.rainbow_strength=.075;
   return c;
 }
 
@@ -44,7 +46,7 @@ double environment_light_seconds(const EnvironmentConfig *c,double seconds){
 }
 
 EnvironmentSample environment_sample(const EnvironmentConfig *c, double seconds) {
-  EnvironmentSample s = {14, 0, 0, 255, 255, 255};
+  EnvironmentSample s = {.hour=14,.red=255,.green=255,.blue=255};
   if (!c || !c->enabled) return s;
   seconds = bound(seconds, 0, 1e12, 0);
   s.hour = c->day_night ? environment_cycle_hour(c,seconds) :
@@ -52,6 +54,10 @@ EnvironmentSample environment_sample(const EnvironmentConfig *c, double seconds)
   // Readable moonlit minimum, warm low sun, neutral midday. Smooth at midnight.
   double sun = sin((s.hour - 6) * 6.283185307179586 / 24);
   double day = smooth(bound((sun + 0.15) / 0.8, 0, 1, 1));
+  // Preserve late-afternoon exposure while the key light becomes warmer.
+  // This reaches zero at sunset and leaves the moonlit night unchanged.
+  double sunlight=smooth(bound(sun/.30,0,1,0))*bound(c->readability,0,1,0);
+  day=mix(day,fmax(day,.90),sunlight);
   s.daylight=day;
   double twilight = (1 - fabs(2 * day - 1)) * (s.hour < 12 ? 0.7 : 1);
   double cloud = c->weather == 1 ? 0.8 : c->weather >= 2 ? 1 : 0.2;
@@ -68,8 +74,9 @@ EnvironmentSample environment_sample(const EnvironmentConfig *c, double seconds)
   s.blue = (Uint8)lround(255 * (mix(0.69, 1, day) - 0.24 * twilight));
 
   double seasonal=c->season==1?.012:c->season==2?-.008:0;
-  s.green=(Uint8)lround(bound(s.green*(1-warmth*.28+seasonal*.3),0,255,255));
-  s.blue=(Uint8)lround(bound(s.blue*(1-warmth*.55-seasonal),0,255,255));
+  double readable=bound(c->readability,0,1,0)*day;
+  s.green=(Uint8)lround(bound(s.green*(1-warmth*mix(.28,.07,readable)+seasonal*.3),0,255,255));
+  s.blue=(Uint8)lround(bound(s.blue*(1-warmth*mix(.55,.20,readable)-seasonal),0,255,255));
   double angle = (s.hour - 6) * 6.283185307179586 / 24;
   // The full moon travels opposite the sun. Its directional light reveals
   // terrain form and faint tree contours rather than a flat blue night tint.

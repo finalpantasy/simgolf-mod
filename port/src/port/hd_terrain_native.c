@@ -37,6 +37,7 @@ extern int terrain_hd_build(void);
 extern void terrain_hd_scroll_padding(int on);
 extern const float *terrain_hd_vertices(void);
 extern int terrain_hd_batch_count(void);
+extern int terrain_hd_texture_path_style(int i);
 extern const int32_t *terrain_hd_batches(void);
 extern const uint8_t *terrain_hd_texture(int i, int32_t *out);
 extern void terrain_hd_target(int32_t *out);
@@ -168,6 +169,7 @@ static NewTex *prepare_course_textures(int nb, const int32_t *b, int *count) {
     HdTerrainJob *j = jobs + n;
     j->rgba = terrain_hd_texture(b[i * 5 + 2], size);
     j->src = terrain_hd_texture_src(b[i * 5 + 2]);
+    j->path_style = terrain_hd_texture_path_style(b[i * 5 + 2]);
     j->w = size[0]; j->h = size[1];
     ready[n].serial = (uint32_t)b[i * 5 + 3];
     ready[n].water = (b[i * 5 + 4] & kWater) != 0;
@@ -271,7 +273,7 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
     n->water = (b[i * 5 + 4] & kWater) != 0;
     // the art pack's terrain look (hd_art.c, task-17): the 4x upscale of the same file
     int uw = 0, uh = 0;
-    uint8_t *up = hd_art_terrain(terrain_hd_texture_src(b[i * 5 + 2]), rgba, size[0], size[1], &uw, &uh);
+    uint8_t *up = hd_art_terrain_style(terrain_hd_texture_src(b[i * 5 + 2]), rgba, size[0], size[1], &uw, &uh,terrain_hd_texture_path_style(b[i*5+2]));
     if (up) {
       n->w = uw;
       n->h = uh;

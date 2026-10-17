@@ -357,12 +357,22 @@ static void pump_sdl(void) {
   ) {
 #ifndef __EMSCRIPTEN__
     if (dbg_overlay_event(&e)) continue;    // the debug overlay's hotkey (task-113)
+    extern int place_drag_event(SDL_Event *, int);
+    if (place_drag_event(&e, 0)) {
+      // The native UI saw the course press. Finish its button ownership even
+      // when placement consumes the release, so the next UI click is fresh.
+      if (e.type == SDL_MOUSEBUTTONUP) (void)hd_ui_event(&e);
+      continue;
+    }
     if (hd_ui_event(&e)) continue;          // native UI layers first (hd_native.c, task-3)
 #endif
 #ifndef __EMSCRIPTEN__
     if (keymap_event(&e)) continue;         // rebound keys become what the game reads (card task-24)
 #endif
     if (camera_input_event(&e)) continue;   // drag to pan, W/A/S/D, wheel zoom
+#ifndef __EMSCRIPTEN__
+    if (place_drag_event(&e, 1)) continue;
+#endif
     switch (e.type) {
       case SDL_MOUSEMOTION:
         g_mouse_x = e.motion.x;
