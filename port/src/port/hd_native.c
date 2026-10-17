@@ -36,6 +36,7 @@
 //                 big screens show more of the course (title and menus stay
 //                 800x600, pillarboxed); canvas=WxH fixes it (ui_scale then
 //                 only follows from it), canvas=800x600 is the original framing
+//                 Sizes above 4096 in either dimension fall back to auto.
 //   ui_scale=auto screen pixels per game pixel, for the course and golf's UI
 //                 alike: auto = the screen height / 720 rounded down to a
 //                 quarter, at least 1 (1080p 1.5, 1440p 2, 4K 3, 1600x900
@@ -265,7 +266,11 @@ static void set_key(const char *k, const char *v) {
   } else if (!_stricmp(k, "vsync")) g_cfg.vsync = atoi(v) != 0;
   else if (!_stricmp(k, "fps")) g_cfg.fps = atoi(v) < 0 ? 0 : atoi(v);
   else if (!_stricmp(k, "canvas")) {
-    if (!parse_size(v, &g_cfg.canvas_w, &g_cfg.canvas_h)) g_cfg.canvas_w = g_cfg.canvas_h = 0;   // auto
+    // The game's DIBs reject dimensions above 4096. Window and render sizes
+    // use a different limit, so validate only the game canvas here.
+    if (!parse_size(v, &g_cfg.canvas_w, &g_cfg.canvas_h) ||
+        g_cfg.canvas_w > 4096 || g_cfg.canvas_h > 4096)
+      g_cfg.canvas_w = g_cfg.canvas_h = 0;   // auto
   }
   else if (!_stricmp(k, "terrain")) g_cfg.terrain = atoi(v) != 0;
   else if (!_stricmp(k, "ui_scale")) {
