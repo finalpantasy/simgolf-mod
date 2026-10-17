@@ -7,103 +7,18 @@ It runs your own copy of the game as a modern program: sharp at 1080p, 1440p
 and 4K, widescreen, smooth scrolling and zoom, a cleaner look for the menus and
 course HUD, an Options page, and a way to change the game with mods.
 
-Now with **45 additional golfer identities and portraits**, Living Club personalities,
+Includes **45 additional golfer identities and portraits**, Living Club personalities,
 an optional **day/night lighting and regional weather system**, and the new Parkland clubhouse.
 
 This download contains **no game files**. You bring your own copy of the game
 (an installed game folder or disc image, and the version 1.02 no-CD `golf.exe`); the installer prepares
 it on your PC and nothing from it ever leaves your computer.
 
-![The showcase course in HD with the new HUD](screenshots/course-hd.jpg)
+![Classic construction controls with modern top stats in the Windows game](screenshots/classic-construction.jpg)
 
-## New in 0.1.18
+[Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Choose from 18 cosmetic path materials, use the consolidated Course build menu,
-and optionally add six kinds of course lamps. The optional atmosphere gains
-clearer sunlight, water reflections and stable directional shadows while paused.
-Click-and-drag construction is available as an opt-in feature; normal placement
-and original per-tile prices remain available.
-
-Path materials are in the build menu. Enable lamps with `[course_lights] enabled=1`
-in `mods.ini`; enable optional dragging with `[ui] drag_placement=1`. The atmosphere
-controls described below remain optional. Rainbows and gameplay effects stay off
-by default. Existing settings, custom mods and saves are preserved by updates.
-
-## New in 0.1.17
-
-### A course that changes with the light and weather
-
-Enable the optional atmosphere mod for warm dawns and golden afternoons, moonlit
-nights, moving cloud shade, rain, wet ground and storms with thunder. Regional
-weather follows the course's location and season. Lighting adds terrain shading
-and soft directional shadows while keeping the original course and artwork recognizable.
-
-| Daylight | Golden hour |
-|---|---|
-| ![Daylight on the showcase course with optional lighting enabled](screenshots/lighting-day.jpg) | ![Warm golden-hour lighting on the same course](screenshots/lighting-golden.jpg) |
-| **Moonlight** | **Rain and cloud cover** |
-| ![Moonlit course with the optional lighting mod](screenshots/lighting-night.jpg) | ![Rain and cloud shade over the same course](screenshots/weather-rain.jpg) |
-
-These are real screenshots from the Windows 0.1.17 build with the atmosphere mod
-enabled. The hour and weather were selected for the pictures; the default game
-keeps the original lighting. The separate experimental Terrain Mod is not installed
-in these pictures.
-
-To try the moving day/night cycle and regional weather, add or update these
-values in the existing `[environment]` section of `mods.ini`:
-
-```ini
-[environment]
-enabled=1
-day_night=1
-regional_weather=1
-gameplay=0
-```
-
-Set `enabled=0` to return to the original presentation. Weather effects on ball
-rolls and arriving golfers' mood are a separate, **off-by-default** gameplay mod.
-Thunder and rain have their own volume setting; lightning can be disabled.
-See the [independent mod switches](docs/modding/CORE.md#optional-additions-in-0117).
-
-### 45 more faces at the club
-
-Meet **25 new ordinary visitors, 10 touring pros and 10 fictional celebrities**,
-with authored names, portraits and character details. The original cast remains
-available. Living Club adds 25 personalities, contextual dialogue, memories and
-persistent stories, with extra mood reactions available separately.
-
-| Ada Fairway | Calder Stone |
-|---|---|
-| ![Ada Fairway's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-ada.jpg) | ![Calder Stone's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-calder.jpg) |
-
-New ordinary visitors follow **original skill progression by default**. Authored
-arrival skill mixes and extra mood reactions are opt-in. Original energy, mood
-and weed balance is preserved. The roster, stories and reactions each have
-[independent switches](docs/modding/CORE.md#optional-additions-in-0117).
-
-### A new clubhouse and a batch of fixes
-
-The new Parkland clubhouse includes all four views, animated flags and
-birdbath water. Original textures retain the original building. The update also
-repairs construction animation, pro shot controls, Save editing and cancellation,
-long welcome messages, theme memory and the modern Routing Map.
-
-![The new Parkland clubhouse and garden in the Windows game](screenshots/clubhouse-parkland.jpg)
-
-Download [0.1.18 for Windows](https://github.com/finalpantasy/simgolf-mod/releases/tag/v0.1.18)
-or use the in-game updater. The separate experimental Terrain Mod is optional
-and is not needed for the clubhouse, lighting, weather or new golfers.
-
-## More screenshots
-
-| | |
-|---|---|
-| ![Start menu](screenshots/start-menu.jpg) | ![Golfer card](screenshots/golfer-card.jpg) |
-| ![Course report](screenshots/reports.jpg) | ![Options page](screenshots/options.jpg) |
-| ![Create your pro](screenshots/create-pro.jpg) | ![Skill points](screenshots/skill-points.jpg) |
-| ![Golfer list in the People tab](screenshots/golfer-list.jpg) | ![Accomplishment page](screenshots/trophy.jpg) |
-
-## What's improved over vanilla SimGolf
+## New features and improvements over vanilla
 
 ### Bigger courses and more staff
 
@@ -114,6 +29,7 @@ and is not needed for the clubhouse, lighting, weather or new golfers.
 
 - **1080p, 1440p, 4K and ultrawide (21:9)** support, with windowed or borderless full-screen play.
 - **Optional HD art:** the game's original artwork upscaled 4x, including golfers, buildings, trees, terrain, animals and effects. Setup can download the separate pack, about 2.6 GB. Choose **HD**, **Pixel HD** or **Original** textures.
+- **Sharp legacy text:** original and modern font choices are rendered at display resolution, including classic construction labels and the original HUD.
 - **Frosted Mint interface:** redesigned menus, loading screens, course controls, dialogs, golfer cards and reports, with readable modern text.
 - **Frame rate choices:** 60, 120, 144, 240 or uncapped, plus v-sync.
 - **A shaded HD golf ball** with golfer-specific colours and a fading flight trail. Ball size, colours and trail are adjustable.
@@ -128,10 +44,14 @@ and is not needed for the clubhouse, lighting, weather or new golfers.
 
 - **Smooth camera movement** with mouse-wheel zoom toward the pointer, WASD panning and middle-mouse dragging.
 - **Adjustable game speed**, mouse settings and key bindings, with Original and Modern control presets.
-- **A clear course view:** hide the HUD with U, show golfer names with Shift+N, or hide trees and scenic palms with Shift+T.
+- **A clear course view:** adjustable golfer names, optional HUD hiding and the ability to hide terrain trees and scenic palms. Original controls remain available.
 
 ### Easier course building
 
+- **Classic construction controls:** the original wheel and Course/Buildings trays with modern top stats. Original panel artwork uses the optional HD art pack; the modern combined Course palette remains a live Options choice.
+- **18 cosmetic path materials** in the modern picture picker, preserved with saved courses.
+- **Six optional course-light designs** with saved placement and day/night artwork. Enable the lamps separately and use the modern palette to select them.
+- **Optional click-and-drag construction:** terrain rectangles and L-shaped paths keep the original per-tile prices and placement rules. Single placement remains the default.
 - **Picture-based design choices** for benches, flower beds, landmarks, scenic trees and bridges.
 - **Rotate controls** for greens and the clubhouse, plus camera-aligned placement outlines and lighter path shading.
 - **Repeated placement** for landmarks and scenic bridges, with an option to return to single placement.
@@ -149,6 +69,68 @@ and is not needed for the clubhouse, lighting, weather or new golfers.
 - **Tabbed reports** for course information, comments, histograph, SGA, finances, roster, best scores and hole stats.
 - **A redesigned year-end summary** with a clear Continue button.
 
+### Optional lighting and regional weather
+
+Enable the optional atmosphere mod for warm dawns and golden afternoons, moonlit
+nights, moving cloud shade, rain, wet ground and storms with thunder. Regional
+weather follows the course's location and season. Lighting adds terrain shading, water reflections
+and soft directional shadows while keeping the original course and artwork recognizable.
+
+| Daylight | Golden hour |
+|---|---|
+| ![Daylight on the showcase course with optional lighting enabled](screenshots/lighting-day.jpg) | ![Warm golden-hour lighting on the same course](screenshots/lighting-golden.jpg) |
+| **Moonlight** | **Rain and cloud cover** |
+| ![Moonlit course with the optional lighting mod](screenshots/lighting-night.jpg) | ![Rain and cloud shade over the same course](screenshots/weather-rain.jpg) |
+
+These are actual Windows screenshots with the optional atmosphere enabled. The hour and weather were selected for the pictures; original lighting remains the default. The separate experimental Terrain Mod is not installed.
+
+To try the moving day/night cycle and regional weather, add or update these
+values in the existing `[environment]` section of `mods.ini`:
+
+```ini
+[environment]
+enabled=1
+day_night=1
+regional_weather=1
+gameplay=0
+```
+
+Set `enabled=0` to return to the original presentation. Weather effects on ball
+rolls and arriving golfers' mood are a separate, **off-by-default** gameplay mod.
+Thunder and rain have their own volume setting; lightning can be disabled.
+See the [independent mod switches](docs/modding/CORE.md#optional-additions-in-0117).
+
+### More golfers and Living Club
+
+Meet **25 new ordinary visitors, 10 touring pros and 10 fictional celebrities**,
+with authored names, portraits and character details. The original cast remains
+available. Living Club adds 25 personalities, contextual dialogue, memories and
+persistent stories, with extra mood reactions available separately.
+
+| Ada Fairway | Calder Stone |
+|---|---|
+| ![Ada Fairway's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-ada.jpg) | ![Calder Stone's portrait and skill preview in the real Pick A Pro screen](screenshots/golfers-calder.jpg) |
+
+New ordinary visitors follow **original skill progression by default**. Authored
+arrival skill mixes and extra mood reactions are opt-in. Original energy, mood
+and weed balance is preserved. The roster, stories and reactions each have
+[independent switches](docs/modding/CORE.md#optional-additions-in-0117).
+
+### A new Parkland clubhouse
+
+The new clubhouse includes all four views, animated flags and birdbath water.
+Original textures retain the original building.
+
+![The new Parkland clubhouse and garden in the Windows game](screenshots/clubhouse-parkland.jpg)
+
+### Fixes and compatibility
+
+Construction animations, pro-shot controls, Save editing and cancellation,
+long welcome messages, theme memory and the Routing Map are repaired. Saves,
+custom mods and settings are preserved during updates. Original energy, mood,
+weed balance and ordinary visitor skill progression remain the defaults;
+optional gameplay changes have independent switches.
+
 ### More content and mod support
 
 - **Restored cut content:** enable items already present in the original game files, including the oriental house, dinosaur tar pit and lovers' bench.
@@ -164,7 +146,14 @@ and is not needed for the clubhouse, lighting, weather or new golfers.
 
 Original interface and texture options remain available. The default energy, mood and weed balance follows vanilla SimGolf.
 
-We're working on many other fixes, changes, updates, improvements, and mods to make SimGolf better.
+## More screenshots
+
+| | |
+|---|---|
+| ![Start menu](screenshots/start-menu.jpg) | ![Golfer card](screenshots/golfer-card.jpg) |
+| ![Course report](screenshots/reports.jpg) | ![Options page](screenshots/options.jpg) |
+| ![Create your pro](screenshots/create-pro.jpg) | ![Skill points](screenshots/skill-points.jpg) |
+| ![Golfer list in the People tab](screenshots/golfer-list.jpg) | ![Accomplishment page](screenshots/trophy.jpg) |
 
 ## Install in four steps
 

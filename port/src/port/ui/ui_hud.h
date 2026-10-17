@@ -24,6 +24,7 @@ typedef struct {
   int msg_open;       // task-62 (jwe): seq of the message shown in full (clicked), 0 = the strip's card as it comes
   int hist_open;      // the bell's message history is out
   int seen_seq;       // newest message the history has shown (the bell's dot)
+  int original_bottom; // retain the native construction wheel and trays
   int last_news;      // news_seq of the last frame (a new message replaces the expanded one)
 } UiHud;
 #define UI_HUD_INIT {0, 0, 0, -1, 0, 0}

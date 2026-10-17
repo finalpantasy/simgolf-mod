@@ -108,7 +108,9 @@ static const Row k_gameplay[] = {
     PREF(16, "Golfer thoughts", "Show golfers' thoughts on screen."),
     PREF(32, "Animals and habitats", "Include animals and habitats on the course."),
     {.type = OT_HEAD, .label = "Look of the game"},
-    // One supported course layout. Original UI remains an explicit data-file A/B control.
+    {.type = OT_TOGGLE, .label = "Original construction menu", .key = "ui.original_bottom", .def = "1",
+     .desc = "Use the classic building wheel and trays with modern top stats. Turn off for the combined Course menu and its path and lamp pickers."},
+    // Original construction and the modern course palette are independently switchable.
     {.type = OT_SEG, .label = "Golfer tags and cards", .key = "ui.golfers", .def = "frosted_mint",
      .desc = "Name tags, thought bubbles and the golfer card on the course.",
      .n = 2, .vals = {"frosted_mint", "original"}, .names = {"Frosted Mint", "Original"}},

@@ -1,4 +1,12 @@
-# SimGolf Remastered for Windows 0.1.18
+# SimGolf Remastered for Windows
+
+## 0.1.19 - 2026-10-17
+
+Classic construction controls and sharp legacy interface text.
+
+- Restored the classic construction wheel and trays with a live, persisted Options switch to the modern Course palette.
+- Legacy original and modern fonts render at display resolution on Windows, with clipping, copied text and overlap handling.
+- Existing optional HD artwork supplies the original construction panels. Original HUD, bitmap text and vanilla remain reachable.
 
 ## 0.1.18 - 2026-10-17
 

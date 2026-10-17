@@ -84,6 +84,7 @@
 #include "port/course_lamps_native.h"
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
+#include "port/legacy_text_native.h"
 #include "port/ui/ui_course_map.h"
 #include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
@@ -151,6 +152,8 @@ void hd_native_pump_events(void) {
 
 // Frame hand-over (game thread -> render thread).
 static CRITICAL_SECTION g_lock;
+static LegacyText *g_text_course, *g_text_ui;
+static int g_text_ready;
 static uint16_t *g_frame;   // FRAME_W x FRAME_H: the course layer when layered, else the whole frame
 static uint16_t *g_ui;      // the finished frame when layered: its UI is where it differs from g_frame
 static uint8_t *g_mask;     // hdt_capture's terrain mask for g_frame
@@ -384,6 +387,8 @@ typedef struct {
 
 typedef struct {
   SDL_Renderer *r;
+  LegacyRenderer *text_renderer;
+  LegacyText *text_course, *text_ui;
   // course[cur]: the course layer (or the whole frame when not layered);
   // course[!cur]: the course layer before it, still sliding out (smooth).
   Layer course[2], overlay, ui;   // overlay: course with bare terrain cut out; ui: golf's UI (premultiplied)
@@ -521,6 +526,8 @@ static void upload(Rt *t, double now) {
   HdUiCamera before = t->cam;
   int was_layered = t->layered && t->course_view;
   EnterCriticalSection(&g_lock);
+  memcpy(t->text_course,g_text_course,sizeof *g_text_course);
+  memcpy(t->text_ui,g_text_ui,sizeof *g_text_ui);
   memcpy(t->local, g_frame, (size_t)FRAME_W * FRAME_H * 2);
   t->course_view = g_frame_course;
   t->layered = g_frame_layered;
@@ -1255,10 +1262,17 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     night=night*night*(3-2*night);
     lamps_render(t->r,&t->lamps,(SDL_Rect){d.x,d.y,d.w,d.h},t->weather_receiver,FRAME_W,FRAME_H,lamp_x,lamp_y,lamp_scale,night);
   }
+  if (!layered || g_show_golf_ui) {
+    float tx=(float)(glide?d.x+t->zx*k:d.x+ox*k);
+    float ty=(float)(glide?d.y+t->zy*k:d.y+oy*k);
+    float ts=(float)(glide?k*t->zs:k);
+    legacy_text_draw(t->text_renderer,t->text_course,tx,ty,ts,(SDL_Rect){d.x,d.y,d.w,d.h});
+  }
   if (layered && (g_dump_on || t->dump_f)) dump_course(t, target, d, ox, oy, now);   // complete course, before UI
   if (layered && g_show_golf_ui) {
     if (t->art_ui) hd_art_draw(HD_ART_TOP, t->r, d.x, d.y, k);   // golf's UI art in hi-res, under the rest of its UI
     draw_layer(t, &t->ui, target, d, *sw, *sh, t->premul);
+    legacy_text_draw(t->text_renderer,t->text_ui,(float)d.x,(float)d.y,(float)k,(SDL_Rect){d.x,d.y,d.w,d.h});
   }
   InterlockedExchange(&g_shown_course, t->course_view);
   LONG n = g_n_ui_layers;
@@ -1450,6 +1464,8 @@ static DWORD WINAPI render_main(void *arg) {
   }
   Rt *t = calloc(1, sizeof *t);
   t->profile=getenv("SIMGOLF_RENDER_PROFILE")!=NULL;
+  t->text_course=calloc(1,sizeof(LegacyText));
+  t->text_ui=calloc(1,sizeof(LegacyText));
   t->local = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->local_ui = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->mask = calloc((size_t)FRAME_W * FRAME_H, 1);
@@ -1474,6 +1490,8 @@ static DWORD WINAPI render_main(void *arg) {
     SetEvent(g_ready);
     return 0;
   }
+  t->text_renderer=legacy_text_create(t->r);
+  g_text_ready=t->text_renderer && t->text_course && t->text_ui;
   SDL_RendererInfo info;
   SDL_GetRendererInfo(t->r, &info);
   for (int c = 0; c < 32768; c++) {
@@ -1694,6 +1712,8 @@ void hd_native_prepare(int *w, int *h, unsigned *flags) {
   hd_frame_h = ch & ~1;
   g_ui_px = fmin((double)out_w / hd_frame_w, (double)out_h / hd_frame_h);
   win_set_screen_size(hd_frame_w, hd_frame_h);
+  g_text_course=calloc(1,sizeof(LegacyText));
+  g_text_ui=calloc(1,sizeof(LegacyText));
   g_frame = calloc((size_t)FRAME_W * FRAME_H, 2);
   g_ui = calloc((size_t)FRAME_W * FRAME_H, 2);
   g_snap = calloc((size_t)FRAME_W * FRAME_H, 2);
@@ -1904,9 +1924,31 @@ int hd_present(const uint16_t *screen) {
   int course = terrain_hd_seen() && hdt_capture(layered ? g_snap : screen, mask, g_frame_serial + 1);   // the serial this frame gets below
   if (!course) layered = 0;
   EnterCriticalSection(&g_lock);
-  memcpy(g_frame, layered ? g_snap : screen, (size_t)FRAME_W * FRAME_H * 2);
+  int replay=g_text_ready && mods_get_int("ui.hd_legacy_text",1)!=0;
+  g_text_course->count=g_text_course->glyphs=0;
+  g_text_ui->count=g_text_ui->glyphs=0;
+  if(replay)gdi_legacy_capture(layered?g_snap:screen,g_frame,FRAME_W,FRAME_H,g_text_course);
+  else memcpy(g_frame, layered ? g_snap : screen, (size_t)FRAME_W * FRAME_H * 2);
   if (layered) {
-    memcpy(g_ui, screen, (size_t)FRAME_W * FRAME_H * 2);
+    if(replay)gdi_legacy_capture(screen,g_ui,FRAME_W,FRAME_H,g_text_ui);
+    else memcpy(g_ui, screen, (size_t)FRAME_W * FRAME_H * 2);
+    // Course runs are drawn with camera motion, never again in the fixed UI.
+    for(int i=g_text_ui->count-1;i>=0;i--) {
+      LegacyRun *a=g_text_ui->run+i;
+      for(int j=0;j<g_text_course->count;j++) {
+        LegacyRun *b=g_text_course->run+j;
+        if(a->font==b->font && a->em==b->em && a->rgb==b->rgb && a->count==b->count &&
+           a->bold==b->bold && a->underline==b->underline && !memcmp(a->bounds,b->bounds,sizeof a->bounds) &&
+           !memcmp(g_text_ui->glyph+a->first,g_text_course->glyph+b->first,(size_t)a->count*sizeof(LegacyGlyph))) {
+          memmove(a,a+1,(size_t)(--g_text_ui->count-i)*sizeof *a);break;
+        }
+      }
+    }
+    if(getenv("SIMGOLF_LEGACY_TEXT_LOG")) {
+      static int last=-1;
+      if(last!=g_text_ui->count) {last=g_text_ui->count;
+        fprintf(stderr,"legacy-text: course %d UI %d glyphs %d\n",g_text_course->count,g_text_ui->count,g_text_ui->glyphs);}
+    }
     g_frame_cam = g_snap_cam;
     hud_course_frame_presented();
   }

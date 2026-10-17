@@ -67,6 +67,7 @@ uint16_t *gdi_screen_dib(int i, int *w, int *h, int *pitch, int *is565);
 extern int win_screen_w, win_screen_h;
 
 #define PAGES 8
+static int g_bottom; // native wheel owns bottom drawing and input
 static int g_on;              // this frame: the new HUD replaces the old one
 static uint16_t *g_save[PAGES];
 static size_t g_save_cap[PAGES];
@@ -90,9 +91,9 @@ static uint32_t g_serial, g_art_serial;
 static int g_art_theme = -1, g_art_frames;
 
 int hud_on(void) { return g_on; }
-int hud_mx(int x) { return g_on ? -10000 : x; }
-int hud_my(int y) { return g_on ? -10000 : y; }
-int hud_ylim(int y) { return g_on ? 100000 : y; }
+int hud_mx(int x) { return g_on && !g_bottom ? -10000 : x; }
+int hud_my(int y) { return g_on && !g_bottom ? -10000 : y; }
+int hud_ylim(int y) { return g_on && !g_bottom ? 100000 : y; }
 int hud_injecting(void) { return g_inj; }
 int hud_course_transition(void) { return g_on && host_now_ms() < g_course_transition_until; }
 void hud_course_frame_presented(void) {
@@ -109,10 +110,10 @@ void hud_note_script_click(int x, int y) {
 }
 static int script_click(void) { return G32(MOUSE_X) == g_script_x && G32(MOUSE_Y) == g_script_y; }
 
-int hud_strip_click(void) { return !g_on || (!g_inj && script_click()); }
+int hud_strip_click(void) { return !g_on || g_bottom || (!g_inj && script_click()); }
 
 int hud_old_click(void) {
-  if (!g_on) return 1;
+  if (!g_on || (g_bottom && !g_inj)) return 1;
   if (!g_inj) return script_click();
   // the click being handled is ours: make sure it carries our point
   G32(MOUSE_X) = g_inj_x;
@@ -128,7 +129,7 @@ static void rects(void) {
   g_nrects = 0;
   g_rects[g_nrects++] = (R){0, 0, 240, 84};                      // banner, stars, hearts
   g_rects[g_nrects++] = (R){W - 215, 0, 215, HUD_ORIGINAL_STATS_BOTTOM}; // money, fun, skill plates
-  g_rects[g_nrects++] = (R){0, H - 220, W, 220};                 // wheel, trays, chip strip, tray tooltips
+  if (!g_bottom) g_rects[g_nrects++] = (R){0, H - 220, W, 220};                 // wheel, trays, chip strip, tray tooltips
                                                                    // (bottom-anchored on a tall canvas, task-3 B4)
   for (int i = 0; i < g_nrects; i++) {
     R *r = &g_rects[i];
@@ -173,6 +174,7 @@ void hud_save(void) {
   dlgf_enabled();   // task-27: registers the dialogs layer early (a dialog needs it up before it opens)
   int w, h, pitch, is565;
   g_on = hudf_enabled() && gdi_screen_dib(0, &w, &h, &pitch, &is565) != NULL;
+  g_bottom = g_on && mods_get_int("ui.original_bottom", 1) != 0;
   if (!g_on) return;
   rects();
   for (int i = 0; i < PAGES; i++) copy_rects(i, 1);
@@ -1254,7 +1256,7 @@ void hud_restore(void) {
   static int preview_setting = -1;
   unsigned revision = hd_art_preview_revision();
   int previews = mods_get_int("fixes.hd_design_previews", 1);
-  if (g_target >= 0 && (theme != g_art_theme || revision != preview_revision ||
+  if (!g_bottom && g_target >= 0 && (theme != g_art_theme || revision != preview_revision ||
                        previews != preview_setting || ++g_art_frames > 600)) {
     preview_revision = revision;
     preview_setting = previews;

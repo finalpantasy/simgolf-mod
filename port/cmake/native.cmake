@@ -50,7 +50,7 @@ add_executable(golf WIN32
   ${SIMGOLF_GEN_SRC} ${SIMGOLF_GOLF_OVERRIDES} ${SIMGOLF_JGLD_OVERRIDES})
 
 # task-3: sharp scaling, borderless full screen, render thread (any resolution, any frame rate)
-target_sources(golf PRIVATE src/port/hd_native.c src/port/hd_terrain_native.c)
+target_sources(golf PRIVATE src/port/hd_native.c src/port/hd_terrain_native.c src/port/legacy_text_native.c)
 target_sources(golf PRIVATE src/port/course_lamps.c src/port/course_lamps_art.c src/port/course_lamps_game.c src/port/course_lamps_render.c)
 add_custom_target(course_lights_files ALL
  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/data"
