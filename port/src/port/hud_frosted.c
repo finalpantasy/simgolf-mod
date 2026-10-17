@@ -357,7 +357,7 @@ static void draw(const HdUiFrame *f, void *user) {
     return;
   }
   update_art(r);
-  g_hud.original_bottom = mods_get_int("ui.original_bottom", 1) != 0;
+  g_hud.original_bottom = mods_get_int("ui.original_bottom", 0) != 0;
   g_hud.density = g_hud.original_bottom ? HUD_JWE : hud_density();
   hide_key(g_hud.hide_key, sizeof g_hud.hide_key);
   if (g_toggle_hidden) {
@@ -535,7 +535,7 @@ static int input(SDL_Event *e, int course, void *user) {
       if(g_visible && e->key.keysym.sym==SDLK_ESCAPE && lamps_game_event(e))return 1;
       if (e->key.keysym.sym == SDLK_ESCAPE && !opt_is_open() && gwf_escape(e->key.repeat)) return 1;
       if (e->key.keysym.sym == SDLK_ESCAPE && mode == HUD_MODE_FROSTED &&
-          !opt_is_open() && !dlgf_active() && mods_get_int("ui.original_bottom", 1)) return 0;
+          !opt_is_open() && !dlgf_active() && mods_get_int("ui.original_bottom", 0)) return 0;
       if (e->key.keysym.sym == SDLK_ESCAPE) fprintf(stderr, "hud: esc key (visible %d, options %d, dialog %d)\n", g_visible, opt_is_open(), dlgf_active());
       if (e->key.keysym.sym == SDLK_ESCAPE && g_visible && !opt_is_open() && !dlgf_active()) {
         if (!e->key.repeat) g_esc = 1;   // each Esc is one step (the draw runs ui_hud_escape)
@@ -573,7 +573,7 @@ static int input(SDL_Event *e, int course, void *user) {
   }
   int to = ui_route_event(g_ui, &u);
   if((to & UI_ROUTE_GAME) && lamps_game_event(e))return 1;
-  if (mode == HUD_MODE_FROSTED && !mods_get_int("ui.original_bottom", 1) &&
+  if (mode == HUD_MODE_FROSTED && !mods_get_int("ui.original_bottom", 0) &&
       u.kind == UI_EV_DOWN && (to & UI_ROUTE_GAME)) {
     lock();
     int placing = hudf_keep_tray_on_world_click(&g_snap);

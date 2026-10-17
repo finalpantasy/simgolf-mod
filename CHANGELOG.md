@@ -1,5 +1,13 @@
 # SimGolf Remastered for Windows
 
+## 0.1.20 - 2026-10-17
+
+Restore the remastered construction menu as the default.
+
+- Corrected the accidental classic-menu default in 0.1.19. Fresh installs and upgrades open the remastered menu unless the player explicitly selected classic controls.
+- The original construction wheel and trays remain optional in Options. Explicit menu preferences are preserved.
+- Retains the sharp legacy text fixes and all previously shipped features.
+
 ## 0.1.19 - 2026-10-17
 
 Classic construction controls and sharp legacy interface text.

@@ -99,6 +99,10 @@ static void apply_settings(void) {
     const ModKeyUse *k = &g_res.keys[i];
     if (k->kind != MT_SETTING) continue;
     const char *origin = k->winner >= 0 ? g_set.m[k->winner].id : k->n ? g_set.m[k->mod[k->n - 1]].id : NULL;
+    // 0.1.19 accidentally bundled a classic-menu default. The updater retains
+    // installed mod definitions, so disregard that built-in default on upgrade.
+    // Explicit mods.ini, Options and other mods still choose the classic menu.
+    if (origin && !strcmp(origin, "ui_hud") && !strcmp(k->key, "ui.original_bottom")) continue;
     mods_store_put(MS_MODS, k->key, k->result, origin);
   }
 }

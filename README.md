@@ -14,7 +14,7 @@ This download contains **no game files**. You bring your own copy of the game
 (an installed game folder or disc image, and the version 1.02 no-CD `golf.exe`); the installer prepares
 it on your PC and nothing from it ever leaves your computer.
 
-![Classic construction controls with modern top stats in the Windows game](screenshots/classic-construction.jpg)
+![Remastered construction menu in the Windows game](screenshots/remastered-construction.jpg)
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
@@ -48,7 +48,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 ### Easier course building
 
-- **Classic construction controls:** the original wheel and Course/Buildings trays with modern top stats. Original panel artwork uses the optional HD art pack; the modern combined Course palette remains a live Options choice.
+- **Remastered construction controls by default:** the combined Course palette includes path-material and lamp pickers. The original wheel and Course/Buildings trays are an optional choice in Options, with modern top stats and optional HD panel artwork.
 - **18 cosmetic path materials** in the modern picture picker, preserved with saved courses.
 - **Six optional course-light designs** with saved placement and day/night artwork. Enable the lamps separately and use the modern palette to select them.
 - **Optional click-and-drag construction:** terrain rectangles and L-shaped paths keep the original per-tile prices and placement rules. Single placement remains the default.

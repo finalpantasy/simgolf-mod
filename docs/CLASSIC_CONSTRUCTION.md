@@ -1,10 +1,13 @@
 # Classic construction controls and sharp legacy text
 
-The classic construction wheel and original trays are restored by default with
-the modern top stats, notifications and Options. Options > Gameplay > Look of
-the game > Original construction menu switches live and saves the preference.
-Turn it off to use the combined Course palette, path-material picker and lamp
-picker from 0.1.18. The original HUD remains available through `ui.hud=original`.
+The remastered construction menu is the default. Options > Gameplay > Look of
+the game > Original construction menu enables the optional classic wheel and
+Course/Buildings trays with modern top stats. The switch is live and saved.
+Leave it off for the combined Course palette, path-material picker and lamp
+picker. The original HUD remains available through `ui.hud=original`.
+
+The mistaken built-in classic-menu default in 0.1.19 is ignored on upgrade;
+explicit player choices in mods.ini or Options remain honored.
 
 The existing optional HD art pack provides the faithful 4x versions of
 `Interface/3mainLowerLeft.pcx`, `Interface/BuildingPanel.pcx` and
@@ -12,7 +15,8 @@ The existing optional HD art pack provides the faithful 4x versions of
 textures to use these sheets. Without that pack, original artwork still works.
 No original game assets are included in the source change.
 
-`ui.original_bottom=0` restores the modern construction palette.
+`ui.original_bottom=0` keeps the default remastered construction palette.
+`ui.original_bottom=1` opts into the classic construction wheel and trays.
 `ui.hd_legacy_text=0` restores the previous low-resolution bitmap text for A/B.
 `ui.font=original` retains the original font faces while allowing native-size
 text replay. `ui.font=plus_jakarta` uses the existing modern font option.
