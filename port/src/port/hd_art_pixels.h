@@ -11,6 +11,22 @@ enum {
   HD_ART_STILL_OPTIONAL_INDEXED_SHADOW,
 };
 
+// The Parkland rock textures bake a smooth green background into their art.
+// Replace only green ground with the matching rough sample. Neutral stone,
+// highlights and dark shadows retain their original pixels.
+static inline void hd_art_rock_ground(uint8_t *rock, const uint8_t *rough, size_t pixels) {
+  for (size_t i = 0; i < pixels; i++) {
+    uint8_t *p = rock + i * 4;
+    const uint8_t *r = rough + i * 4;
+    int other = p[0] > p[2] ? p[0] : p[2];
+    int green = (int)p[1] - other;
+    if (green <= 12 || p[1] < 60 || !p[3]) continue;
+    int blend = (green - 12) * 16;
+    if (blend > 256) blend = 256;
+    for (int c = 0; c < 3; c++) p[c] = (uint8_t)((p[c] * (256 - blend) + r[c] * blend + 128) / 256);
+  }
+}
+
 // Still sprites in the shadow draw slots are usually shade masks. course1.pcx
 // also uses those slots for colored course art, so only its original shadow
 // palette inks should be darkened. cliffs01.pcx contains ordinary rock art.

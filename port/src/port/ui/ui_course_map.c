@@ -107,6 +107,7 @@ static UiColor heat_color(const UiCourseMap *m, int x, int y) {
   if (!cat) return (UiColor){219,226,210,255};
   if (cat==7) return (UiColor){93,164,179,255};
   uint16_t v=m->heat[i];
+  if (m->mode == 1 && !v) return (UiColor){169,195,165,255};
   float rr=((v>>10)&31)/31.0f, gg=((v>>5)&31)/31.0f, bb=(v&31)/31.0f;
   if (m->mode==2) {
     if (rr>.2f && gg<.05f) return (UiColor){205,187,168,255};
@@ -190,6 +191,25 @@ void ui_course_map_draw(UiCtx *c,const UiCourseMap *m,UiRect bounds) {
   SDL_Texture *texture=map_texture(c,m,(int)ceilf(w*2),(int)ceilf(h*2));
   if(texture)uid_image(ui_drawer(c),texture,NULL,area,0,(UiColor){255,255,255,255});
   UiDraw *d=ui_drawer(c);
+  if (m->mode == 0) for (int i = 0; i < 128; i++) {
+    if (!m->staff[i].active) continue;
+    float x, y, last_x = 0, last_y = 0;
+    UiColor color = m->staff[i].job == -4 ? (UiColor){64,114,217,255} :
+                    m->staff[i].job == -3 ? (UiColor){225,185,51,255} :
+                    m->staff[i].job == -5 ? (UiColor){204,83,107,255} : (UiColor){55,139,82,255};
+    for (int j = 0; j <= 48; j++) {
+      float angle = j * (6.28318530718f / 48);
+      point(m, area, m->staff[i].x + cosf(angle) * m->staff[i].radius,
+            m->staff[i].y + sinf(angle) * m->staff[i].radius, &x, &y);
+      if (j) {
+        uid_line(d, last_x, last_y, x, y, ui_s(c, 4), (UiColor){244,250,237,220});
+        uid_line(d, last_x, last_y, x, y, ui_s(c, 2), color);
+      }
+      last_x = x; last_y = y;
+    }
+    point(m, area, m->staff[i].x, m->staff[i].y, &x, &y);
+    uid_rrect(d, ui_rect(x-ui_s(c,3),y-ui_s(c,3),ui_s(c,6),ui_s(c,6)), ui_s(c,3), color);
+  }
   // Draw every route before every badge, so another hole's line cannot cross
   // out a number that has already been painted.
   for(int i=0;i<18;i++) {

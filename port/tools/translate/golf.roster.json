@@ -25,6 +25,10 @@
   "patches": {
     "FUN_00421bc0": [
       [
+        "if ((&DAT_004d60b4)[(short)(&DAT_0057956e)[uVar11 * 0x80] * 0x8c] != 0) {",
+        "if (!roster_vanilla_visitor_skills((short)(&DAT_0057956e)[uVar11 * 0x80]) && (&DAT_004d60b4)[(short)(&DAT_0057956e)[uVar11 * 0x80] * 0x8c] != 0) {"
+      ],
+      [
         "FUN_0045c1e0(&DAT_00822d9c,0x4b)",
         "FUN_0045c1e0(&DAT_00822d9c,(ushort)roster_regular_count())"
       ],

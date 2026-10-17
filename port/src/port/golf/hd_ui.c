@@ -89,6 +89,7 @@ typedef struct {
   uint32_t bits, locked;      // +0x4c0, +0x4cc
   int32_t w, h;               // +0x38, +0x3c
   int32_t clip[4], bounds[4]; // +0x44, +0x54
+  int dx, dy;
 } View;
 static View g_view;
 
@@ -113,6 +114,7 @@ int hd_ui_view_begin(int dx, int dy) {
   if (!s) return 0;
   View *v = &g_view;
   v->s = s;
+  v->dx = dx; v->dy = dy;
   v->bits = *(uint32_t *)(s + 0x4c0);
   v->locked = *(uint32_t *)(s + 0x4cc);
   v->w = *(int32_t *)(s + 0x38);
@@ -152,6 +154,21 @@ void hd_ui_view_end(void) {
   memcpy(s + 0x54, v->bounds, 16);
   gdi_set_view(NULL, 0, 0);
   v->s = NULL;
+}
+
+int FUN_00407c60(int x, int y, int radius, int color);
+int hd_ui_staff_circle(int x, int y, int radius, int color) {
+#ifndef __EMSCRIPTEN__
+  const char *setting = mods_get("fixes.staff_circle");
+  if (setting && atoi(setting) == 0) return FUN_00407c60(x, y, radius, color);
+#endif
+  // Employee controls are bottom anchored. Draw their world-space ring on
+  // the full course surface without the controls' additional pixel shift.
+  int active = g_view.s != NULL, dx = g_view.dx, dy = g_view.dy;
+  if (active) hd_ui_view_end();
+  int result = FUN_00407c60(x, y, radius, color);
+  if (active) hd_ui_view_begin(dx, dy);
+  return result;
 }
 
 // ------------------------------------------------------------------ layers

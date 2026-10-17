@@ -27,10 +27,27 @@ static volatile unsigned g_kq_head, g_kq_tail;
 // render thread
 static ModMgr *g_mgr;
 static ModsUi g_ui;
+static JsonVal *g_config;
 static SDL_Renderer *g_r;
 #define MAXMODS 256
 static SDL_Texture *g_icon[MAXMODS];
 static unsigned char g_icon_tried[MAXMODS];
+
+static const char *setting_value(const char *key) {
+  const char *value = mods_get(key);
+  if (value && *value) return value;
+  char fallback[160];
+  if (!strncmp(key, "display.", 8)) snprintf(fallback, sizeof fallback, "golf.%s", key + 8);
+  else if (!strcmp(key, "map.scale")) snprintf(fallback, sizeof fallback, "golf.map_scale");
+  else return value;
+  return mods_get(fallback);
+}
+
+static int setting_save(const char *key, const char *value) {
+  if (!g_mgr || g_ui.selected < 0) return 0;
+  const ModManifest *mf = modmgr_manifest(g_mgr, g_ui.selected);
+  return mf && mods_config_set(mf->id, key, value);
+}
 
 void modsp_open(void) { g_open_req = 1; }
 void modsp_close(void) { g_close_req = 1; }
@@ -135,6 +152,13 @@ static void log_layout(int w, int h, double now) {
   PUT("dup", g_ui.log_dup);
   PUT("ren", g_ui.log_ren);
   PUT("del", g_ui.log_del);
+  PUT("configure", g_ui.log_configure);
+  for (int i = 0; i < g_ui.log_nsettings && o < 2100; i++) {
+    char name[160];
+    snprintf(name, sizeof name, "setting_%s", g_ui.log_setting_key[i]);
+    for (char *p = name; *p; p++) if (*p == '.') *p = '_';
+    PUT(name, g_ui.log_setting[i]);
+  }
   for (int i = 0; i < g_ui.log_nrows && o < 2200; i++) {
     const char *id = modmgr_manifest(g_mgr, g_ui.log_row_mod[i])->id;
     char nm[96];
@@ -165,6 +189,8 @@ void modsp_draw(UiCtx *c, SDL_Renderer *r, int w, int h, double now, int in_game
       g_mgr = NULL;
     }
     free_icons();
+    json_free(g_config);
+    g_config = NULL;
   }
   if (g_open_req) {   // opened: read the mods folder and the running set now
     g_open_req = 0;
@@ -177,6 +203,16 @@ void modsp_draw(UiCtx *c, SDL_Renderer *r, int w, int h, double now, int in_game
     for (int i = 0; i < n; i++) run[i] = mods_id_at(i);
     g_mgr = modmgr_open(mods_root(), run, n);
     ui_mods_init(&g_ui, g_mgr);
+    json_free(g_config);
+    char *base = SDL_GetBasePath();
+    char config_path[1000], err[300] = "";
+    snprintf(config_path, sizeof config_path, "%sui/mod_settings.json", base ? base : "");
+    SDL_free(base);
+    g_config = modconfig_load(config_path, err, sizeof err);
+    if (!g_config) fprintf(stderr, "modsui: settings unavailable: %s\n", err);
+    g_ui.config = g_config;
+    g_ui.setting_get = setting_value;
+    g_ui.setting_save = setting_save;
     g_ui.icon_fn = icon_for;
     g_ui.in_game = in_game;
     fprintf(stderr, "modsui: opened (%s), %d mods installed, %d loaded, profile %s, folder %s\n", in_game ? "in a game" : "start menu",
@@ -201,5 +237,7 @@ void modsp_draw(UiCtx *c, SDL_Renderer *r, int w, int h, double now, int in_game
     modmgr_close(g_mgr);
     g_mgr = NULL;
     free_icons();
+    json_free(g_config);
+    g_config = NULL;
   }
 }

@@ -29,6 +29,7 @@ extern int hudf_blocks_course_point(int, int);
 static struct {
   int held, pending, index, picked, x, y, terrain, building, design;
   int width, height, rotation, zoom, camera_x, camera_y;
+  int joined_pot;
   int this_frame;
   PlaceDragShape shape;
 } drag;
@@ -41,12 +42,14 @@ static void cancel(void) { memset(&drag, 0, sizeof drag); }
 void place_drag_reset(void) { cancel(); }
 static int matching(void) {
   return enabled() && drag.terrain == G(0x4c2848) && drag.building == G(0x4c2854)
+    && (drag.terrain != 9 || drag.joined_pot == mods_get_int("terrain.joined_pot_bunkers",0))
     && drag.design == G(0x56a514) && drag.width == g_map_w && drag.height == g_map_h;
 }
 static int supported(void) {
   int b = G(0x4c2854), t = G(0x4c2848);
   if (b >= 0) return b == 0 || b == 2 || b == 16; // paths, flowers and scenic trees, never buildings/landmarks
-  // Explicitly exclude tees, pot bunkers, mounds and special editing tools.
+  if(t==9) return mods_get_int("terrain.joined_pot_bunkers",0);
+  // Explicitly exclude tees, mounds and special editing tools.
   // Terrain ids: terrain.md section2.4. Trees are tile terrain, not landmarks.
   return t == 1 || t == 2 || t == 3 || t == 4 || t == 5 || t == 7 || t == 8
     || t == 17 || t == 10 || t == 11 || t == 12 || t == 13 || t == 14 || t == 15;
@@ -121,6 +124,7 @@ int place_drag_event(SDL_Event *e, int allow_start) {
   if (!pick(e->button.x,e->button.y,&x,&y)) return 0;
   cancel(); drag.held=1; swallow_up=1;
   drag.terrain=G(0x4c2848); drag.building=G(0x4c2854); drag.design=G(0x56a514);
+  drag.joined_pot=mods_get_int("terrain.joined_pot_bunkers",0);
   drag.width=g_map_w; drag.height=g_map_h;
   drag.rotation=G(0x5685f4); drag.zoom=G(0x4c2844);
   drag.camera_x=G(0x4c2ba0); drag.camera_y=G(0x4c2ba4);

@@ -20,6 +20,10 @@ it on your PC and nothing from it ever leaves your computer.
 
 ## New features and improvements over vanilla
 
+### Mod settings in the game
+
+Select a mod and use the green **Configure** button to change named settings, with guidance on when each choice takes effect. Settings save automatically; disabled mods and the Vanilla profile keep their original behavior.
+
 ### Bigger courses and more staff
 
 - **Up to 10x the land:** choose Original (50 x 50 tiles), Bigger (70 x 70), Large (100 x 100) or Huge (158 x 158) when starting a course. Terrain, scenery and wildlife scale with the map, and saves keep their course size.
@@ -49,6 +53,7 @@ it on your PC and nothing from it ever leaves your computer.
 ### Easier course building
 
 - **Remastered construction controls by default:** the combined Course palette includes path-material and lamp pickers. The original wheel and Course/Buildings trays are an optional choice in Options, with modern top stats and optional HD panel artwork.
+- **Optional joined pot bunkers** with connected sand, rounded edges and a steep outer rim. Off by default.
 - **18 cosmetic path materials** in the modern picture picker, preserved with saved courses.
 - **Six optional course-light designs** with saved placement and day/night artwork. Enable the lamps separately and use the modern palette to select them.
 - **Optional click-and-drag construction:** terrain rectangles and L-shaped paths keep the original per-tile prices and placement rules. Single placement remains the default.
@@ -63,6 +68,7 @@ it on your PC and nothing from it ever leaves your computer.
 - **Golfer names on hover**, lighter thought bubbles and mood faces.
 - **Golfer cards** with mood bars, scores, recent comments and profile information.
 - **People lists:** see each golfer's mood and current hole, jump to them, and hire, fire, move or rename staff.
+- **Remaining professional goals**, matching pro skill bars and a direct-opponent match scorecard.
 - **Modern pro screens** for profiles, skill points, practice, match pairing, accomplishments and Top Ten Designers.
 - **Live pro scorecards** with the current stroke count, plus shot choices and flight previews.
 - **Clickable notifications** with full messages and shortcuts to the relevant golfer or hole, plus message history.

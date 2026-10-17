@@ -34,6 +34,7 @@
 #include "port/hd_native.h"
 #include "port/hd_art.h"
 #include "mods/living_club.h"
+#include "mods/mods.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
@@ -633,7 +634,7 @@ static void fill_card(int slot, GwCard *g) {
       else if (r->fn == 0 && r->y == 0x3e) copy_str(g->line1, sizeof g->line1, r->s);
       else if (r->fn == 0 && r->y == 0x4b) copy_str(g->line2, sizeof g->line2, r->s);
       else if (r->fn == 1 && r->y == 0x5b) copy_str(g->quote, sizeof g->quote, r->s);     // golf draws the golfer's line in red
-      else if (r->fn == 0 && r->y == 0x69) copy_str(g->skills, sizeof g->skills, r->s);   // and what they want more of under it
+      else if (r->fn == 0 && r->y == 0x69) copy_str(g->skills, sizeof g->skills, r->s);   // the golfer's current skill group
       else if (r->x == 0x24a && r->y >= 0x2c && r->y <= 0x6c && ((r->y - 0x2c) & 15) == 0)
         copy_str(g->label[(r->y - 0x2c) >> 4], 20, r->s);
       else if (r->fn == 0 && r->y == 0x84) g->has_scores = 1;
@@ -672,6 +673,31 @@ static void fill_card(int slot, GwCard *g) {
   if (g->layout == 1 && !g->name[0]) copy_str(g->name, sizeof g->name, "Golfer");
 }
 
+static void match_snapshot(int slot, GwCard *g) {
+  // A pro's paired opponent is live game data, not the last opened card.
+  int partner = slot >= 0 && slot < SLOTS ? G16(0x57955a + slot * 256) : -1;
+  int pro = G32(0x5a59f8);
+  const char *match_card = mods_get("ui.match_scorecard");
+  if ((!match_card || atoi(match_card)) && partner >= 0 && partner < SLOTS && partner != slot &&
+      (slot == pro || partner == pro) && G16(0x57955a + partner * 256) == slot &&
+      G8(0x5794d9 + partner * 256) > 0 && G8(0x5794d9 + partner * 256) <= 19) {
+    g->has_opponent = slot == pro ? 1 : 2;
+    g->has_scores = 1;
+    char keep[512]; memcpy(keep, (void *)0x51a068, sizeof keep);
+    *(char *)0x51a068 = 0;
+    FUN_004676e0((uint32_t)partner, 0);
+    copy_str(g->opponent_name, sizeof g->opponent_name, (char *)0x51a068);
+    memcpy((void *)0x51a068, keep, sizeof keep);
+    g->opponent_hole = G8(0x5794d9 + partner * 256);
+    for (int i = 0; i < GW_HOLES; i++) {
+      int strokes = G8(0x5794dc + partner * 256 + i);
+      if (g->opponent_hole == i + 1) strokes = G8(0x5794da + partner * 256);
+      g->opponent_score[i] = strokes > 0 ? strokes : 0;
+      g->opponent_total += g->opponent_score[i];
+    }
+  }
+}
+
 void gc_end(int slot) {
   if (!g_card_cap) return;
   g_card_cap = 0;
@@ -694,6 +720,7 @@ void gc_end(int slot) {
   if (bb && w >= g_save_w && h >= g_save_h)
     for (int y = 0; y < g_save_h; y++) memcpy(bb + (ptrdiff_t)y * pitch, g_save + (size_t)y * g_save_w, (size_t)g_save_w * 2);
   fill_card(slot, &g_note.card);
+  match_snapshot(slot, &g_note.card);
   char identity[100];
   living_card(slot, identity, sizeof identity, g_note.card.club_story, sizeof g_note.card.club_story);
   if (*identity) {

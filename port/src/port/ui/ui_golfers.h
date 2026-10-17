@@ -49,7 +49,7 @@ typedef struct GwCard {
   char name[48];       // the card's own title
   char line1[96];      // status and age
   char line2[200];     // traits
-  char skills[160];    // what the golfer wants more of
+  char skills[160];    // the golfer's current skill group
   char quote[220];     // the golfer's line
   char club_story[240]; // persistent Living Club story, separate from original pair stories
   char label[GW_METERS][20];
@@ -60,6 +60,9 @@ typedef struct GwCard {
   int16_t cur_hole;           // the hole in progress (1-based) or 0
   int16_t total;
   int16_t has_scores;
+  int16_t has_opponent, opponent_hole, opponent_total;
+  int16_t opponent_score[GW_HOLES];
+  char opponent_name[48];
   int16_t has_story;          // golf offers the story page / comments
   char story[5][100];         // golf's comment lines under the card (and the story page): what the golfer said, newest first
   int8_t story_tone[5];       // -1 bad (golf's red), 0, 1 good (green)

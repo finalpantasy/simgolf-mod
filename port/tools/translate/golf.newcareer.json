@@ -1,0 +1,8 @@
+{
+  "comment": "The original title/new-career reset clears nearby course fields but omits g_unlocked_landmark_mask. Reset only here; sandbox enables its mask later, and save loading restores its serialized field.",
+  "patches": {
+    "FUN_0040f5c0": [
+      ["DAT_0059e7b8 = 0x40000000;\n  FUN_004315e0();", "DAT_0059e7b8 = 0x40000000;\n  fix_newcareer_landmarks();\n  FUN_004315e0();"]
+    ]
+  }
+}

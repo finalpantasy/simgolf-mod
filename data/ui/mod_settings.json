@@ -1,0 +1,889 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "mod": "ui_golfers",
+      "key": "ui.golfers",
+      "label": "Golfer display",
+      "help": "Choose the style of name tags, thoughts and golfer cards.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.tags",
+      "label": "Show golfer names",
+      "help": "Hover shows the golfer under your pointer and the selected golfer. The name key can temporarily show everyone.",
+      "default": "hover",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "hover",
+          "label": "On hover"
+        },
+        {
+          "value": "always",
+          "label": "Always"
+        },
+        {
+          "value": "off",
+          "label": "Off"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.bubbles",
+      "label": "Thought bubbles",
+      "help": "Brief shows important thoughts for a few seconds and smaller thoughts as mood faces. Full keeps the complete thoughts.",
+      "default": "brief",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "brief",
+          "label": "Brief"
+        },
+        {
+          "value": "full",
+          "label": "Full"
+        },
+        {
+          "value": "icons",
+          "label": "Icons"
+        },
+        {
+          "value": "off",
+          "label": "Off"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.tag_style",
+      "label": "Name background",
+      "help": "Plain uses outlined text with a background on hover. Pill always uses a rounded background.",
+      "default": "plain",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "plain",
+          "label": "Plain text"
+        },
+        {
+          "value": "pill",
+          "label": "Rounded pill"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.tag_scale",
+      "label": "Names and bubbles size",
+      "help": "Change the size of golfer names and thoughts without changing the rest of the interface.",
+      "default": "0.7",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0.6",
+          "label": "Small"
+        },
+        {
+          "value": "0.7",
+          "label": "Standard"
+        },
+        {
+          "value": "0.85",
+          "label": "Large"
+        },
+        {
+          "value": "1",
+          "label": "Extra large"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.tag_opacity",
+      "label": "Bubble opacity",
+      "help": "Higher opacity makes text easier to read over a busy course.",
+      "default": "0.85",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0.5",
+          "label": "50%"
+        },
+        {
+          "value": "0.7",
+          "label": "70%"
+        },
+        {
+          "value": "0.85",
+          "label": "85%"
+        },
+        {
+          "value": "1",
+          "label": "100%"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.bubble_ms",
+      "label": "Brief thought duration",
+      "help": "How long an important brief thought stays visible before it fades.",
+      "default": "4000",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "2000",
+          "label": "2 seconds"
+        },
+        {
+          "value": "4000",
+          "label": "4 seconds"
+        },
+        {
+          "value": "6000",
+          "label": "6 seconds"
+        },
+        {
+          "value": "8000",
+          "label": "8 seconds"
+        }
+      ]
+    },
+    {
+      "mod": "ui_golfers",
+      "key": "ui.faces",
+      "label": "Mood faces",
+      "help": "Choose the artwork used for golfer moods.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_ball",
+      "key": "ui.ball",
+      "label": "Ball appearance",
+      "help": "Choose a round shaded ball with smooth flight or the original small ball.",
+      "default": "round",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "round",
+          "label": "Round HD"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_ball",
+      "key": "ui.ball_size",
+      "label": "Ball size",
+      "help": "Larger balls are easier to follow. This changes appearance only.",
+      "default": "75",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "60",
+          "label": "Tiny"
+        },
+        {
+          "value": "75",
+          "label": "Small"
+        },
+        {
+          "value": "85",
+          "label": "Medium"
+        },
+        {
+          "value": "100",
+          "label": "Large"
+        }
+      ]
+    },
+    {
+      "mod": "ui_ball",
+      "key": "ui.ball_colours",
+      "label": "Ball colors",
+      "help": "Personal gives each golfer a ball color; white uses the same color for everyone.",
+      "default": "personal",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "personal",
+          "label": "Personal colors"
+        },
+        {
+          "value": "white",
+          "label": "White"
+        }
+      ]
+    },
+    {
+      "mod": "ui_ball",
+      "key": "ui.ball_trail",
+      "label": "Ball trail",
+      "help": "Smooth draws a short trail behind the moving ball to help you follow the shot.",
+      "default": "smooth",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "smooth",
+          "label": "Smooth trail"
+        },
+        {
+          "value": "all",
+          "label": "Every shot"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        },
+        {
+          "value": "off",
+          "label": "Off"
+        }
+      ]
+    },
+    {
+      "mod": "ui_hud",
+      "key": "ui.hud",
+      "label": "Course interface",
+      "help": "Choose the modern build dock and course information or the original interface.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_paths",
+      "key": "ui.paths",
+      "label": "Path help",
+      "help": "Show path connection information and help identify buildings without clubhouse access.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_paths",
+      "key": "ui.paths_markers",
+      "label": "Disconnected building markers",
+      "help": "Show a No path marker above buildings that have no cart path to the clubhouse.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "ui_paths",
+      "key": "ui.paths_opacity",
+      "label": "Path overlay opacity",
+      "help": "How strongly the path connection overlay appears.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0.5",
+          "label": "50%"
+        },
+        {
+          "value": "0.75",
+          "label": "75%"
+        },
+        {
+          "value": "1",
+          "label": "100%"
+        }
+      ]
+    },
+    {
+      "mod": "ui_paths",
+      "key": "ui.paths_tint",
+      "label": "Path highlight strength",
+      "help": "Control the tint on paths in the connection overlay.",
+      "default": "0.30",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0.15",
+          "label": "Subtle"
+        },
+        {
+          "value": "0.30",
+          "label": "Standard"
+        },
+        {
+          "value": "0.5",
+          "label": "Strong"
+        }
+      ]
+    },
+    {
+      "mod": "ui_aim",
+      "key": "ui.aim",
+      "label": "Shot aim display",
+      "help": "Show a smooth direction arrow and landing ring for the shot you choose.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_place",
+      "key": "ui.place_center",
+      "label": "Center buildings on pointer",
+      "help": "Place buildings with the pointer in the middle of their footprint. Off uses the original corner placement.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "ui_place",
+      "key": "ui.repeat_amenities",
+      "label": "Keep building tool selected",
+      "help": "After placing an amenity, keep its tool ready to place another.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "drag_placement",
+      "key": "ui.drag_placement",
+      "label": "Click-and-drag construction",
+      "help": "Drag to lay an L-shaped path or fill a rectangle of terrain, flowers or scenic trees. Each tile keeps its original price.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "drag_placement",
+      "key": "ui.drag_tiles_per_frame",
+      "label": "Construction pace",
+      "help": "How many tiles a dragged area builds at a time. Slower spreads large construction over more frames.",
+      "default": "16",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "4",
+          "label": "Slow"
+        },
+        {
+          "value": "8",
+          "label": "Gentle"
+        },
+        {
+          "value": "16",
+          "label": "Standard"
+        },
+        {
+          "value": "32",
+          "label": "Fast"
+        }
+      ]
+    },
+    {
+      "mod": "living_club",
+      "key": "golfers.living",
+      "label": "Golfer stories and personalities",
+      "help": "Remember golfer stories and use the Living Club personalities. Off returns to original behavior.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "living_club",
+      "key": "golfers.reactions",
+      "label": "Personality reactions",
+      "help": "Allow personality-based reactions to replace some original golfer thought lines.",
+      "default": "0",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "course_lights",
+      "key": "course_lights.enabled",
+      "label": "Course lights",
+      "help": "Allow the course light tools and placed lamp illumination. Existing saved lamp records are retained.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "course_lights",
+      "key": "course_lights.spacing_units",
+      "label": "Minimum lamp spacing",
+      "help": "Keep newly placed lamps apart to limit crowding and overlapping light. Existing lamps do not move.",
+      "default": "128",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "No minimum"
+        },
+        {
+          "value": "64",
+          "label": "Close"
+        },
+        {
+          "value": "128",
+          "label": "Standard"
+        },
+        {
+          "value": "256",
+          "label": "Wide"
+        }
+      ]
+    },
+    {
+      "mod": "ui_dialogs",
+      "key": "ui.dialogs",
+      "label": "Dialog style",
+      "help": "Choose the modern presentation or the original game presentation.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_frontend",
+      "key": "ui.frontend",
+      "label": "Start menu style",
+      "help": "Choose the modern presentation or the original game presentation.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_reports",
+      "key": "ui.reports",
+      "label": "Report style",
+      "help": "Choose the modern presentation or the original game presentation.",
+      "default": "frosted_mint",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "frosted_mint",
+          "label": "Frosted Mint"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "ui_font",
+      "key": "ui.font",
+      "label": "Game text",
+      "help": "Choose smooth modern text or the original pixel lettering.",
+      "default": "plus_jakarta",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "plus_jakarta",
+          "label": "Plus Jakarta Sans"
+        },
+        {
+          "value": "original",
+          "label": "Original"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.drag_button",
+      "label": "Drag to pan with",
+      "help": "Hold this mouse button and drag to move the course. A right click without dragging still acts as a right click.",
+      "default": "middle",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "middle",
+          "label": "Middle button"
+        },
+        {
+          "value": "right",
+          "label": "Right button"
+        },
+        {
+          "value": "middle,right",
+          "label": "Either button"
+        },
+        {
+          "value": "none",
+          "label": "Off"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.glide",
+      "label": "Camera glide",
+      "help": "Add softer trailing motion while dragging. Off makes dragging more responsive.",
+      "default": "0",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.wheel_zoom",
+      "label": "Mouse wheel zoom",
+      "help": "Turn the mouse wheel to zoom the course.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.zoom_anchor",
+      "label": "Zoom toward",
+      "help": "Keep the spot under your pointer in place while zooming, or keep the view center in place.",
+      "default": "pointer",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "pointer",
+          "label": "Mouse pointer"
+        },
+        {
+          "value": "centre",
+          "label": "View center"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.edge_scroll",
+      "label": "Screen edge scrolling",
+      "help": "Move the course when the pointer touches the edge of the screen.",
+      "default": "0",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "camera_controls",
+      "key": "camera.pan_speed",
+      "label": "Keyboard pan speed",
+      "help": "How quickly the camera moves when you hold a pan key.",
+      "default": "900",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "300",
+          "label": "Slow"
+        },
+        {
+          "value": "600",
+          "label": "Gentle"
+        },
+        {
+          "value": "900",
+          "label": "Standard"
+        },
+        {
+          "value": "1500",
+          "label": "Fast"
+        },
+        {
+          "value": "2400",
+          "label": "Very fast"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "display.smooth",
+      "label": "Smooth course scrolling",
+      "help": "Let the course move smoothly and stop between tile positions.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "display.smooth_zoom",
+      "label": "Smooth zoom",
+      "help": "Glide between zoom levels instead of cutting instantly.",
+      "default": "1",
+      "timing": "live",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "display.fps",
+      "label": "Frame rate limit",
+      "help": "Limit drawing speed. Unlimited may use more power.",
+      "default": "0",
+      "timing": "restart",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Unlimited"
+        },
+        {
+          "value": "30",
+          "label": "30 fps"
+        },
+        {
+          "value": "60",
+          "label": "60 fps"
+        },
+        {
+          "value": "120",
+          "label": "120 fps"
+        },
+        {
+          "value": "144",
+          "label": "144 fps"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "display.vsync",
+      "label": "Match monitor refresh",
+      "help": "Reduce screen tearing by matching drawing to the display refresh rate.",
+      "default": "1",
+      "timing": "restart",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Off"
+        },
+        {
+          "value": "1",
+          "label": "On"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "display.ui_scale",
+      "label": "Interface size",
+      "help": "Choose the size of original game pixels on a larger screen. Automatic chooses a size for your display.",
+      "default": "auto",
+      "timing": "restart",
+      "choices": [
+        {
+          "value": "auto",
+          "label": "Automatic"
+        },
+        {
+          "value": "1",
+          "label": "1x"
+        },
+        {
+          "value": "2",
+          "label": "2x"
+        },
+        {
+          "value": "3",
+          "label": "3x"
+        },
+        {
+          "value": "4",
+          "label": "4x"
+        }
+      ]
+    },
+    {
+      "mod": "hd_presentation",
+      "key": "map.scale",
+      "label": "Size of new courses",
+      "help": "Choose the land area for newly created courses. Existing saves always keep their own size.",
+      "default": "1",
+      "timing": "new_course",
+      "choices": [
+        {
+          "value": "1",
+          "label": "Original: 50 x 50"
+        },
+        {
+          "value": "2",
+          "label": "Larger: 70 x 70"
+        },
+        {
+          "value": "4",
+          "label": "Large: 100 x 100"
+        },
+        {
+          "value": "10",
+          "label": "Largest: 158 x 158"
+        }
+      ]
+    }
+  ]
+}

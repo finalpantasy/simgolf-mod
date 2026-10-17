@@ -405,7 +405,7 @@ int modset_add(ModSet *s, ModManifest *m) {
 
 static int cmp_str(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
-static void scan_root(ModSet *s, const char *root, int builtin) {
+static void scan_root(ModSet *s, const char *root, int builtin, int missing_only) {
   DIR *d = opendir(root);
   if (!d) return;
   char **names = NULL;
@@ -433,6 +433,11 @@ static void scan_root(ModSet *s, const char *root, int builtin) {
       m.id = mods_strdup(names[i]);
       if (!m.name) m.name = mods_strdup(names[i]);
     }
+    // Compatibility defaults never replace an installed or customized mod.
+    if (missing_only && modset_find(s, m.id) >= 0) {
+      manifest_free(&m);
+      continue;
+    }
     // Folder names relative to the mods folder: the same text wherever it lives.
     if (m.error)
       mdiag_add(&s->diags, MD_ERROR, "manifest_error", m.id, "%s (%s%s/mod.toml): %s", m.id, builtin ? "builtin/" : "",
@@ -449,8 +454,12 @@ static void scan_root(ModSet *s, const char *root, int builtin) {
 void modset_scan(ModSet *s, const char *mods_dir) {
   char p[700];
   snprintf(p, sizeof p, "%s/builtin", mods_dir);
-  scan_root(s, p, 1);
-  scan_root(s, mods_dir, 0);
+  scan_root(s, p, 1, 0);
+  scan_root(s, mods_dir, 0, 0);
+  // Older updaters refresh ui/ but deliberately leave player mods untouched.
+  // Discover missing built-ins there without copying files or enabling them.
+  snprintf(p, sizeof p, "%s/../ui/builtin-mods", mods_dir);
+  scan_root(s, p, 1, 1);
 }
 
 void modset_free(ModSet *s) {

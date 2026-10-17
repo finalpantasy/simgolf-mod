@@ -44,8 +44,8 @@ uint32_t compose_golfer_palette(int slot) {
   if (slot < 0 || slot >= 0x200) return 0;
   if (!special) {
     profile = *(int16_t *)(uintptr_t)(0x57956e + slot * 0x100);
-    if (fix_re_bounds_on() && !sg_re_profile_valid(profile)) return 0;
-    uint32_t person = 0x4d6088 + profile * 0x230;
+    if (!roster_profile_valid(profile)) return 0;
+    uint32_t person = roster_address(0x4d6088) + profile * 0x230;
     uint32_t golfer = 0x5794b8 + slot * 0x100;
     male = FUN_0046c940(slot) != 0;
     shirt = profile * 3 % 10; pants = profile % 10;
@@ -62,7 +62,7 @@ uint32_t compose_golfer_palette(int slot) {
       hat = CP8(person + 0x23) & 15; head_hair = CP8(person + 0x28);
     }
     if (CP8(golfer + 0x18) == 0x20) {
-      uint32_t roster = 0x58dd70 + (uint8_t)CP8(golfer + 0xbb) * 0x38;
+      uint32_t roster = roster_address(0x58dd70) + (uint8_t)CP8(golfer + 0xbb) * 0x38;
       hair = 4; male = 1;
       hat = CP8(roster + 2); skin = CP8(roster + 1);
       shirt = CP8(roster + 3); pants = CP8(roster + 4);
@@ -94,7 +94,7 @@ uint32_t compose_golfer_palette(int slot) {
     palette_read(rgb, hair + offset, 100); palette_write(rgb, 90, 7);
     palette_read(rgb, 0x8b + (slot & 1), 172);
   }
-  int tail = slot < 0x98 && (*(uint8_t *)(uintptr_t)(0x5849e2 + profile * 0x2c) & 7) > 3;
+  int tail = slot < 0x98 && (*(uint8_t *)(uintptr_t)(roster_address(0x5849e2) + profile * 0x2c) & 7) > 3;
   palette_read(rgb, 0x8b + tail, 172);
   return palette_write(rgb, 144, 28);
 }

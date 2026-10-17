@@ -52,6 +52,9 @@ int mods_ini_save(void);
 // SIMGOLF_OPTIONS_FILE), which is read over mods.ini at the next start. Returns 0 if validation, table
 // capacity, or persistence fails. A persistence failure leaves the new value active for this run.
 int mods_option_set(const char *key, const char *value);
+// Mod-scoped choices load only while their owning mod is loaded. They share
+// the regular Options controls, with the latest player change taking priority.
+int mods_config_set(const char *mod, const char *key, const char *value);
 // The same without writing the file (a slider being dragged); mods_option_flush writes it.
 int mods_option_put(const char *key, const char *value);
 // Returns 0 when settings were not persisted, including when --no-mods suppresses the write.

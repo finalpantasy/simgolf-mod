@@ -1,0 +1,9 @@
+id = "joined_pot_bunkers"
+name = "Joined pot bunkers"
+version = "0.1.0"
+authors = ["SimGolf mod team"]
+description = "Adjacent pot bunkers share a recessed sandy floor and outer rim. Works with Click-and-drag placement."
+platform = "^1.0"
+game = ">=1.2.0"
+[settings]
+"terrain.joined_pot_bunkers" = "1"

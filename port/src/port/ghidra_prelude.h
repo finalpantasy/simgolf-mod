@@ -258,6 +258,7 @@ extern int win_screen_w, win_screen_h, win_tier_w, win_tier_h;
 #define HD_UI_DY (win_screen_h - 600)
 int hd_ui_view_begin(int dx, int dy);
 void hd_ui_view_end(void);
+int hd_ui_staff_circle(int x, int y, int radius, int color);
 void hd_ui_frame_camera(void);
 void hd_ui_course_done(void);
 void hd_ui_camera_clamp(void);
@@ -300,6 +301,7 @@ int living_reaction(int slot, int event, int original);
 // task-40 (src/port/golf/overrides.c): 1 = FUN_00449540 raises water tiles at load too.
 int fix_water_push(void);
 int fix_weed_guard(int tile, int original);   // task-114t
+void fix_newcareer_landmarks(void);
 int fix_hole_time(void);   // task-114: repairs an inflated hole 1 time total at load (mods.ini [fixes] hole_time)
 
 // task-6 (src/port/golf/overrides.c): FUN_00462020's default skin for a head, with v1.03's bound.

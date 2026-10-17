@@ -2,6 +2,33 @@
 
 [Modding guide](README.md) / Mods screen
 
+## Configure a mod in the game
+
+Select a mod, then choose **Configure** in its details panel. Use the arrows
+beside a named choice to change it. Each setting explains what it does and
+whether it applies immediately, after a restart, or only to a new course.
+Scroll inside the panel to see more settings. No file editing is needed.
+
+The built-in catalog covers 42 choices across 15 mods, including camera
+controls, golfer names and thoughts, balls, path help, construction, course
+lights, and presentation. Cut content and the game bridge have no additional
+player settings. Other mods without catalog entries say that configuration
+is unavailable rather than displaying a raw file editor.
+
+Configuration saves automatically and is shared by profiles that load that
+mod. **Apply changes** and **Undo changes** still control only the mod list
+and profiles. Configuration controls remain disabled until their mod is
+enabled and loaded. A disabled mod and the Vanilla profile do not apply these
+saved choices; enabling the mod again restores them. Changes made through
+the normal Options page update the same choice. Unrecognized existing
+values show as **Custom** and are preserved until explicitly changed.
+
+For developers, `data/ui/mod_settings.json` supplies labels, guidance, safe
+choices and timing. The build copies it beside the executable under `ui/`;
+the release packager includes that directory. Invalid catalogs are rejected
+with a visible unavailable message. Settings use `config.<mod>.<setting>`
+entries in the normal options store. They never rewrite a mod's own files.
+
 The in-game mod manager is a Frosted Mint page to turn mods on and off, order them, see
 conflicts and missing dependencies, and keep profiles. It is the screen version of `tools/modctl`:
 every decision comes from the platform's resolver (`mods_resolve`), nothing is re-implemented in the UI,
@@ -67,3 +94,11 @@ are absent from the public export. See [Testing](TESTING.md).
 - Gallery pages `mods-*` at 1080p and 4K (`ui_gallery --only mods`).
 - Sample mods: `mods/sample_cheap_bar` (a data tweak), `sample_bar_tips` (needs it), `sample_pricey_bar`
   (conflicts with the cheap one), `sample_fancy_menu` (missing dependency, changes saves). All off by default.
+
+## Older updater compatibility
+
+The release includes new built-in manifests under `ui/builtin-mods/` as well
+as the normal mods folder. Discovery reads this compatibility folder only
+for IDs absent from the installed mods folder. Existing and customized
+mods, profiles and load order stay untouched. Merely discovering an optional
+mod never enables it; Vanilla remains empty.

@@ -437,7 +437,9 @@ static int draw_profile(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
       float bw = ui_s(c, 28), bws = own_pro ? ui_s(c, 4) : 2 * bw;   // the player's pro: no buttons, the meter moves right
       ui_text_fit(c, ui_rect(rr.x + ui_s(c, 12), rr.y, rr.w - bws - ui_s(c, 100), rr.h), UI_TYPE_LABEL, t->text_primary, p.lev_name[i], 0);
       UiRect mr = ui_rect(rr.x + rr.w - bws - ui_s(c, 94), rr.y + (rr.h - ui_s(c, 8)) / 2, ui_s(c, 60), ui_s(c, 8));
-      ui_meter(c, mr, p.lev[i] / 10.0f);
+      // The original profile prints level * 10 as a percentage, unlike the
+      // allocation screen's raw 0..10 levels. Keep the bar on the same scale.
+      ui_meter(c, mr, p.lev[i] / 100.0f);
       char num[16];
       snprintf(num, sizeof num, "%d", p.lev[i]);
       ui_text_in(c, ui_rect(mr.x + mr.w + ui_s(c, 2), rr.y, ui_s(c, 24), rr.h), UI_TYPE_LABEL, t->text_secondary, num, 0.5f);
@@ -829,11 +831,14 @@ static int draw_photo(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpActi
   for (int i = 0; top && i < s->n; i++)
     if (s->it[i].type == RP_IT_PIC && s->it[i].x == top->x && s->it[i].y == top->y) pic = &s->it[i];
   float history_h = n > 1 ? 192.0f : 0;
+  int goals = 0;
+  for (int i = 0; i < s->n; i++) if (s->it[i].type == RP_IT_GOAL) goals++;
+  float goals_h = goals ? 46.0f + 32.0f * goals : 0;
 
   UiRect scr = ui_screen(c);
   float margin = ui_s(c, t->edge_margin);
   float photo_w = 480, photo_h = 384;
-  float design_h = 28 + 22 + 44 + 16 + photo_h + 12 + 30 + (history_h ? 16 + 38 + history_h : 0) + 20 + 48 + 28;
+  float design_h = 28 + 22 + 44 + 16 + photo_h + 12 + 30 + (history_h ? 16 + 38 + history_h : 0) + goals_h + 20 + 48 + 28;
   float k = fminf(1.0f, fminf((scr.w - 2 * margin) / ui_s(c, PH_W), (scr.h - 2 * margin) / ui_s(c, design_h)));
   if (k < 1.0f) ui_push_scale(c, k);
   UiRect pr = ui_rect_round(ui_center(ui_screen(c), ui_s(c, PH_W), ui_s(c, design_h)));
@@ -908,6 +913,21 @@ static int draw_photo(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpActi
         *selected = ph[i]->art;
     }
     ui_vscroll_end(c);
+    y += ui_s(c, history_h);
+  }
+  if (goals) {
+    y += ui_s(c, 16);
+    section_label(c, in.x, y, in.w, "Next accomplishments");
+    y += ui_s(c, 30);
+    for (int i = 0; i < s->n; i++) {
+      if (s->it[i].type != RP_IT_GOAL) continue;
+      char goal[RP_TEXT];
+      fix_text(goal, sizeof goal, s->it[i].s);
+      ui_icon(c, UI_ICON_TROPHY, ui_rect(in.x, y, ui_s(c, 24), ui_s(c, 28)), ui_s(c, 18), t->text_secondary);
+      ui_text_fit(c, ui_rect(in.x + ui_s(c, 34), y, in.w - ui_s(c, 34), ui_s(c, 28)),
+                  UI_TYPE_BODY, t->text_primary, goal, 0);
+      y += ui_s(c, 32);
+    }
   }
   if (getenv("SIMGOLF_REPORTS_LOG")) {
     static int last_id = -1, last_open = -1;

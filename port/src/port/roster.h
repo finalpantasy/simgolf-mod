@@ -21,6 +21,7 @@ void roster_seed(int reset);
 void roster_append_tables(void);
 void roster_bind_slot(int slot);
 void roster_spawned(unsigned slot);
+int roster_vanilla_visitor_skills(int profile);
 int roster_face_count(int male);
 int roster_face_character(int male,int ordinal);
 const char *roster_face_name(int character);

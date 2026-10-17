@@ -24,6 +24,7 @@
 #include "port/reports_handoff_policy.h"
 #include "port/grid.h"
 #include "port/host.h"
+#include "port/staff.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define SCREEN_STATE 0x569498
@@ -1125,6 +1126,12 @@ static void rp_frame_body(int present) {
     g_snap.ext[1] = id;
     g_snap.ext[2] = id != 99 && *(volatile int16_t *)(uintptr_t)0x4c2c9c != 0;
     g_snap.ext[3] = g_ph_n;
+    // The original board lists the first three unearned awards, even with no photos.
+    for (int id = 0, next = 0; id < 22 && next < 3; id++) {
+      if (G32(0x4c15a0 + 0x30 * id)) continue;
+      RpItem *goal = slot(RP_IT_GOAL, 0, next++);
+      if (goal) { goal->art = (uint8_t)id; accomp_name(id, goal->s, sizeof goal->s); }
+    }
   }
   if (g_log > 0 && g_kind >= RP_PROFILE) {   // task-102: when golf took a click (the tests time a click from the native action)
     static uint32_t last;
@@ -1139,6 +1146,12 @@ static void rp_frame_body(int present) {
     g_snap.ext[0] = G32(0x4d20dc);
     capture_pics();
     g_route_drawing = 0;
+    if (g_log) {
+      int zones = 0, varied = 0;
+      for (int i = 0; i < STAFF_CAPACITY; i++) zones += g_snap.map.staff[i].active;
+      for (int i = 1; i < g_snap.map.width * g_snap.map.height; i++) varied += g_snap.map.heat[i] != g_snap.map.heat[0];
+      fprintf(stderr, "reports: map mode %d staff zones %d varied heat cells %d\n", g_snap.map.mode, zones, varied);
+    }
   }
   g_snap.serial = ++g_serial;
   rpf_publish(&g_snap);
@@ -1559,6 +1572,17 @@ static void rp_map_begin(void) {
     memset(m, 0, sizeof *m);
     m->valid = 1; m->width = MAP_W; m->height = MAP_H;
     m->mode = g_kind == RP_TRACTS ? -1 : G32(0x4d20dc);
+    if (m->mode == 0) {
+      for (int i = 0; i < STAFF_CAPACITY; i++) {
+        const uint8_t *r = (const uint8_t *)(staff_base() + i * STAFF_STRIDE);
+        int job = (int8_t)r[0x13];
+        int x = staff_tile_coord(r[0x10]), y = staff_tile_coord(r[0x11]);
+        if (!r[0x12] || job < -5 || job > -2 || x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+        m->staff[i].active = 1; m->staff[i].job = job;
+        m->staff[i].x = x; m->staff[i].y = y;
+        m->staff[i].radius = job == -4 ? ((r[0x12] & 8) ? 8 : 6) : 4;
+      }
+    }
     for (int i = 0; i < 18; i++) {
       uintptr_t p = 0x575ab0 + (uintptr_t)(i + 1) * 0x208;
       if (!*(volatile int8_t *)p) continue;

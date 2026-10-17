@@ -159,6 +159,8 @@ static uint16_t *g_ui;      // the finished frame when layered: its UI is where 
 static uint8_t *g_mask;     // hdt_capture's terrain mask for g_frame
 static int g_frame_course;                  // g_frame shows the course view (hdt_capture)
 static int g_frame_layered;                 // g_frame/g_ui are the course and UI layers
+static int g_frame_analysis;
+int rp_analysis_on(void);
 static HdUiCamera g_frame_cam;              // the camera g_frame was drawn with (layered)
 static uint8_t g_frame_note[HD_NOTE_MAX];   // task-31: what the game thread attached to g_frame (layered)
 static int g_frame_note_size;
@@ -398,6 +400,7 @@ typedef struct {
   SDL_Texture *canvas;
   int canvas_w, canvas_h;
   int course_view;   // the course view: the whole canvas; anything else: its top-left 800x600
+  int analysis;
   int layered;       // course[cur] and ui are separate layers
   LONG shown_serial;
   SDL_BlendMode premul;
@@ -531,6 +534,7 @@ static void upload(Rt *t, double now) {
   memcpy(t->local, g_frame, (size_t)FRAME_W * FRAME_H * 2);
   t->course_view = g_frame_course;
   t->layered = g_frame_layered;
+  t->analysis = g_frame_analysis;
   if (t->course_view) memcpy(t->mask, g_mask, (size_t)FRAME_W * FRAME_H);
   if (t->layered) {
     memcpy(t->local_ui, g_ui, (size_t)FRAME_W * FRAME_H * 2);
@@ -622,8 +626,11 @@ static void fill_art(Rt *t, LONG serial) {
   // course overlay and its top list under golf's UI layer; without, its one
   // list covers the whole picture (title, menus, reports).
   const uint8_t *cc = hd_art_cut_mask(HD_ART_COURSE), *ct = hd_art_cut_mask(HD_ART_TOP);
-  t->cut = layered ? cc : ct;
-  t->art_main = t->cut ? (layered ? HD_ART_COURSE : HD_ART_TOP) : -1;
+  // Analysis draws trajectories over a frozen course without a new split
+  // frame. Its trees still belong to the retained HD course list.
+  int course_art = layered || t->analysis;
+  t->cut = course_art ? cc : ct;
+  t->art_main = t->cut ? (course_art ? HD_ART_COURSE : HD_ART_TOP) : -1;
   t->cut_ui = layered ? ct : NULL;
   t->art_ui = t->cut_ui != NULL;
   t->terrain_on = t->course_view && g_cfg.terrain;
@@ -708,7 +715,7 @@ static void draw_cast_shadows(Rt *t, SDL_Rect clip, double x, double y, double s
   EnvironmentSample sun = environment_sample(&t->environment, environment_light_seconds(&t->environment,environment_time(t, now)));
   double dx = 0, dy = 0;
   int visible = environment_shadow_slope(&sun, t->cam.ax, t->cam.ay, t->cam.bx, t->cam.by, &dx, &dy);
-  int enabled = t->layered && t->course_view && terrain && t->environment.enabled && t->environment.cast_shadows;
+  int enabled = (t->layered || t->analysis) && t->course_view && terrain && t->environment.enabled && t->environment.cast_shadows;
   // Snapshots retain a clean base. At night replacement stays enabled so
   // the art's fixed midday shadows cannot reappear as the sun fades away.
   double opacity = visible && !snapshot ? t->environment.atmosphere.shadow_opacity * sun.sun_strength * environment_shadow_transmission(&t->environment,&sun) : 0;
@@ -1032,7 +1039,15 @@ static int weather_receiver(Rt *t) {
 static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh, double now) {
   t->profile_terrain=t->profile_shadow=t->profile_fx=0;
   EnvironmentSample sun = environment_sample(&t->environment, environment_light_seconds(&t->environment,environment_time(t, now)));
-  int lighting = t->course_view && t->layered && t->environment.enabled && t->environment.lighting;
+  int course_lighting = t->course_view && (t->layered || t->analysis);
+  if (getenv("SIMGOLF_REPORTS_LOG")) {
+    static int last_analysis = -1;
+    if (last_analysis != t->analysis) {
+      last_analysis = t->analysis;
+      fprintf(stderr, "reports: analysis lighting %d course %d layered %d\n", t->analysis, t->course_view, t->layered);
+    }
+  }
+  int lighting = course_lighting && t->environment.enabled && t->environment.lighting;
   terrain_lighting_sky((float)sun.daylight);
   terrain_lighting_ambient((float)t->environment.ambient_fill);
   terrain_lighting_linear(t->environment.linear_light);
@@ -1164,7 +1179,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     if (layered && g_cfg.smooth && g_cfg.edge_fix) keep_course(t, target, d, ox, oy);
     else t->slast_ok = 0;
   }
-  if (layered && t->course_view) {
+  if (course_lighting) {
     SDL_Rect course = {d.x, d.y, d.w, d.h};
     EnvironmentView view = environment_view_camera(&t->cam, *sw, *sh, k,
       glide ? t->zs : 1, glide ? t->zx : (cd.x - d.x) / k,
@@ -1255,7 +1270,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
       environment_fx_destroy(&t->environment_fx);
     }
   }
-  if(layered && t->course_view && weather_receiver(t)) {
+  if(course_lighting && weather_receiver(t)) {
     double lamp_scale=glide?k*t->zs:k;
     double lamp_x=glide?d.x+t->zx*k:cd.x, lamp_y=glide?d.y+t->zy*k:cd.y;
     double night=t->environment.enabled?fmax(0,fmin(1,(.65-sun.daylight)/.65)):0;
@@ -1918,12 +1933,14 @@ int hd_present(const uint16_t *screen) {
   // frame): the course and its UI go over as two layers. Modal screens
   // present without one and stay a single picture.
   int layered = g_snap_fresh;
+  int analysis = rp_analysis_on() && mods_get_int("fixes.analysis_lighting", 1);
   g_snap_fresh = 0;
   // Before golf has drawn any course terrain, the terrain cache holds the
   // title picture, which would pass for a course frame.
   int course = terrain_hd_seen() && hdt_capture(layered ? g_snap : screen, mask, g_frame_serial + 1);   // the serial this frame gets below
   if (!course) layered = 0;
   EnterCriticalSection(&g_lock);
+  g_frame_analysis = analysis;
   int replay=g_text_ready && mods_get_int("ui.hd_legacy_text",1)!=0;
   g_text_course->count=g_text_course->glyphs=0;
   g_text_ui->count=g_text_ui->glyphs=0;
@@ -2062,8 +2079,8 @@ int hd_present(const uint16_t *screen) {
   g_note3_pending_size = 0;
   if (course) memcpy(g_mask, mask, (size_t)FRAME_W * FRAME_H);
   lamps_game_frame(&g_frame_lamps);
-  if(!layered||!course)g_frame_lamps.enabled=0;
-  hd_art_publish(layered, screen);
+  if((!layered&&!analysis)||!course)g_frame_lamps.enabled=0;
+  hd_art_publish(layered, screen, course && rp_analysis_on());
   InterlockedIncrement(&g_frame_serial);
   LeaveCriticalSection(&g_lock);
   const char *temperature_units=mods_get("environment.temperature_units");

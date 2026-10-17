@@ -240,6 +240,7 @@
       ]
     ],
     "FUN_00436e50": [
+      ["FUN_00407c60(", "hd_ui_staff_circle("],
       [
         "(char)(&DAT_00585860)[iVar7]",
         "staff_tile_coord((&DAT_00585860)[iVar7])"
@@ -290,6 +291,8 @@
       ]
     ],
     "FUN_00456be0": [
+      ["(char)psStack_120[-7]", "staff_tile_coord((char)psStack_120[-7])"],
+      ["*(char *)((int)psStack_120 + -0xd)", "staff_tile_coord(*(char *)((int)psStack_120 + -0xd))"],
       [
         "0x586b63",
         "(staff_base()+STAFF_BYTES+0x13)"

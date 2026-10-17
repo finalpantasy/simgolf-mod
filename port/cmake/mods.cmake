@@ -6,7 +6,7 @@
 
 set(SIMGOLF_MODS_CORE
   src/mods/semver.c src/mods/manifest.c src/mods/resolve.c src/mods/session.c
-  src/mods/store.c src/mods/modmgr.c src/mods/saverec.c src/mods/relocate.c src/mods/json.c src/mods/data.c
+  src/mods/store.c src/mods/modmgr.c src/mods/modconfig.c src/mods/saverec.c src/mods/relocate.c src/mods/json.c src/mods/data.c
   third_party/tomlc99/toml.c)
 set_source_files_properties(third_party/tomlc99/toml.c PROPERTIES COMPILE_OPTIONS "-w")
 
@@ -26,12 +26,14 @@ endif()
 add_executable(modctl_core src/mods/tool/modctl_core.c src/mods/tool/modctl_data.c ${SIMGOLF_MODS_CORE} src/compat/msvc/dirent.c)
 add_executable(mods_tests "${CMAKE_SOURCE_DIR}/../tests/mods/test_mods.c" ${SIMGOLF_MODS_CORE} src/mods/mods_runtime.c
   src/compat/msvc/dirent.c)
+add_executable(modconfig_tests "${CMAKE_SOURCE_DIR}/../tests/mods/test_modconfig.c" ${SIMGOLF_MODS_CORE} src/mods/mods_runtime.c
+  src/compat/msvc/dirent.c)
 # task-19: the data layer's unit tests (tests/mods/test_data.c).
 add_executable(data_tests "${CMAKE_SOURCE_DIR}/../tests/mods/test_data.c" ${SIMGOLF_MODS_CORE} src/compat/msvc/dirent.c)
 add_executable(living_tests "${CMAKE_SOURCE_DIR}/../tests/mods/test_living.c" src/mods/living_club.c src/mods/json.c src/mods/semver.c)
 # task-22: the Mods screen's model (search, filter, sort, order and profile edits, load_order.toml).
 add_executable(modmgr_tests "${CMAKE_SOURCE_DIR}/../tests/ui/test_modmgr.c" ${SIMGOLF_MODS_CORE} src/compat/msvc/dirent.c)
-foreach(t modctl_core mods_tests data_tests modmgr_tests living_tests)
+foreach(t modctl_core mods_tests modconfig_tests data_tests modmgr_tests living_tests)
   target_include_directories(${t} PRIVATE src third_party src/compat/msvc)
   target_compile_definitions(${t} PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
   target_compile_options(${t} PRIVATE $<$<COMPILE_LANGUAGE:C>:/clang:-std=gnu11> -Wno-unused-function)

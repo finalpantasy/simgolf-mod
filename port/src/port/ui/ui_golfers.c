@@ -502,7 +502,7 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   int n_q = g->quote[0] && !story ? wrap_lines(c, UI_TYPE_BODY, g->quote, in_w - ui_s(c, 28), q, 4) : 0;
   float quote_h = n_q ? n_q * bf.line + ui_s(c, 24) : 0;
   char wl[2][160];
-  int n_w = g->skills[0] && !story ? wrap_lines(c, UI_TYPE_CAPTION, g->skills, in_w - ui_s(c, 28) - ui_text_width(c, UI_TYPE_CAPTION, "Wants more  "), wl, 2) : 0;
+  int n_w = g->skills[0] && !story ? wrap_lines(c, UI_TYPE_CAPTION, g->skills, in_w - ui_s(c, 28) - ui_text_width(c, UI_TYPE_CAPTION, "Has  "), wl, 2) : 0;
   float wants_h = n_w ? n_w * cf.line + ui_s(c, 10) : 0;
   char club[3][160];
   int n_club = g->club_story[0] ? wrap_lines(c, UI_TYPE_CAPTION, g->club_story, in_w, club, 3) : 0;
@@ -514,8 +514,9 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   if (!story && g->has_scores) {
     rows = g->cur_hole > 9 ? 2 : 1;   // the back nine only once it is being played
     for (int i = 9; i < GW_HOLES; i++)
-      if (g->score[i] > 0) rows = 2;
-    card_rows_h = rows * (cf.line + bf.line + ui_s(c, 6)) + ui_s(c, 6);
+      if (g->score[i] > 0 || (g->has_opponent && (g->opponent_score[i] > 0 || g->opponent_hole == i + 1))) rows = 2;
+    card_rows_h = rows * (cf.line + bf.line * (g->has_opponent ? 2 : 1) + ui_s(c, 6)) + ui_s(c, 6);
+    if (g->has_opponent) card_rows_h += cf.line + ui_s(c, 6);
   }
   char sl[10][160];
   int8_t sl_tone[10];
@@ -614,8 +615,8 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
   }
   if (n_w) {
     float lx = x + ui_s(c, 14);
-    float lw = ui_text_width(c, UI_TYPE_CAPTION, "Wants more  ");
-    ui_text_in(c, ui_rect(lx, y, lw, cf.line), UI_TYPE_CAPTION, t->accent_soft_text, "Wants more", 0);
+    float lw = ui_text_width(c, UI_TYPE_CAPTION, "Has  ");
+    ui_text_in(c, ui_rect(lx, y, lw, cf.line), UI_TYPE_CAPTION, t->accent_soft_text, "Has", 0);
     for (int i = 0; i < n_w; i++)
       ui_text_in(c, ui_rect(lx + lw, y + i * cf.line, in_w - ui_s(c, 28) - lw, cf.line), UI_TYPE_CAPTION, t->text_secondary, wl[i], 0);
     y += wants_h + ui_s(c, 10);
@@ -641,30 +642,48 @@ static int draw_card(UiCtx *c, const GwNote *n, SDL_Texture *const *art, float v
     }
     y += ui_s(c, 6);
     if (g->has_scores) {
+      if (g->has_opponent) {
+        char against[96]; snprintf(against, sizeof against, "Against %s", g->opponent_name);
+        ui_text_fit(c, ui_rect(x, y, in_w, cf.line), UI_TYPE_CAPTION, t->accent_soft_text, against, 0);
+        y += cf.line + ui_s(c, 6);
+      }
       // a row of nine holes (two once the back nine is played); the total sits at the end of the last row
-      float colw = in_w / 10.0f;
+      float colw = in_w / (g->has_opponent ? 11.0f : 10.0f);
+      float score_x = x + (g->has_opponent ? colw : 0);
       for (int row = 0; row < rows; row++) {
+        if (g->has_opponent) {
+          ui_text_fit(c, ui_rect(x, y + cf.line, colw, bf.line), UI_TYPE_MICRO, t->text_secondary, g->has_opponent == 1 ? "You" : "Rival", 0);
+          ui_text_fit(c, ui_rect(x, y + cf.line + bf.line, colw, bf.line), UI_TYPE_MICRO, t->text_secondary, g->has_opponent == 1 ? "Rival" : "You", 0);
+        }
         char hn[8];
         for (int col = 0; col < 9; col++) {
           int hole = row * 9 + col;
-          UiRect cell = ui_rect(x + col * colw, y, colw, cf.line);
+          UiRect cell = ui_rect(score_x + col * colw, y, colw, cf.line);
           snprintf(hn, sizeof hn, "%d", hole + 1);
           ui_text_in(c, cell, UI_TYPE_MICRO, g->cur_hole == hole + 1 ? t->accent : t->text_tertiary, hn, 0.5f);
           if (g->score[hole] > 0 || g->cur_hole == hole + 1) {
             char sn[8];
             snprintf(sn, sizeof sn, "%d", g->score[hole]);
-            UiRect sc = ui_rect(x + col * colw, y + cf.line, colw, bf.line);
-            if (g->cur_hole == hole + 1 && g->score[hole] == 0) continue;
-            tone_text(c, sc, sn, g->tone[hole]);
+            UiRect sc = ui_rect(score_x + col * colw, y + cf.line, colw, bf.line);
+            if (g->score[hole] > 0) tone_text(c, sc, sn, g->tone[hole]);
+          }
+          if (g->has_opponent && g->opponent_score[hole] > 0) {
+            char sn[8]; snprintf(sn, sizeof sn, "%d", g->opponent_score[hole]);
+            ui_text_in(c, ui_rect(score_x + col * colw, y + cf.line + bf.line, colw, bf.line),
+                       UI_TYPE_NUMBER, g->opponent_hole == hole + 1 ? t->accent : t->text_primary, sn, .5f);
           }
         }
         if (row == rows - 1) {
           char tn[8];
           snprintf(tn, sizeof tn, "%d", g->total);
-          ui_text_in(c, ui_rect(x + 9 * colw, y, colw, cf.line), UI_TYPE_MICRO, t->text_tertiary, "Total", 0.5f);
-          ui_text_in(c, ui_rect(x + 9 * colw, y + cf.line, colw, bf.line), UI_TYPE_NUMBER, t->text_primary, tn, 0.5f);
+          ui_text_in(c, ui_rect(score_x + 9 * colw, y, colw, cf.line), UI_TYPE_MICRO, t->text_tertiary, "Total", 0.5f);
+          ui_text_in(c, ui_rect(score_x + 9 * colw, y + cf.line, colw, bf.line), UI_TYPE_NUMBER, t->text_primary, tn, 0.5f);
+          if (g->has_opponent) {
+            snprintf(tn, sizeof tn, "%d", g->opponent_total);
+            ui_text_in(c, ui_rect(score_x + 9 * colw, y + cf.line + bf.line, colw, bf.line), UI_TYPE_NUMBER, t->text_primary, tn, .5f);
+          }
         }
-        y += cf.line + bf.line + ui_s(c, 6);
+        y += cf.line + bf.line * (g->has_opponent ? 2 : 1) + ui_s(c, 6);
       }
       y += ui_s(c, 6);
     }

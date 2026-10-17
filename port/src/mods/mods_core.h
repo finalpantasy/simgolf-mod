@@ -128,7 +128,9 @@ int manifest_load(ModManifest *m, const char *dir, int builtin);
 void manifest_free(ModManifest *m);
 
 // Scans "<mods_dir>/builtin/*/mod.toml" then "<mods_dir>/*/mod.toml", each in
-// name order. A folder without mod.toml is not a mod (builtin, examples).
+// name order, then missing built-ins from ../ui/builtin-mods (legacy updater).
+// Existing IDs always win. Discovery never writes files or enables a mod.
+// A folder without mod.toml is not a mod (builtin, examples).
 void modset_scan(ModSet *s, const char *mods_dir);
 int modset_add(ModSet *s, ModManifest *m);   // takes ownership; 0 on duplicate id
 int modset_find(const ModSet *s, const char *id);

@@ -4,7 +4,8 @@
 // chips, a toggle and up/down/drag for the load order, a profile menu with create, duplicate, rename and
 // delete, a detail panel for the selected mod, and Apply / Revert / Close. Every decision (conflicts,
 // dependencies, order, restart) is the model's, which asks the platform's resolver; this file only draws
-// and turns clicks into model calls. Nothing is written to disk until Apply.
+// and turns clicks into model calls. Profile edits reach disk with Apply;
+// configuration choices save automatically through the presenter's callback.
 //
 // Immediate mode like the rest of the kit: ui_mods_draw is called between ui_begin and ui_end each frame.
 // It never touches the OS: "open the folder" and "open the link" are requests in ModsUi (open_path,
@@ -14,6 +15,7 @@
 #include <SDL.h>
 
 #include "mods/modmgr.h"
+#include "mods/modconfig.h"
 #include "port/ui/ui_kit.h"
 
 enum { MUI_DLG_NONE, MUI_DLG_NEW, MUI_DLG_RENAME, MUI_DLG_DELETE, MUI_DLG_CLOSE };
@@ -34,6 +36,16 @@ typedef struct ModsUi {
   int in_game;             // opened over a running course (Esc menu): the footer says changes need a restart
   int drag;                // mod index being dragged, -1
   int drag_target;         // mod index it would drop on
+  // Settings save immediately, independently of profile Apply / Revert.
+  const JsonVal *config;
+  const char *(*setting_get)(const char *key);
+  int (*setting_save)(const char *key, const char *value);
+  int configure;
+  int config_selected;
+  UiRect log_configure;
+  UiRect log_setting[24];
+  const char *log_setting_key[24];
+  int log_nsettings;
   // requests for the host, cleared by it
   int req_close;
   char open_path[600];

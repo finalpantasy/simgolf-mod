@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <deque>
 
 namespace tgl {
 
@@ -144,7 +145,8 @@ private:
   float offX_ = 0, offY_ = 0;
   int mode_ = MODELVIEW;
   std::vector<Mat4> stack_[2];
-  std::vector<Texture> textures_;  // index = id - 1; w == 0 means free
+  // HD batches retain pointers while runtime art adds textures to this frame.
+  std::deque<Texture> textures_;  // stable addresses; id - 1, w == 0 means free
   unsigned bound_ = 0;
   Recorder recorder_ = nullptr;
   void *recorderUser_ = nullptr;

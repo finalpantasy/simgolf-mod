@@ -13,6 +13,10 @@
 #include "platform/terrain.h"
 #include "platform/terrain_gl.h"
 #include "platform/terrain_port.h"
+#include "platform/joined_pot.h"
+#if defined(SIMGOLF_PORT_FS) && !defined(__EMSCRIPTEN__)
+#include "mods/mods.h"
+#endif
 
 #include <dirent.h>
 #include <math.h>
@@ -60,6 +64,7 @@ TerrainState *g_inst;                             // 0x10106b4c
 float g_pos[TERRAIN_MAX * TERRAIN_MAX * 9][3];        // 0x100b28c8, 3x3 vertices per tile
 float g_nrm[TERRAIN_MAX * TERRAIN_MAX * 9][3];        // 0x10070a18
 unsigned g_tex[37][25][9];                        // 0x100687f8 [set][variant][frame]
+unsigned g_joinedPotTex[6][25][4][256];           // ground, variant, phase, mask
 int g_courseType;                                 // 0x10070a0c
 float g_pitch;                                    // 0x10070a10
 static bool g_screen_lines_fixed = true;
@@ -464,23 +469,32 @@ void setTriTexture(Tile *t, int set, int slot, int frame) {
 
 // FUN_10013670: picks the edge-transition frame of each triangle from the
 // three neighbours touching it. Tees and pot bunkers keep fixed textures.
-void updateTransitions(Tile *t, int set) {
+bool connectedPot(const Tile *t) {
+  if(!t || t->type!=9) return false;
+  for(const Tile *n:t->nbr) if(n && n->type==9) return true;
+  return false;
+}
+
+void updateTransitions(Tile *t, int set, bool joinedBackdrop=false) {
   if (set == -1) set = t->type;
   if (set == kVoid || set == 9 || set == 0) return;
   Tile *n0 = t->nbr[0], *n1 = t->nbr[1], *n2 = t->nbr[2], *n3 = t->nbr[3];
-  int e0 = edgeKind(t, n0), e2 = edgeKind(t, n2), e3 = edgeKind(t, n3), e1 = edgeKind(t, n1);
+  auto edge=[&](const Tile *n) {
+    return joinedBackdrop && connectedPot(n) ? 0 : edgeKind(t,n);
+  };
+  int e0 = edge(n0), e2 = edge(n2), e3 = edge(n3), e1 = edge(n1);
   int d02 = 0, d03 = 0, d12 = 0, d13 = 0;
   bool desert = g_courseType == 1 && set == kTypeWater;
   bool g0 = false, g1 = false, g2 = false, g3 = false;
   if (n0) {
     if (desert && grassy(n0)) g0 = true;
-    if (n2) d02 = edgeKind(t, n0->nbr[2]);
-    if (n3) d03 = edgeKind(t, n0->nbr[3]);
+    if (n2) d02 = edge(n0->nbr[2]);
+    if (n3) d03 = edge(n0->nbr[3]);
   }
   if (n1) {
     if (desert && grassy(n1)) g1 = true;
-    if (n2) d12 = edgeKind(t, n1->nbr[2]);
-    if (n3) d13 = edgeKind(t, n1->nbr[3]);
+    if (n2) d12 = edge(n1->nbr[2]);
+    if (n3) d13 = edge(n1->nbr[3]);
   }
   if (n2 && desert && grassy(n2)) g2 = true;
   if (n3 && desert && grassy(n3)) g3 = true;
@@ -751,11 +765,79 @@ void drawStrata(Tile *t, int depth) {
   }
 }
 
+unsigned joinedPotTexture(Tile *t) {
+#if defined(SIMGOLF_PORT_FS) && !defined(__EMSCRIPTEN__)
+  if(t->type!=9 || !mods_get_int("terrain.joined_pot_bunkers",0)) return 0;
+  unsigned mask=0;
+  for(int i=0;i<8;i++) {
+    Tile *n=tileAt(t->x+joined_pot::dx[i],t->y-joined_pot::dy[i]);
+    if(n && n->type==9) mask|=1u<<i;
+  }
+  if(!joined_pot::connected(mask)) return 0;
+  // kUV maps (u,v) to (1-v,u) at rotation1, opposite the mask's
+  // clockwise bit order. Match the actual UV table, not the camera label.
+  mask=joined_pot::rotate(mask,-g_rot);
+  int variant=t->texVariant;
+  if(variant<0 || variant>=25) return 0;
+  int base=4;
+  for(Tile *n:t->nbr) if(n && n->type>=1 && n->type<=5) {base=n->type;break;}
+  unsigned phase=mask==255?0:joined_pot::phase(t->x,t->y,g_rot);
+  unsigned &id=g_joinedPotTex[base][variant][phase][mask];
+  if(id) return id;
+  const tgl::Texture *source=g_gl.texture(g_tex[9][variant][3]);
+  if(!source || source->w<10 || source->h<10) return 0;
+  tgl::Texture tex;
+  tex.w=tex.h=64;
+  tex.src="joined-pot/"+std::to_string(g_courseType)+"/"+std::to_string(base)+"/"+std::to_string(variant)+"/"+std::to_string(phase)+"/"+std::to_string(mask);
+  tex.rgba.resize(64*64*4);
+  const tgl::Texture *ground=g_gl.texture(g_tex[base][0][0]);
+  // Parkland supplies an uninterrupted pot-sand frame. Other themes repeat
+  // their single-pit frame, so copy a sand-only patch without its turf or wall.
+  // Mirror the original texels, preserving their color and native grain size.
+  const tgl::Texture *floor=g_courseType==0?g_gl.texture(g_tex[9][variant][0]):nullptr;
+  tgl::Texture sampledFloor;
+  if(!floor) {
+    sampledFloor.w=sampledFloor.h=64;sampledFloor.rgba.resize(64*64*4);
+    int pw=source->w*3/16,ph=source->h/8;
+    for(int y=0;y<64;y++)for(int x=0;x<64;x++) {
+      int px=x%(2*pw),py=y%(2*ph);
+      if(px>=pw)px=2*pw-1-px;if(py>=ph)py=2*ph-1-py;
+      // Loaded BMP rows use bottom-up texture coordinates.
+      int sx=source->w*13/32+px,sy=source->h/4+py;
+      memcpy(sampledFloor.rgba.data()+(y*64+x)*4,source->rgba.data()+(sy*source->w+sx)*4,4);
+    }
+    floor=&sampledFloor;
+  }
+  joined_pot::pixels(mask,source->rgba.data(),source->w,source->h,tex.rgba.data(),64,phase,
+                     ground?ground->rgba.data():nullptr,ground?ground->w:0,ground?ground->h:0,
+                     floor?floor->rgba.data():nullptr,floor?floor->w:0,floor?floor->h:0);
+  id=g_gl.createTexture(std::move(tex));
+  return id;
+#else
+  (void)t; return 0;
+#endif
+}
+
 void drawTile(Tile *t) {  // FUN_1000e6c0
   if (!t) return;
+  unsigned joined=joinedPotTexture(t);
+  bool backdrop=false;
+#if defined(SIMGOLF_PORT_FS) && !defined(__EMSCRIPTEN__)
+  if(t->type>=1 && t->type<=5 && t->triCount==8 && mods_get_int("terrain.joined_pot_bunkers",0)) {
+    for(int i=0;i<8;i++)
+      if(connectedPot(tileAt(t->x+joined_pot::dx[i],t->y-joined_pot::dy[i]))) {backdrop=true;break;}
+  }
+#endif
+  uint32_t oldTex[8];uint8_t oldFrame[8];
+  if(backdrop) {
+    for(int i=0;i<8;i++) {oldTex[i]=t->tri[i].tex;oldFrame[i]=t->tri[i].frame;}
+    // The original grass edge frames include a straight tile-shaped collar
+    // around pot bunkers. Suppress that collar only beside joined pots.
+    updateTransitions(t,-1,true);
+  }
   for (int i = 0; i < t->triCount; i++) {
     TerrainTri &tri = t->tri[i];
-    unsigned tex = tri.tex;
+    unsigned tex = joined ? joined : tri.tex;
     if (g_rot != 0 && t->type == kTypeBunker) {
       // Bunker art is drawn per screen orientation, so turn the set with the view.
       int o = t->variation % 4 - g_rot;
@@ -770,6 +852,7 @@ void drawTile(Tile *t) {  // FUN_1000e6c0
     }
     g_gl.triangle(v[0], v[1], v[2]);
   }
+  if(backdrop) for(int i=0;i<8;i++) {t->tri[i].tex=oldTex[i];t->tri[i].frame=oldFrame[i];}
   if (t->hasPath && t->drawPathOverlay) drawPath(t);
   drawWalls(t);
   drawStrata(t, 3);
@@ -943,6 +1026,9 @@ unsigned loadTga(const char *path) {
 }
 
 void freeTextures(TerrainState *s) {  // FUN_100380a0
+  for(auto &base:g_joinedPotTex) for(auto &variant:base) for(auto &phase:variant) for(unsigned &id:phase) {
+    g_gl.deleteTexture(id); id=0;
+  }
   if (!s->texturesLoaded) return;
   for (int set = 0; set < 37; set++) {
     for (int v = 0; v < 25; v++)

@@ -492,6 +492,70 @@ static const char *dep_state(const ModMgr *m, const char *id, int *bad) {
   return *bad = 1, f->on ? "cannot load" : "turned off";
 }
 
+static void draw_configuration(UiCtx *c, ModsUi *s, const ModManifest *mf, const ModInfo *f,
+                               float x, float *y, float w, double now) {
+  const UiTokens *t = ui_tokens(c);
+  const JsonVal *a = json_get(s->config, "settings");
+  int count = 0;
+  for (int i = 0; a && i < a->len; i++)
+    count += !strcmp(modconfig_text(a->items[i], "mod"), mf->id);
+  section(c, x, y, w, "Configure this mod");
+  if (!count) {
+    const char *msg = !s->config ? "Settings are unavailable. The settings catalog could not be loaded." :
+      !strcmp(mf->id, "cut_content") ? "This mod has no extra settings. Turn it on to add the restored landmarks and bench to the build menu." :
+      !strcmp(mf->id, "bridge") ? "This mod has no player settings. The local tool connection is controlled when the game starts." :
+      "This mod does not offer in-game configuration. Its on/off switch still controls whether it loads.";
+    *y += para(c, x, *y, w, UI_TYPE_CAPTION, t->text_secondary, msg, 6) + S(12);
+    return;
+  }
+  int enabled = f->on && f->running && f->load_pos >= 0 && s->setting_save && strcmp(modmgr_profile(s->m), "vanilla");
+  *y += para(c, x, *y, w, UI_TYPE_CAPTION, t->text_secondary,
+    enabled ? "Choices save automatically for all profiles. Scroll here for more settings. Apply changes and Undo changes below only affect the mod list and profiles." :
+    "To change settings, enable this mod, apply the mod list and restart the game. Vanilla keeps the original game settings.", 5) + S(16);
+  for (int i = 0; a && i < a->len; i++) {
+    const JsonVal *row = a->items[i];
+    if (strcmp(modconfig_text(row, "mod"), mf->id)) continue;
+    const char *key = modconfig_text(row, "key");
+    const JsonVal *choices = json_get(row, "choices");
+    const char *value = s->setting_get ? s->setting_get(key) : NULL;
+    if (!value || !*value) value = modconfig_text(row, "default");
+    int selected = modconfig_choice(row, value);
+    ui_text_fit(c, ui_rect(x, *y, w, S(26)), UI_TYPE_LABEL, t->text_primary, modconfig_text(row, "label"), 0);
+    *y += S(30);
+    *y += para(c, x, *y, w, UI_TYPE_CAPTION, t->text_secondary, modconfig_text(row, "help"), 6) + S(8);
+    UiRect prev = ui_rect(x, *y, S(40), S(40));
+    UiRect next = ui_rect(x + w - S(40), *y, S(40), S(40));
+    char custom[180];
+    snprintf(custom, sizeof custom, "Custom: %s", value);
+    const char *name = selected < 0 ? custom : modconfig_text(choices->items[selected], "label");
+    ui_text_fit(c, ui_rect(x + S(48), *y, w - S(96), S(40)), UI_TYPE_LABEL, t->accent_soft_text, name, 0.5f);
+    uint32_t id = ui_id(key);
+    int direction = 0;
+    if (ui_icon_button(c, ui_idi(id, 0), prev, UI_ICON_BACK, enabled ? 0 : UI_DISABLED, "Previous choice")) direction = -1;
+    if (ui_icon_button(c, ui_idi(id, 1), next, UI_ICON_CHEV, enabled ? 0 : UI_DISABLED, "Next choice")) direction = 1;
+    if (s->log_nsettings < 24) {
+      int k = s->log_nsettings++;
+      s->log_setting[k] = next;
+      s->log_setting_key[k] = key;
+    }
+    if (direction && enabled) {
+      int index = selected < 0 ? (direction > 0 ? 0 : choices->len - 1) : (selected + direction + choices->len) % choices->len;
+      const char *v = modconfig_text(choices->items[index], "value");
+      int ok = s->setting_save(key, v);
+      const char *when = modconfig_text(row, "timing");
+      log_act("setting %s = %s %s", key, v, ok ? "saved" : "save_failed");
+      ui_mods_say(s, now, "%s", !ok ? "Could not save. The choice may apply for this session; try again before closing." :
+        !strcmp(when, "restart") ? "Saved. Restart the game to use this choice." :
+        !strcmp(when, "new_course") ? "Saved. This choice applies when you create a new course." : "Saved. This choice takes effect now.");
+    }
+    *y += S(46);
+    const char *when = modconfig_text(row, "timing");
+    *y += para(c, x, *y, w, UI_TYPE_MICRO, t->text_tertiary,
+      !strcmp(when, "restart") ? "Takes effect after restarting the game." :
+      !strcmp(when, "new_course") ? "New courses only. Existing saves keep their size." : "Takes effect immediately.", 3) + S(20);
+  }
+}
+
 static void draw_detail(UiCtx *c, ModsUi *s, UiRect dr, double now) {
   (void)now;
   const UiTokens *t = ui_tokens(c);
@@ -505,6 +569,11 @@ static void draw_detail(UiCtx *c, ModsUi *s, UiRect dr, double now) {
     return;
   }
   int mi = s->selected;
+  if (s->config_selected != mi) {
+    s->config_selected = mi;
+    s->configure = 0;
+    *ui_state(c, ui_id("mods.detail.scroll")) = 0;
+  }
   const ModManifest *mf = modmgr_manifest(m, mi);
   const ModInfo *f = modmgr_info(m, mi);
   uint32_t sid = ui_id("mods.detail.scroll");
@@ -512,6 +581,23 @@ static void draw_detail(UiCtx *c, ModsUi *s, UiRect dr, double now) {
   float off = ui_vscroll_begin(c, sid, in, *hstate, S(60));
   float x = in.x, w = in.w - S(10), y = in.y + off;
   float y0 = y;
+
+  if (s->configure) {
+    UiRect back = ui_rect(x, y, w, S(40));
+    s->log_configure = back;
+    if (ui_button(c, ui_id("mods.configure"), back, "Back to mod details", UI_ICON_BACK, UI_BTN_PILL, 0)) {
+      s->configure = 0;
+      *ui_state(c, sid) = 0;
+      log_act("configure %s closed", mf->id);
+    }
+    y += S(52);
+    ui_text_fit(c, ui_rect(x, y, w, S(30)), UI_TYPE_HEADING, t->text_primary, mf->name, 0);
+    y += S(34);
+    draw_configuration(c, s, mf, f, x, &y, w, now);
+    *hstate = y - y0 + S(10);
+    ui_vscroll_end(c);
+    return;
+  }
 
   // header
   UiRect ic = ui_rect(x, y, S(84), S(84));
@@ -556,6 +642,17 @@ static void draw_detail(UiCtx *c, ModsUi *s, UiRect dr, double now) {
   }
   y += S(6);
   y += para(c, x, y, w, UI_TYPE_LABEL, t->text_primary, mf->description && *mf->description ? mf->description : "No description.", 9) + S(6);
+
+  // The main action belongs with the mod's identity and explanation, before
+  // technical details. Use the solid green primary style so it stands out.
+  UiRect configure = ui_rect(x, y + S(6), w, S(48));
+  s->log_configure = configure;
+  if (ui_button(c, ui_id("mods.configure"), configure, "Configure mod", UI_ICON_GEAR, UI_BTN_PRIMARY, 0)) {
+    s->configure = 1;
+    *ui_state(c, sid) = 0;
+    log_act("configure %s opened", mf->id);
+  }
+  y += S(68);
 
   // dependencies
   if (mf->ndeps || mf->nopt) {
@@ -766,6 +863,8 @@ static void draw_dialog(UiCtx *c, ModsUi *s, double now) {
 // ------------------------------------------------------------------ the page
 
 void ui_mods_draw(UiCtx *c, ModsUi *s, double now) {
+  s->log_nsettings = 0;
+  s->log_configure = (UiRect){0};
   const UiTokens *t = ui_tokens(c);
   ModMgr *m = s->m;
   s->clock = now;
@@ -900,6 +999,7 @@ void ui_mods_draw(UiCtx *c, ModsUi *s, double now) {
     else if (restart && dirty) line = "Press Apply, then restart the game: these changes take effect after a restart.";
     else if (restart) line = "Restart the game for the saved changes to take effect.";
     else if (dirty) line = "You have changes that are not applied yet.";
+    else if (s->configure) line = "Settings save automatically. Apply changes only saves the mod list and profiles.";
     else {
       snprintf(buf, sizeof buf, "%s", s->in_game ? "A game is running. Mod changes take effect after you restart the game." : "Changes are saved with Apply. Nothing changes until then.");
       line = buf;

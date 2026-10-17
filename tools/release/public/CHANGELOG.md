@@ -1,5 +1,17 @@
 # SimGolf Remastered for Windows
 
+## 0.1.21 - 2026-10-17
+
+Player-report repairs, in-game mod configuration and optional joined bunkers.
+
+- Professional accomplishments now include remaining goals. Pro profiles show matching skill bars, and live matches include the direct opponent's scorecard.
+- Golfer cards describe skills as abilities. Clothing colours remain stable during play, and new unedited visitors retain the original multi-skill assignment used for hole qualification.
+- Staff coverage circles follow their assigned spot, with Staff and Aura coverage on the Routing Map.
+- New courses reset landmark unlocks. Parkland rock gaps use matching rough, and shot analysis preserves tree lighting.
+- Added prominent green Configure controls and named settings inside the Mods screen, preserving existing choices and Vanilla behavior.
+- Optional joined pot bunkers combine adjacent sand with rounded edges and a steep outer rim. Original sand colours are retained; the feature is off by default.
+- Retains the remastered construction menu default, Living Club, sharp legacy text, path styles, optional course lamps and all previous release features.
+
 ## 0.1.20 - 2026-10-17
 
 Restore the remastered construction menu as the default.

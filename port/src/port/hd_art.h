@@ -33,9 +33,9 @@ enum { HD_ART_COURSE, HD_ART_TOP };
 // back buffer bits and pitch. Closes the course list.
 void hd_art_course_done(const uint16_t *bits, int pitch);
 // Game thread, hd_present: closes the top list against the finished frame
-// and hands both to the render thread (layered=0: no course layer, the
-// course list is not shown).
-void hd_art_publish(int layered, const uint16_t *screen);
+// and hands both to the render thread. retain_course keeps the last complete
+// course art for analysis frames that add trajectories without a course redraw.
+void hd_art_publish(int layered, const uint16_t *screen, int retain_course);
 void hd_art_discard_pending(void);          // discard an unpublished transient frame; keep published art intact
 int hd_art_mark(void);                      // start of a replaced original draw
 void hd_art_hide_from(int mark);            // hide only art recorded since that mark

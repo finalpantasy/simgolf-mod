@@ -29,6 +29,7 @@ typedef struct {
 // would not fit. Not nested.
 int hd_ui_view_begin(int dx, int dy);
 void hd_ui_view_end(void);
+int hd_ui_staff_circle(int x, int y, int radius, int color);
 
 // The camera of the course being drawn (before the per-frame driver).
 void hd_ui_frame_camera(void);

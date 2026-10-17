@@ -141,6 +141,11 @@ static void route_heat(UiCtx *c, const RpSnap *s, UiRect detail) {
         ui_rect(detail.x + ui_s(c, 36), y, detail.w - ui_s(c, 36), ui_s(c, 24)), UI_TYPE_BODY, 0);
     y += ui_s(c, 36);
   }
+  if (!home) {
+    uid_rrect(d, ui_rect(detail.x, y, ui_s(c, 24), ui_s(c, 24)), ui_s(c, 6), (UiColor){169,195,165,255});
+    ui_text_in(c, ui_rect(detail.x + ui_s(c, 36), y, detail.w - ui_s(c, 36), ui_s(c, 24)),
+               UI_TYPE_BODY, t->text_primary, "No player feedback yet", 0);
+  }
 }
 
 static int draw_routing(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAction *acts, int max) {
@@ -178,7 +183,7 @@ static int draw_routing(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAc
       s->ext[0] == 1 ? "Course aura" : s->ext[0] == 2 ? "Home site values" : "Course map", 0);
   ui_course_map_draw(c, &s->map, ui_rect(map.x, map.y + ui_s(c, 48), map.w, map.h - ui_s(c, 96)));
   ui_text_in(c, ui_rect(map.x + ui_s(c, 20), map.y + map.h - ui_s(c, 42), map.w - ui_s(c, 40), ui_s(c, 24)),
-      UI_TYPE_CAPTION, t->text_secondary, "Numbered markers show the golf holes.", 0);
+      UI_TYPE_CAPTION, t->text_secondary, s->ext[0] == 0 ? "Colored rings show staff coverage at assigned spots." : "Numbered markers show the golf holes.", 0);
   (void)art;
   if (s->ext[0] == -1) na += route_holes(c, s, detail, acts + na, max - na);
   else if (s->ext[0] == 0) na += route_staff(c, s, detail, acts + na, max - na);

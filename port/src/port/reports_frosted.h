@@ -28,7 +28,7 @@ enum { RP_AL_LEFT = 0, RP_AL_CENTRE = 1, RP_AL_RIGHT = 2 };
 #define RP_TEXT 96
 #define RP_ART 32   // distinct golf sprites a report shows as art
 
-enum { RP_IT_TEXT = 0, RP_IT_RECT, RP_IT_LINE, RP_IT_CHIP, RP_IT_PIC };   // RP_IT_PIC: a rectangle of golf's page kept as a picture (art slot in .art)
+enum { RP_IT_TEXT = 0, RP_IT_RECT, RP_IT_LINE, RP_IT_CHIP, RP_IT_PIC, RP_IT_GOAL };   // GOAL: next unearned accomplishment, in original order
 
 typedef struct {
   int16_t x, y;     // golf's 800x600 page coordinates of the anchor (a line's first end)

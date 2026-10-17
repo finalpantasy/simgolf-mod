@@ -222,6 +222,20 @@ void roster_spawned(unsigned slot) {
   int id=roster_identity(*(int16_t *)(g+0xb6));
   if(id>=0 && id<25)memcpy(g+0xf0,roster_seeds[id].skills,10);
 }
+int roster_vanilla_visitor_skills(int profile) {
+  if(!roster_enabled() || profile<ROSTER_FIRST || profile>=ROSTER_FIRST+25 || !roster_profile_valid(profile))return 0;
+#ifndef __EMSCRIPTEN__
+  if(!mods_get_int("fixes.roster_skill_groups",1))return 0;
+#endif
+  int id=roster_identity(profile);
+  if(id!=profile-ROSTER_FIRST)return 0;
+  // Authored single-skill defaults bypassed createGolfer's vanilla groups,
+  // starving the original 3/5/6 versus 7 hole-rating comparisons. Retain
+  // vanilla assignment for unedited added regulars. Explicit player edits,
+  // imported characters, pros and every original identity keep their rules.
+  initialize();
+  return people[profile*PEOPLE+44]==roster_seeds[id].flags;
+}
 static void copy_seed(int id,int profile) {
   const RosterSeed *s=&roster_seeds[id];uint8_t *p=people+profile*PEOPLE;
   memset(p,0,PEOPLE);snprintf((char *)p,16,"%s",s->profession);

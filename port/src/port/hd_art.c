@@ -1841,6 +1841,28 @@ uint8_t *hd_art_terrain_style(const char *src, const uint8_t *rgba, int w, int h
       }
     }
   int alpha = 0, up_alpha = 0;   // paths are TGAs with alpha: the upscale's own, else the original's in blocks
+  if (strstr(g_files[f].norm, "textures/parkland/rock") && mods_get_int("art.rock_ground_match", 1)) {
+    char rough_src[MAX_PATH]; snprintf(rough_src, sizeof rough_src, "%s", src);
+    char *name = strrchr(rough_src, '/');
+    char *back = strrchr(rough_src, '\\');
+    if (back && (!name || back > name)) name = back;
+    name = name ? name + 1 : rough_src;
+    int frame = (int)strlen(name) >= 9 ? name[strlen(name) - 5] - '0' : 1;
+    snprintf(name, sizeof rough_src - (size_t)(name - rough_src), "RoughA000%d.bmp", frame >= 1 && frame <= 9 ? frame : 1);
+    int rf = find_file(rough_src, NULL), rw = 0, rh = 0;
+    if (rf < 0) {
+      snprintf(name, sizeof rough_src - (size_t)(name - rough_src), "RoughA0001.bmp");
+      rf = find_file(rough_src, NULL);
+    }
+    if (rf >= 0) {
+      char rough_path[MAX_PATH * 2];
+      if (g_files[rf].bundled_terrain) snprintf(rough_path, sizeof rough_path, "%s/ui/terrain/%s.png", host_exe_dir(), g_files[rf].out);
+      else snprintf(rough_path, sizeof rough_path, "%s/%s.png", g_dir, g_files[rf].out);
+      uint8_t *rough = decode_sized(rough_path, 0, &rw, &rh, NULL, W, H);
+      if (rough && rw == W && rh == H) hd_art_rock_ground(up, rough, (size_t)W * H);
+      free(rough);
+    }
+  }
   for (size_t i = 0; i < (size_t)w * h && !alpha; i++) alpha = rgba[i * 4 + 3] != 255;
   for (size_t i = 0; i < (size_t)W * H && !up_alpha; i++) up_alpha = up[i * 4 + 3] != 255;
   if (alpha && !up_alpha)
@@ -2062,7 +2084,7 @@ int hd_art_pick(int x, int y, HdArtPick *o) {
   return found;
 }
 
-void hd_art_publish(int layered, const uint16_t *screen) {
+void hd_art_publish(int layered, const uint16_t *screen, int retain_course) {
   path_styles_frame();
   live_settings();   // also with the pack off: Pixel HD is a grid over whatever the course shows
   if (!g_on) return;
@@ -2072,7 +2094,10 @@ void hd_art_publish(int layered, const uint16_t *screen) {
   // what golf drew since the course (or, on a page, since the last present)
   list_close(LT, screen, HD_FRAME_W);
   EnterCriticalSection(&g_pub_lock);
-  publish_one(LC, layered && g_rec_which == LT);
+  // A frozen analyzer frame adds trajectories without redrawing the course.
+  // Keep its last complete HD art and ownership mask, including during A/B.
+  if (layered || !retain_course || g_pub[LC].w != HD_FRAME_W || g_pub[LC].h != HD_FRAME_H)
+    publish_one(LC, layered && g_rec_which == LT);
   publish_one(LT, 1);
   InterlockedIncrement(&g_pub_serial);
   LeaveCriticalSection(&g_pub_lock);

@@ -203,6 +203,16 @@ void mods_init(int argc, char **argv) {
   mods_session_open(&g_ss, g_root, prof_arg, g_no_mods);
   snprintf(g_profile, sizeof g_profile, "%s", g_ss.profile);
   apply_settings();
+  // Configuration choices belong to their mod. Keep them saved while it is
+  // disabled, but never apply them to a disabled mod or the vanilla profile.
+  if (strcmp(g_profile, "vanilla")) for (int i = 0; i < g_nopt; i++) {
+    if (strncmp(g_okey[i], "config.", 7)) continue;
+    const char *dot = strchr(g_okey[i] + 7, '.');
+    if (!dot || dot - (g_okey[i] + 7) > 63) continue;
+    char owner[64];
+    snprintf(owner, sizeof owner, "%.*s", (int)(dot - (g_okey[i] + 7)), g_okey[i] + 7);
+    if (mods_enabled(owner)) mods_store_put(MS_INI, dot + 1, g_oval[i], NULL);
+  }
 
   char line[1200];
   if (g_no_mods) log_line(NULL, "--no-mods: the original game, mods.ini ignored");
@@ -283,6 +293,19 @@ static int option_write(void) {
 // The Options page sets a value: it takes effect now (the store); the file follows with mods_option_flush.
 int mods_option_put(const char *key, const char *value) {
   if (!key || !*key || !value) return 0;
+  // An Options change to a configured setting updates that same saved choice.
+  // Avoid a second, unscoped copy that could remain active with the mod off.
+  if (strncmp(key, "config.", 7)) for (int j = 0; j < g_nopt; j++) {
+    if (strncmp(g_okey[j], "config.", 7)) continue;
+    const char *dot = strchr(g_okey[j] + 7, '.');
+    if (dot && !_stricmp(dot + 1, key)) {
+      if (!mods_store_put(MS_INI, key, value, NULL)) return 0;
+      mods_store_put(MS_LIVE, key, NULL, NULL);
+      free(g_oval[j]);
+      g_oval[j] = mods_strdup(value);
+      return 1;
+    }
+  }
   if (!mods_store_put(MS_INI, key, value, NULL)) return 0;
   int i = 0;
   while (i < g_nopt && _stricmp(g_okey[i], key)) i++;
@@ -309,6 +332,23 @@ int mods_option_flush(void) {
 // ... and kept in options.ini at once.
 int mods_option_set(const char *key, const char *value) {
   if (!mods_option_put(key, value)) return 0;
+  return mods_option_flush();
+}
+
+int mods_config_set(const char *mod, const char *key, const char *value) {
+  if (g_no_mods || !mod || !*mod || strlen(mod) > 63 || strchr(mod, '.') ||
+      !key || !strchr(key, '.') || !strncmp(key, "mods.", 5) || !strncmp(key, "config.", 7) ||
+      !value || !mods_enabled(mod) || !strcmp(g_profile, "vanilla")) return 0;
+  char scoped[128];
+  if (snprintf(scoped, sizeof scoped, "config.%s.%s", mod, key) >= (int)sizeof scoped) return 0;
+  // Transfer an earlier ordinary Options choice to this mod's scope.
+  for (int i = 0; i < g_nopt; i++) if (!_stricmp(g_okey[i], key)) {
+    free(g_okey[i]);
+    g_okey[i] = mods_strdup(scoped);
+    break;
+  }
+  if (!mods_option_put(scoped, value) || !mods_store_put(MS_INI, key, value, NULL)) return 0;
+  mods_store_put(MS_LIVE, key, NULL, NULL);
   return mods_option_flush();
 }
 

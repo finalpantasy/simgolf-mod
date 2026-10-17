@@ -9,6 +9,7 @@ typedef struct {
   uint8_t terrain[UI_MAP_CELLS], path[UI_MAP_CELLS];
   uint16_t heat[UI_MAP_CELLS];
   struct { int active, n; float x[4], y[4]; } hole[18];
+  struct { int active, job; float x, y, radius; } staff[128];
 } UiCourseMap;
 
 // All shapes and labels are drawn at the target's resolution. No game-page bitmap.
