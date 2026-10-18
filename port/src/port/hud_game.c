@@ -351,15 +351,28 @@ static void copy_str(char *dst, int cap, const char *src) {
 // The game's news strip (FUN_0040cb00 posts, FUN_0040d6a0 ticks) keeps one message at a time, in
 // NEWS_TEXT (0x5a6d40) with screen_state (0x569498) == 1 while it shows, the subject in 0x4c2e08
 // (>= 0: the golfer slot whose portrait the strip shows) and the display timer in 0x5a7144 (set to
-// length / 3 + 16 at a post, counted down by the tick). A post is seen here as screen_state going to 1,
-// or the timer going up while it shows (a forced message over the old one). Accepted posts also
-// capture here immediately, before another post can replace the single news slot. What the message is about: the golfer slot when the game names one;
+// length / 3 + 16 at a post, counted down by the tick). Accepted posts capture here immediately,
+// before another post can replace the single news slot. Polling also finds load-time state, but
+// a timer adjustment, modal return or advancing date is not another accepted post. What the message is about: the golfer slot when the game names one;
 // else the hole whose name the text starts with (the hole hotkeys then do the camera jump).
 static HudMsg g_hist[HUD_MSG_MAX];
 static int g_hist_n, g_hist_seq, g_news_seq;
 static int g_prev_ss, g_prev_timer;
 static char g_prev_text[HUD_NEWS_TEXT];
-static int g_last_news_tick = -1, g_last_news_subject;
+static int g_last_news_subject, g_last_news_seq;
+static char g_last_news_text[HUD_NEWS_TEXT];
+
+static int news_history_on(void) {
+  static unsigned seen = ~0u;
+  static int capture = 1;
+  unsigned serial = mods_serial();
+  if (serial != seen) {
+    seen = serial;
+    const char *v = mods_get("fixes.news_history");
+    capture = !v || atoi(v) != 0;
+  }
+  return capture;
+}
 
 // A golfer on the course: the record's state byte (+0x21) is neither 0 (unused) nor -1 (the "hire an
 // employee" placeholder, which opens that dialog when selected).
@@ -393,10 +406,14 @@ static int hole_of_text(const char *text) {
 static void note_messages(const char *date, int posted) {
   int ss = G8(SCREEN_STATE), timer = G32(0x5a7144);
   const char *text = (const char *)(uintptr_t)NEWS_TEXT;
-  int tick = G32(0x834170), subject = G32(0x4c2e08);
-  int duplicate = g_hist_n && tick == g_last_news_tick && subject == g_last_news_subject &&
-                  !strncmp(text, g_prev_text, sizeof g_prev_text - 1) &&
-                  !strcmp(date, g_hist[g_hist_n - 1].date);
+  int subject = G32(0x4c2e08);
+  int same_slot = g_last_news_seq && subject == g_last_news_subject &&
+                  !strncmp(text, g_last_news_text, sizeof g_last_news_text - 1);
+  // Presentation can change after startMessage returns (the scenario intro sets its own timer).
+  // Another accepted post is a distinct notification, even with identical text on the same tick.
+  // With the fix off, keep the original frame-polling behavior.
+  int duplicate = same_slot && !posted && news_history_on();
+  if (ss == 1 && duplicate) g_news_seq = g_last_news_seq;
   if (ss == 1 && text[0] && !duplicate && (posted || g_prev_ss != 1 || timer > g_prev_timer || strncmp(text, g_prev_text, sizeof g_prev_text - 1) != 0)) {
     HudMsg *m;
     if (g_hist_n == HUD_MSG_MAX) {
@@ -414,8 +431,9 @@ static void note_messages(const char *date, int posted) {
     copy_str(m->date, sizeof m->date, date);
     m->t_ms = host_now_ms();
     m->seq = g_news_seq = ++g_hist_seq;
-    g_last_news_tick = tick;
     g_last_news_subject = subject;
+    g_last_news_seq = m->seq;
+    copy_str(g_last_news_text, sizeof g_last_news_text, text);
     int subj = G32(0x4c2e08);
     if (golfer_ok(subj)) {
       m->show = HUD_SHOW_GOLFER;
@@ -435,17 +453,9 @@ static void note_messages(const char *date, int posted) {
 }
 
 // Called only after the original news function accepts and finishes a post.
-// Keep polling for load-time state, and suppress its duplicate through the same previous-state fields.
+// Keep polling for load-time state, with identity separate from transient presentation state.
 void hud_news_posted(void) {
-  static unsigned seen = ~0u;
-  static int capture = 1;
-  unsigned serial = mods_serial();
-  if (serial != seen) {
-    seen = serial;
-    const char *v = mods_get("fixes.news_history");
-    capture = !v || atoi(v) != 0;
-  }
-  if (!capture) return;
+  if (!news_history_on()) return;
   char keep[512], numeric[12], date[24];
   int16_t year = G16(0x5a6d3c);
   memcpy(keep, (void *)(uintptr_t)TEXT_BUF, sizeof keep);

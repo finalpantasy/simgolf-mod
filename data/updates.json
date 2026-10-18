@@ -2,6 +2,15 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.22",
+      "date": "2026-10-18",
+      "name": "Repair repeated course welcome messages in notification history",
+      "summary": "Repair repeated course welcome messages in notification history.",
+      "notes": [
+        "Course welcome messages appear once in message history, including Carolina. Display-timer changes no longer add extra copies; genuine later notices remain available. Fixes #71."
+      ]
+    },
+    {
       "version": "0.1.21",
       "date": "2026-10-17",
       "name": "Player-report repairs, in-game mod configuration and optional joined bunkers",

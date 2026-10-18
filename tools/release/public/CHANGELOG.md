@@ -1,5 +1,11 @@
 # SimGolf Remastered for Windows
 
+## 0.1.22 - 2026-10-18
+
+Repair repeated course welcome messages in notification history.
+
+- Course welcome messages appear once in message history, including Carolina. Display-timer changes no longer add extra copies; genuine later notices remain available. Fixes #71.
+
 ## 0.1.21 - 2026-10-17
 
 Player-report repairs, in-game mod configuration and optional joined bunkers.
