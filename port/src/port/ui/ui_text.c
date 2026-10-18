@@ -88,7 +88,8 @@ int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
   t->aw = t->ah = 2048;
   t->alpha = malloc((size_t)t->aw * t->ah);
   if (!t->alpha) {
-    fprintf(stderr, "ui: cannot allocate glyph atlas pixels; text rendering disabled\n");
+    fprintf(stderr, "ui: cannot allocate glyph atlas pixels; will retry\n");
+    t->atlas_retry_at = SDL_GetTicks() + 1000;
     return loaded;  // callers may still show the UI using icons/art
   }
   if (r) {
@@ -285,9 +286,20 @@ float uit_draw(UiText *t, float x, float y, int weight, float px, const char *s,
   int f = pick(t, weight);
   if (f < 0 || !s || !*s) return x;
   if (!t->atlas) {
-    if (!t->r || !t->alpha) return x;
+    if (!t->r) return x;
     Uint32 now = SDL_GetTicks();
-    if (t->atlas_retry_at && !SDL_TICKS_PASSED(now, t->atlas_retry_at)) return x;
+    // A wrapped deadline of zero is still a scheduled retry.
+    if (!SDL_TICKS_PASSED(now, t->atlas_retry_at)) return x;
+    if (!t->alpha) {
+      t->alpha = malloc((size_t)t->aw * t->ah);
+      if (!t->alpha) {
+        t->atlas_retry_at = now + 1000;
+        return x;
+      }
+      // Initialization stopped before the CPU atlas existed. Preserve the
+      // loaded fonts and initialize packing only once storage is available.
+      atlas_reset(t);
+    }
     t->atlas = SDL_CreateTexture(t->r, SDL_PIXELFORMAT_ARGB8888,
                                  SDL_TEXTUREACCESS_STATIC, t->aw, t->ah);
     if (!t->atlas) {

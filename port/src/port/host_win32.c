@@ -30,6 +30,7 @@
 #include "port/host.h"
 #include "port/runtime.h"
 #include "port/crash_record.h"
+#include "port/log_rotation.h"
 #include "mods/mods.h"
 
 extern int win_closing;   // win32.h (not included: its enum clashes with wingdi.h)
@@ -266,11 +267,12 @@ static void pick_game_dir(const char *arg) {
 static void open_log(const char *arg) {
   if (arg) snprintf(g_log_path, sizeof g_log_path, "%s", arg);
   else snprintf(g_log_path, sizeof g_log_path, "%s/golf.log", g_exe_dir);
-  FILE *f = fopen(g_log_path, "w");
-  if (f) fclose(f);
+  int rotated = host_rotate_log(g_log_path);
+  // Crash reports are append-only; they survive even repeated clean launches.
   // Both streams append to one file, unbuffered, so a crash loses nothing.
   if (freopen(g_log_path, "a", stderr)) setvbuf(stderr, NULL, _IONBF, 0);
   if (freopen(g_log_path, "a", stdout)) setvbuf(stdout, NULL, _IONBF, 0);
+  fprintf(stderr, "\n--- session start; log rotation %s ---\n", rotated ? "ok" : "failed (appending to preserve evidence)");
 }
 
 static DWORD WINAPI game_thread(void *arg) {

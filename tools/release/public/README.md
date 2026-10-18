@@ -16,7 +16,91 @@ it on your PC and nothing from it ever leaves your computer.
 
 ![Remastered construction menu in the Windows game](screenshots/remastered-construction.jpg)
 
-[Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
+[Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md) | [Use the original UI](#use-the-original-ui) | [Report a bug](#report-a-bug-no-coding-experience-needed)
+
+## Use the original UI
+
+Prefer the classic menus and controls? The replacement interface has several
+independent switches. **Original construction menu** in Options only changes the
+building wheel; it does not turn off the other new screens. Use the settings
+below to switch all the replacement UI layers back to their original paths.
+
+1. **Save your game and close SimGolf Remastered completely.**
+2. Right-click your **SimGolf Remastered** desktop shortcut, choose **Properties**,
+   then **Open File Location**. Use the installed folder containing `golf.exe`,
+   not the download ZIP or your separate original SimGolf installation.
+3. Find `options.ini` and make a backup copy named `options-before-original-ui.ini`.
+   Open `options.ini` with Notepad. If it does not exist, create it: in Notepad's
+   **Save As**, select **All files**, name it `options.ini`, and save beside
+   `golf.exe`. Check that Windows has not named it `options.ini.txt` (turn on
+   **File name extensions** in File Explorer's View menu).
+4. Merge the settings below into that file. If a `[ui]` or `[art]` section already
+   exists, update matching lines there and add the missing lines under that
+   heading. Otherwise, add the section. **Keep only one entry for each key** and
+   leave your unrelated settings intact. Copy the spelling exactly, with no
+   spaces around `=` and no leading semicolons; a semicolon comments a line out.
+
+```ini
+[ui]
+font=original
+hd_legacy_text=0
+hud=original
+hud_show=1
+original_bottom=1
+original_rotate_button=0
+speed_button=0
+golfers=original
+faces=original
+portraits=original
+portrait_preview=original
+frontend=original
+logo=original
+map_badges=original
+map_globe=original
+map_icons=original
+dialogs=original
+reports=original
+options=original
+loading=original
+smooth_loading=0
+paths=original
+aim=original
+shot_readout=original
+ball=original
+ball_trail=original
+
+[art]
+ui=original
+```
+
+5. Save the file, then launch the game again. You should see the classic start
+   menu, course HUD/building wheel, golfer cards, dialogs and reports. Preferences
+   uses the original **Edit Preferences** list instead of the modern Options
+   page. The extra Rotate button, shot card, path overlay, modern ball/trail and
+   high-resolution legacy text replay are also disabled.
+
+**Why `options.ini`?** It is read after `mods.ini` and overrides matching values,
+so changing only `mods.ini` can leave a previously saved Options choice active.
+The UI switches do not require disabling all mods or changing the active profile.
+If you deliberately use `SIMGOLF_OPTIONS_FILE` to select another settings file,
+edit that file instead. A launch using `--no-mods` ignores these settings files.
+
+**To get the new UI back:** close the game, then restore your backed-up
+`options.ini`. If you created the file for these instructions, remove only the
+entries you added (or remove the file if it still contains nothing else), then
+restart. Restoring a backup also restores the other options saved in that backup;
+if you changed those later, undo just the UI entries instead.
+
+**This restores the supported original interface, not an unmodified 2002 game.**
+Bug fixes, resolution/scaling, gameplay mods, the added golfer roster, course art,
+water and optional lighting/weather have separate settings. For original course
+textures, choose **Textures: Original** in the modern Options page before doing
+this, or set `textures=original` under `[art]` in `options.ini` (any explicit
+`look` or per-category art overrides must also be removed or set to `original`).
+For original water, set `water=original` under `[display]`; to turn off the
+optional atmosphere, set `enabled=0` under `[environment]`. Merge these into
+existing sections too. You can keep HD course art and bug fixes with the classic
+UI; none of these steps requires deleting saves, game data or mod folders.
 
 ## New features and improvements over vanilla
 
@@ -179,6 +263,70 @@ separately; that ZIP can stay zipped. See [INSTALL.md](INSTALL.md) for archive h
 Full step-by-step help and fixes for common problems are in [INSTALL.md](INSTALL.md).
 
 Ideas and help are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Report a bug (no coding experience needed)
+
+**A save from just before the problem, the log, and clear steps are much more useful than “it crashed.”** Please send what you have even if some files are missing.
+
+### 1. Open a report
+
+1. [Check existing reports](https://github.com/finalpantasy/simgolf-mod/issues) for the same problem. If one matches, add your details and files in a comment there.
+2. Otherwise, [open a new bug report](https://github.com/finalpantasy/simgolf-mod/issues/new?template=bug_report.yml). GitHub will ask you to sign in or create a free account.
+3. Give it a specific title, such as **“0.1.21 crashes when scrolling a Huge Parkland course.”** You do not need to fork, clone, or download the repository.
+
+### 2. Find your save, log and crash report
+
+**After a crash, copy the log before opening the game again. In 0.1.21 and older builds, the next launch overwrites `golf.log`. Builds with log rotation retain five prior sessions, but collecting promptly is still best.** Copy files; do not move or delete your originals.
+
+For a default installation, press **Windows + R**, paste this, then press Enter:
+
+```text
+%LOCALAPPDATA%\Programs\SimGolf Remastered
+```
+
+If you installed elsewhere, open that installation folder instead. You can right-click the game's shortcut, choose **Properties**, and look at its **Target** to find the folder containing `Sim Golf Remastered.exe`.
+
+Look for:
+
+| What to attach | Where to find it |
+| --- | --- |
+| **The affected save** (`.sve`), preferably from immediately before the problem | `game\Saved Games` inside the installation folder |
+| **Companion files for that save** | In the same folder, copy files whose names start with the full save filename, for example `My Course.sve.*`. These can hold paths, lamps, camera restoration or visitor histories. |
+| **`golf.log`** | Installation folder, beside the game program |
+| **`golf.log.crash.txt`**, if present | Same folder; a crash may not always produce this file |
+| **Settings**, when relevant | `mods.ini`, `options.ini`, and `golf.ini` in the installation folder; also say which mod profile and extra mods you use |
+| **Screenshot or short video** | Especially helpful for missing words, visual glitches, misplaced controls or steps that are hard to describe |
+
+If you use a custom save directory through `SIMGOLF_USER_DIR`, look for `Saved Games` there instead. The log records “host: saves and snapshots in …” when this override is active. A custom log command-line option may also change the log location.
+
+**New-game crash with no save yet?** Attach the log and crash file, and tell us the course theme, map size, game mode and settings you chose. **Freeze without a crash file?** Say it froze, how long you waited, and whether you had to close it yourself. Do not claim there should be a crash file if none was created.
+
+### Optional diagnostic ZIP exporter
+
+If your installation includes `Collect-Diagnostics.ps1`, see the bundled `DIAGNOSTICS.txt` guide for a local exporter that previews files and asks for confirmation before making a ZIP. After export, it shows step-by-step GitHub reporting instructions and offers to open the Issues page. You review, attach and submit the report yourself; it never uploads anything. Saves require explicit selection; their paths, lamp data and visitor histories can be included with the separate `-IncludeSaveCompanions` option. Review the ZIP before sharing. If the exporter is missing or Windows blocks it, use the manual ZIP steps below; do not change security settings just to file a bug.
+
+### 3. Attach the files to GitHub
+
+1. Make a new folder somewhere convenient, such as your Desktop, and **copy only the relevant files** into it.
+2. Right-click that folder and choose **Compress to ZIP file** (Windows 11), or **Send to > Compressed (zipped) folder** (Windows 10).
+3. Drag the ZIP into the bug report's description box, or use the attachment link beneath the box. Wait for the upload to finish before submitting.
+4. Add screenshots the same way. If GitHub rejects a large ZIP, remove unrelated files and try a smaller one. Do not ZIP the entire installation.
+
+**Reports and attachments are public.** Logs can include your Windows username and local paths; saves can contain names you entered. Review the files first and remove personal details you do not want public. Do not include passwords, account information, original game executables, disc images, or the HD art pack. If you cannot share a save publicly, say so and ask the maintainer about alternatives; do not assume a private upload channel exists.
+
+### 4. Tell us how to reproduce it
+
+Please include:
+
+- **Version:** the Remastered release number, and whether you updated or installed fresh.
+- **What you were doing:** numbered steps, starting from loading the attached save or creating a new game.
+- **Expected result / actual result:** what should have happened, and what happened instead.
+- **How often:** every time, sometimes, or once; roughly how long you played before it happened.
+- **Your setup:** Windows version, graphics card if known, screen resolution, and windowed/full-screen mode.
+- **Relevant choices:** course theme and size, HD/Pixel HD/Original textures, optional water/lighting, mod profile and additional mods.
+- **Attached files:** save and its companions, log, crash file if available, and screenshot/video if useful.
+
+Keep unrelated bugs in separate reports. If you test another setting or version, add the result to your original report. Please keep a backup of the affected save and avoid overwriting the only copy while testing.
 
 ## Good to know
 

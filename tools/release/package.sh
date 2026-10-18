@@ -20,6 +20,8 @@ cp tools/release/setup/Setup.cmd tools/release/setup/setup.ps1 tools/release/set
 A=$STAGE/app
 cp $N/golf.exe $N/SDL2.dll $N/sgsetup.exe $N/sgupdate.exe $N/jgld-nops.json "$A/"
 cp "$N/golf.exe" "$A/Sim Golf Remastered.exe"
+cp tools/diagnostics/Collect-Diagnostics.ps1 "$A/"
+cp docs/DIAGNOSTICS.md "$A/DIAGNOSTICS.txt"
 cp -r "$N/fonts" "$A/"
 cp -r "$N/data/." "$A/data/"
 for family in portraits characters; do

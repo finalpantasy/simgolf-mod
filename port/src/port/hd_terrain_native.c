@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "port/hd_art.h"
 #include "port/hd_native.h"
@@ -103,7 +104,7 @@ static uint8_t shade(uint16_t s, uint16_t t) {
 
 // The hand-over: a recorded scene and the textures it needs that the render
 // thread hasn't had yet.
-typedef struct { uint32_t serial; int w, h; uint8_t *rgba; int water; } NewTex;
+typedef struct { uint32_t serial; int w, h; uint8_t *rgba; int water, retry, uploaded; } NewTex;
 typedef struct {
   float *verts;
   int nverts, cap_verts;
@@ -117,7 +118,7 @@ typedef struct {
   float view[6];             // toward the viewer, toward the light (world)
   uint8_t *wcode;            // task-78: the whole map's water tiles (terrain_water_tiles)
   float *wheight;
-  int map_w, map_h, cap_map;
+  int map_w, map_h, cap_map, cap_height;
   LONG map_serial;
   int32_t *batches;
   int nbatches, cap_batches;
@@ -130,7 +131,7 @@ typedef struct {
 
 static CRITICAL_SECTION g_tlock;
 static Scene g_pending;                 // under g_tlock
-static uint32_t *g_sent;                // texture serials already handed over (game thread)
+static uint32_t *g_sent;                // GPU-acknowledged serials, under g_tlock
 static int g_nsent, g_cap_sent;
 static int g_on = 1;
 
@@ -141,33 +142,90 @@ void hdt_init(int on) {
 
 // The art pack's terrain look changed: send every texture again.
 void hdt_resend(void) {
+  EnterCriticalSection(&g_tlock);
   g_nsent = 0;
+  for (int i = 0; i < g_pending.ntex; i++) free(g_pending.tex[i].rgba);
+  g_pending.ntex = 0;
+  LeaveCriticalSection(&g_tlock);
   terrain_hd_invalidate();
 }
 
+// Bounded CPU hand-over storage; no pointer/capacity is published on failure.
+// All sent/pending access is protected by g_tlock. Only the render thread
+// acknowledges a serial, after SDL upload and the optional water hand-over.
+enum { kMaxPendingTextures = 4096, kTextureBudget = 256 * 1024 * 1024,
+       kUploadsPerTake = 8 };
+static void *grow_array(void *p, int cap, size_t n, size_t size, int *newcap) {
+  if (!size || n > INT_MAX || n > SIZE_MAX / size || n > PTRDIFF_MAX / size) return NULL;
+  size_t c = n + n / 2;
+  if (c > INT_MAX || c > SIZE_MAX / size) c = n;
+  void *q = realloc(p, c * size);
+  if (q) *newcap = (int)c;
+  (void)cap;
+  return q;
+}
+#define GROW(p, cap, n, sz) \
+  do { size_t want_ = (size_t)(n); if (want_ > (size_t)(cap)) { \
+    int cap_; void *p_ = grow_array((p), (cap), want_, (sz), &cap_); \
+    if (!p_) { goto allocation_failed; } (p) = p_; (cap) = cap_; \
+  } } while (0)
+
+static int texture_bytes(int w, int h, size_t *bytes) {
+  if (w <= 0 || h <= 0 || w > INT_MAX / 4 ||
+      (size_t)w > SIZE_MAX / 4 / (size_t)h) return 0;
+  *bytes = (size_t)w * (size_t)h * 4;
+  return *bytes <= kTextureBudget;
+}
 static int sent(uint32_t serial) {
   for (int i = 0; i < g_nsent; i++)
     if (g_sent[i] == serial) return 1;
-  if (g_nsent == g_cap_sent) g_sent = realloc(g_sent, (g_cap_sent = g_cap_sent ? g_cap_sent * 2 : 256) * 4);
-  g_sent[g_nsent++] = serial;
   return 0;
 }
-
-#define GROW(p, cap, n, sz) \
-  do { if ((n) > (cap)) { (cap) = (n) + (n) / 2; (p) = realloc((p), (size_t)(cap) * (sz)); } } while (0)
+static int queued(uint32_t serial) {
+  for (int i = 0; i < g_pending.ntex; i++)
+    if (g_pending.tex[i].serial == serial) return 1;
+  return 0;
+}
+static int needed(uint32_t serial) {
+  EnterCriticalSection(&g_tlock);
+  int yes = !sent(serial) && !queued(serial);
+  LeaveCriticalSection(&g_tlock);
+  return yes;
+}
+static int queue_texture(Scene *s, NewTex *n) {
+  size_t bytes, total = 0;
+  if (sent(n->serial) || queued(n->serial)) { free(n->rgba); n->rgba = NULL; return 1; }
+  if (!n->rgba || !texture_bytes(n->w, n->h, &bytes) || s->ntex >= kMaxPendingTextures) return 0;
+  for (int i = 0; i < s->ntex; i++) total += (size_t)s->tex[i].w * s->tex[i].h * 4;
+  if (bytes > kTextureBudget - total) return 0;
+  GROW(s->tex, s->cap_tex, s->ntex + 1, sizeof(NewTex));
+  s->tex[s->ntex++] = *n;
+  n->rgba = NULL;
+  return 1;
+allocation_failed:
+  return 0;
+}
 
 // Decode the first new course's independent ground images before taking the
 // hand-over lock. SDL textures are still created only on the render thread.
 static NewTex *prepare_course_textures(int nb, const int32_t *b, int *count) {
+  if (nb <= 0 || nb > kMaxPendingTextures) return NULL;
   NewTex *ready = calloc((size_t)nb, sizeof *ready);
   HdTerrainJob *jobs = calloc((size_t)nb, sizeof *jobs);
   if (!ready || !jobs) { free(ready); free(jobs); return NULL; }
   int n = 0;
   for (int i = 0; i < nb; i++) {
-    if (!(b[i * 5 + 4] & kTextured) || sent((uint32_t)b[i * 5 + 3])) continue;
+    if (!(b[i * 5 + 4] & kTextured) || !needed((uint32_t)b[i * 5 + 3])) continue;
+    int duplicate = 0;
+    for (int j = 0; j < n; j++) if (ready[j].serial == (uint32_t)b[i*5+3]) { duplicate = 1; break; }
+    if (duplicate) continue;
     int32_t size[2];
     HdTerrainJob *j = jobs + n;
     j->rgba = terrain_hd_texture(b[i * 5 + 2], size);
+    size_t bytes;
+    if (!j->rgba || !texture_bytes(size[0], size[1], &bytes)) {
+      free(ready); free(jobs); return NULL;
+    }
     j->src = terrain_hd_texture_src(b[i * 5 + 2]);
     j->path_style = terrain_hd_texture_path_style(b[i * 5 + 2]);
     j->w = size[0]; j->h = size[1];
@@ -182,10 +240,11 @@ static NewTex *prepare_course_textures(int nb, const int32_t *b, int *count) {
     ready[i].h = j->up ? j->uh : j->h;
     ready[i].rgba = j->up;
     if (!j->up) {
-      size_t bytes = (size_t)j->w * j->h * 4;
-      ready[i].rgba = malloc(bytes);
-      if (!ready[i].rgba) port_abort("terrain texture allocation failed");
-      memcpy(ready[i].rgba, j->rgba, bytes);
+      size_t bytes;
+      if (j->rgba && texture_bytes(j->w, j->h, &bytes)) {
+        ready[i].rgba = malloc(bytes);
+        if (ready[i].rgba) memcpy(ready[i].rgba, j->rgba, bytes);
+      }
     }
   }
   free(jobs);
@@ -210,85 +269,98 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
 
   int nb = terrain_hd_batch_count();
   const int32_t *b = terrain_hd_batches();
-  int nverts = nb ? b[(nb - 1) * 5] + b[(nb - 1) * 5 + 1] : 0;
+  if (nb < 0 || nb > INT_MAX / 5 || (nb && !b)) { terrain_hd_invalidate(); return 1; }
+  int64_t nv = nb ? (int64_t)b[(nb - 1) * 5] + b[(nb - 1) * 5 + 1] : 0;
+  if (nv < 0 || nv > INT_MAX / 8) { terrain_hd_invalidate(); return 1; }
+  int nverts = (int)nv;
   int32_t t[2];
   terrain_hd_target(t);
   int nready = 0;
   NewTex *ready = port_course_textures_fast() && nb > 0 ? prepare_course_textures(nb, b, &nready) : NULL;
   EnterCriticalSection(&g_tlock);
   Scene *s = &g_pending;
-  GROW(s->verts, s->cap_verts, nverts * 8, sizeof(float));
-  memcpy(s->verts, terrain_hd_vertices(), (size_t)nverts * 8 * sizeof(float));
-  s->nverts = nverts;
-  GROW(s->world, s->cap_world, nverts * 3, sizeof(float));
-  memcpy(s->world, terrain_hd_world(), (size_t)nverts * 3 * sizeof(float));
-  GROW(s->normals, s->cap_normals, nverts * 3, sizeof(float));
-  memcpy(s->normals, terrain_hd_normals(), (size_t)nverts * 3 * sizeof(float));
-  terrain_hd_light_model(&s->light_model);
-  terrain_hd_view(s->view);
-  s->height_pixels=terrain_hd_height_pixels();
-  GROW(s->materials,s->cap_materials,nb,1);
-  for(int i=0;i<nb;i++)s->materials[i]=(b[i*5+4]&kTextured)?(uint8_t)course_relief_material(terrain_hd_texture_src(b[i*5+2])):0;
+  // Reserve all geometry before changing its contents/counts. On failure the
+  // previously published scene remains usable, and the game rebuilds next time.
+  GROW(s->verts, s->cap_verts, (size_t)nverts * 8, sizeof(float));
+  GROW(s->world, s->cap_world, (size_t)nverts * 3, sizeof(float));
+  GROW(s->normals, s->cap_normals, (size_t)nverts * 3, sizeof(float));
+  GROW(s->materials, s->cap_materials, nb, 1);
+  GROW(s->batches, s->cap_batches, (size_t)nb * 5, sizeof(int32_t));
   int mw = 0, mh = 0;
-  if (terrain_grid_size(&mw, &mh) && mw * mh > 0) {   // the map's water tiles, sent on when they changed
+  if (terrain_grid_size(&mw, &mh) && mw > 0 && mh > 0 && mw <= INT_MAX / mh) {
     static uint8_t *code;
     static float *height;
-    static int cap;
-    if (cap < mw * mh) {
-      cap = mw * mh;
-      code = realloc(code, (size_t)cap);
-      height = realloc(height, (size_t)cap * sizeof(float));
-    }
-    if (terrain_water_tiles(code, height, cap) == mw * mh &&
-        (mw != s->map_w || mh != s->map_h || memcmp(code, s->wcode, (size_t)mw * mh) ||
-         memcmp(height, s->wheight, (size_t)mw * mh * sizeof(float)))) {
-      GROW(s->wcode, s->cap_map, mw * mh, 1);
-      s->wheight = realloc(s->wheight, (size_t)s->cap_map * sizeof(float));
-      memcpy(s->wcode, code, (size_t)mw * mh);
-      memcpy(s->wheight, height, (size_t)mw * mh * sizeof(float));
-      s->map_w = mw;
-      s->map_h = mh;
-      s->map_serial++;
+    static int cap_code, cap_height;
+    int cells = mw * mh;
+    GROW(code, cap_code, cells, 1);
+    GROW(height, cap_height, cells, sizeof(float));
+    if (terrain_water_tiles(code, height, cells) == cells &&
+        (mw != s->map_w || mh != s->map_h || memcmp(code, s->wcode, (size_t)cells) ||
+         memcmp(height, s->wheight, (size_t)cells * sizeof(float)))) {
+      GROW(s->wcode, s->cap_map, cells, 1);
+      GROW(s->wheight, s->cap_height, cells, sizeof(float));
+      memcpy(s->wcode, code, (size_t)cells);
+      memcpy(s->wheight, height, (size_t)cells * sizeof(float));
+      s->map_w = mw; s->map_h = mh; s->map_serial++;
     }
   }
-  GROW(s->batches, s->cap_batches, nb * 5, sizeof(int32_t));
-  memcpy(s->batches, b, (size_t)nb * 5 * sizeof(int32_t));
-  s->nbatches = nb;
-  s->tw = t[0];
-  s->th = t[1];
+  if (nverts) {
+    memcpy(s->verts, terrain_hd_vertices(), (size_t)nverts * 8 * sizeof(float));
+    memcpy(s->world, terrain_hd_world(), (size_t)nverts * 3 * sizeof(float));
+    memcpy(s->normals, terrain_hd_normals(), (size_t)nverts * 3 * sizeof(float));
+  }
+  s->nverts = nverts;
+  terrain_hd_light_model(&s->light_model);
+  terrain_hd_view(s->view);
+  s->height_pixels = terrain_hd_height_pixels();
+  for (int i = 0; i < nb; i++) s->materials[i] = (b[i*5+4]&kTextured) ?
+    (uint8_t)course_relief_material(terrain_hd_texture_src(b[i*5+2])) : 0;
+  if (nb) memcpy(s->batches, b, (size_t)nb * 5 * sizeof(int32_t));
+  s->nbatches = nb; s->tw = t[0]; s->th = t[1];
+  // Offscreen failures must not monopolize the bounded hand-over forever.
+  // They remain unacknowledged and are requested again if a later scene uses them.
+  int kept = 0;
+  for (int i = 0; i < s->ntex; i++) {
+    int used = 0;
+    for (int j = 0; j < nb; j++)
+      if ((b[j*5+4]&kTextured) && (uint32_t)b[j*5+3] == s->tex[i].serial) { used = 1; break; }
+    if (used) s->tex[kept++] = s->tex[i];
+    else free(s->tex[i].rgba);
+  }
+  s->ntex = kept;
+  int retry = 0;
   if (ready) {
-    if (nready) {
-      GROW(s->tex, s->cap_tex, s->ntex + nready, sizeof(NewTex));
-      memcpy(s->tex + s->ntex, ready, (size_t)nready * sizeof(NewTex));
-      s->ntex += nready;
+    for (int i = 0; i < nready; i++) {
+      if (!queue_texture(s, ready + i)) retry = 1;
+      free(ready[i].rgba);
     }
-    free(ready);
+    free(ready); ready = NULL;
   } else for (int i = 0; i < nb; i++) {
-    if (!(b[i * 5 + 4] & kTextured) || sent((uint32_t)b[i * 5 + 3])) continue;
+    uint32_t serial = (uint32_t)b[i*5+3];
+    if (!(b[i*5+4]&kTextured) || sent(serial) || queued(serial)) continue;
     int32_t size[2];
-    const uint8_t *rgba = terrain_hd_texture(b[i * 5 + 2], size);
-    GROW(s->tex, s->cap_tex, s->ntex + 1, sizeof(NewTex));
-    NewTex *n = &s->tex[s->ntex++];
-    n->serial = (uint32_t)b[i * 5 + 3];
-    n->water = (b[i * 5 + 4] & kWater) != 0;
-    // the art pack's terrain look (hd_art.c, task-17): the 4x upscale of the same file
+    const uint8_t *rgba = terrain_hd_texture(b[i*5+2], size);
+    NewTex n = {serial, size[0], size[1], NULL, (b[i*5+4]&kWater) != 0, 0, 0};
+    size_t bytes;
+    if (!rgba || !texture_bytes(n.w, n.h, &bytes)) { retry = 1; continue; }
     int uw = 0, uh = 0;
-    uint8_t *up = hd_art_terrain_style(terrain_hd_texture_src(b[i * 5 + 2]), rgba, size[0], size[1], &uw, &uh,terrain_hd_texture_path_style(b[i*5+2]));
-    if (up) {
-      n->w = uw;
-      n->h = uh;
-      n->rgba = up;
-      continue;
-    }
-    n->w = size[0];
-    n->h = size[1];
-    n->rgba = malloc((size_t)size[0] * size[1] * 4);
-    memcpy(n->rgba, rgba, (size_t)size[0] * size[1] * 4);
+    n.rgba = hd_art_terrain_style(terrain_hd_texture_src(b[i*5+2]), rgba,
+      n.w, n.h, &uw, &uh, terrain_hd_texture_path_style(b[i*5+2]));
+    if (n.rgba) { n.w = uw; n.h = uh; }
+    else { n.rgba = malloc(bytes); if (n.rgba) memcpy(n.rgba, rgba, bytes); }
+    if (!queue_texture(s, &n)) retry = 1;
+    free(n.rgba);
   }
   s->frame = frame;
   s->serial++;
   LeaveCriticalSection(&g_tlock);
+  if (retry) terrain_hd_invalidate();
   port_course_textures_done();
+  return 1;
+allocation_failed:
+  LeaveCriticalSection(&g_tlock);
+  if (ready) { for (int i = 0; i < nready; i++) free(ready[i].rgba); free(ready); }
+  terrain_hd_invalidate();
   return 1;
 }
 
@@ -324,7 +396,7 @@ static struct {
   LONG serial;
   uint8_t *wcode;
   float *wheight;
-  int map_w, map_h, cap_map;
+  int map_w, map_h, cap_map, cap_height;
   LONG map_serial;
   TerrainTarget targets[2];
   SDL_Vertex *sv;
@@ -344,66 +416,76 @@ static SDL_Texture *find_tex(uint32_t serial) {
 // and taking it earlier showed the new ground under the old course for one
 // presented frame each game frame (task-68).
 static void take(SDL_Renderer *r, long shown) {
-  if (g_pending.serial == R.serial) return;
   EnterCriticalSection(&g_tlock);
   Scene *s = &g_pending;
-  if (s->frame > shown) {
-    LeaveCriticalSection(&g_tlock);
-    return;
-  }
-  GROW(R.verts, R.cap_verts, s->nverts * 8, sizeof(float));
-  memcpy(R.verts, s->verts, (size_t)s->nverts * 8 * sizeof(float));
-  R.nverts = s->nverts;
-  GROW(R.world, R.cap_world, s->nverts * 3, sizeof(float));
-  memcpy(R.world, s->world, (size_t)s->nverts * 3 * sizeof(float));
-  GROW(R.normals, R.cap_normals, s->nverts * 3, sizeof(float));
-  memcpy(R.normals, s->normals, (size_t)s->nverts * 3 * sizeof(float));
-  R.light_model = s->light_model;
-  R.height_pixels=s->height_pixels;
-  GROW(R.materials,R.cap_materials,s->nbatches,1);
-  memcpy(R.materials,s->materials,(size_t)s->nbatches);
-  memcpy(R.view, s->view, sizeof R.view);
-  if (s->map_serial != R.map_serial && s->map_w > 0) {
-    GROW(R.wcode, R.cap_map, s->map_w * s->map_h, 1);
-    R.wheight = realloc(R.wheight, (size_t)R.cap_map * sizeof(float));
-    memcpy(R.wcode, s->wcode, (size_t)s->map_w * s->map_h);
-    memcpy(R.wheight, s->wheight, (size_t)s->map_w * s->map_h * sizeof(float));
-    R.map_w = s->map_w;
-    R.map_h = s->map_h;
-    R.map_serial = s->map_serial;
-  }
-  GROW(R.batches, R.cap_batches, s->nbatches * 5, sizeof(int32_t));
-  memcpy(R.batches, s->batches, (size_t)s->nbatches * 5 * sizeof(int32_t));
-  R.nbatches = s->nbatches;
-  R.tw = s->tw;
-  R.th = s->th;
-  for (int i = 0; i < s->ntex; i++) {
-    NewTex *n = &s->tex[i];
-    SDL_Texture *t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, n->w, n->h);
-    if (t) {
-      if (SDL_UpdateTexture(t, NULL, n->rgba, n->w * 4) != 0) {
-        SDL_DestroyTexture(t);
-        t = NULL;
-      }
+  if (s->frame > shown) goto done;
+  if (s->serial != R.serial) {
+    // Reserve first: a failed grow must not leave half of the old scene replaced.
+    GROW(R.verts, R.cap_verts, (size_t)s->nverts * 8, sizeof(float));
+    GROW(R.world, R.cap_world, (size_t)s->nverts * 3, sizeof(float));
+    GROW(R.normals, R.cap_normals, (size_t)s->nverts * 3, sizeof(float));
+    GROW(R.materials, R.cap_materials, s->nbatches, 1);
+    GROW(R.batches, R.cap_batches, (size_t)s->nbatches * 5, sizeof(int32_t));
+    if (s->map_serial != R.map_serial && s->map_w > 0) {
+      GROW(R.wcode, R.cap_map, (size_t)s->map_w * s->map_h, 1);
+      GROW(R.wheight, R.cap_height, (size_t)s->map_w * s->map_h, sizeof(float));
+      memcpy(R.wcode, s->wcode, (size_t)s->map_w * s->map_h);
+      memcpy(R.wheight, s->wheight, (size_t)s->map_w * s->map_h * sizeof(float));
+      R.map_w = s->map_w; R.map_h = s->map_h; R.map_serial = s->map_serial;
     }
-    if (t) {
-      SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
+    if (s->nverts) {
+      memcpy(R.verts, s->verts, (size_t)s->nverts * 8 * sizeof(float));
+      memcpy(R.world, s->world, (size_t)s->nverts * 3 * sizeof(float));
+      memcpy(R.normals, s->normals, (size_t)s->nverts * 3 * sizeof(float));
+    }
+    if (s->nbatches) {
+      memcpy(R.materials, s->materials, (size_t)s->nbatches);
+      memcpy(R.batches, s->batches, (size_t)s->nbatches * 5 * sizeof(int32_t));
+    }
+    R.nverts = s->nverts; R.nbatches = s->nbatches;
+    R.light_model = s->light_model; R.height_pixels = s->height_pixels;
+    memcpy(R.view, s->view, sizeof R.view);
+    R.tw = s->tw; R.th = s->th; R.serial = s->serial;
+  }
+  // Retry even when the scene serial did not change. Rotate failed entries
+  // behind the remaining queue, with at most eight retries per take. Initial
+  // uploads retain the original all-at-once behavior. Pending pixels stay
+  // owned here until both consumers accept.
+  int remaining = s->ntex, retries = kUploadsPerTake, cursor = 0;
+  while (remaining-- > 0) {
+    NewTex n = s->tex[cursor];
+    if (n.retry && !retries) { cursor++; continue; }
+    if (n.retry) retries--;
+    if (!sent(n.serial)) GROW(g_sent, g_cap_sent, (size_t)g_nsent + 1, sizeof(uint32_t));
+    if (!n.uploaded) {
       int found = -1;
       if (mods_get_int("fixes.terrain_cache", 1))
-        for (int j = R.ntex - 1; j >= 0; j--) if (R.tex[j].serial == n->serial) { found = j; break; }
-      if (found >= 0) {
-        SDL_DestroyTexture(R.tex[found].tex);
-        R.tex[found].tex = t;
-      } else {
-        GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry));
-        R.tex[R.ntex++] = (TexEntry){n->serial, t};
+        for (int j = R.ntex - 1; j >= 0; j--) if (R.tex[j].serial == n.serial) { found = j; break; }
+      if (found < 0) GROW(R.tex, R.cap_tex, (size_t)R.ntex + 1, sizeof(TexEntry));
+      SDL_Texture *t = SDL_CreateTexture(r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, n.w, n.h);
+      if (t && SDL_UpdateTexture(t, NULL, n.rgba, n.w * 4) != 0) {
+        SDL_DestroyTexture(t); t = NULL;
+      }
+      if (t) {
+        SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
+        if (found >= 0) { SDL_DestroyTexture(R.tex[found].tex); R.tex[found].tex = t; }
+        else R.tex[R.ntex++] = (TexEntry){n.serial, t};
+        n.uploaded = 1;
+        R.targets[0].serial = R.targets[1].serial = -1;
       }
     }
-    if (n->water) water_take_texture(n->serial, n->w, n->h, n->rgba);   // task-78: the water pass keeps its own copy
-    free(n->rgba);
+    // Water backpressure must not hide an otherwise successful terrain upload.
+    int complete = n.uploaded && (!n.water || water_take_texture(n.serial, n.w, n.h, n.rgba));
+    if (complete) {
+      if (!sent(n.serial)) g_sent[g_nsent++] = n.serial;
+      free(n.rgba);
+    }
+    memmove(s->tex + cursor, s->tex + cursor + 1, (size_t)(s->ntex - cursor - 1) * sizeof(NewTex));
+    if (complete) s->ntex--;
+    else { n.retry = 1; s->tex[s->ntex - 1] = n; }
   }
-  s->ntex = 0;
-  R.serial = s->serial;
+allocation_failed:
+done:
   LeaveCriticalSection(&g_tlock);
 }
 
@@ -412,8 +494,10 @@ static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float o
   TerrainTarget *target = &R.targets[guard];
   if (!R.nbatches || R.tw <= 0 || R.th <= 0) return NULL;
   if (!target->texture || target->w != w || target->h != h) {
+    SDL_Texture *replacement = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    if (!replacement) return NULL;
     if (target->texture) SDL_DestroyTexture(target->texture);
-    target->texture = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    target->texture = replacement;
     target->w = w;
     target->h = h;
     target->serial = -1;
@@ -434,6 +518,11 @@ static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float o
     draw_vertices = terrain_lighting_vertices();
     draw_batches = terrain_lighting_batches();
   }
+  for (int k = 0; k < R.nbatches; k++) {
+    int count = draw_batches[k * 5 + 1];
+    if (count < 0) return NULL;
+    GROW(R.sv, R.cap_sv, count, sizeof(SDL_Vertex));
+  }
   SDL_SetRenderTarget(r, target->texture);
   SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
   SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
@@ -448,7 +537,6 @@ static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float o
     int first = b[0], count = b[1], flags = b[4];
     SDL_Texture *tex = flags & kTextured ? find_tex((uint32_t)b[3]) : NULL;
     if ((flags & kTextured) && !tex) continue;
-    GROW(R.sv, R.cap_sv, count, sizeof(SDL_Vertex));
     for (int i = 0; i < count; i++) {
       const float *v = draw_vertices + (size_t)(first + i) * 8;
       SDL_Vertex *o = &R.sv[i];
@@ -481,6 +569,8 @@ static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float o
   target->lighting_revision = lighting_revision;
   target->x = ox; target->y = oy;
   return target->texture;
+allocation_failed:
+  return NULL;
 }
 
 SDL_Texture *hdt_render(SDL_Renderer *r, int w, int h, long shown) {

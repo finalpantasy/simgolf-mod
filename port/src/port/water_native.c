@@ -21,12 +21,14 @@
 
 #include <SDL.h>
 #include <SDL_system.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "mods/mods.h"
+#include "port/hd_art.h"
 #include "port/host.h"
 #include "port/runtime.h"
 #include "port/water_native.h"
@@ -93,7 +95,10 @@ void water_poll(void) {
   const char *art = getenv("SIMGOLF_ART_DEFAULT");
   int mode = v && *v ? !strcmp(v, "hd") || !strcmp(v, "realistic") : !(art && !_stricmp(art, "original"));
   if (mode != g_mode) fprintf(stderr, "water: %s\n", mode ? "realistic (display.water=hd)" : "original");
-  InterlockedExchange(&g_mode, mode);
+  LONG old_mode = InterlockedExchange(&g_mode, mode);
+  // Disabled water acknowledges textures without keeping copies. The game
+  // thread must resend them when the user enables the water pass again.
+  if (old_mode == 0 && mode) hdt_resend();
   // water.splash=x,y[,strength]: a splash at map tile x, y (tests and evidence)
   static char last_splash[64];
   const char *sp = mods_get("water.splash");
@@ -207,7 +212,10 @@ static void splashes(void) {
 // ------------------------------------------------------------------ render thread state
 
 typedef struct { uint32_t serial; ID3D11Texture2D *tex; ID3D11ShaderResourceView *srv; } WTex;
-typedef struct { uint32_t serial; int w, h; uint8_t *rgba; } Pend;
+typedef struct { uint32_t serial; int w, h; uint8_t *rgba; size_t bytes; int tried; } Pend;
+// Match terrain's maximum admitted texture size so every valid caller payload
+// can fit once older queued uploads drain.
+enum { kWaterMaxPending = 256, kWaterPendingBytes = 256 * 1024 * 1024, kWaterUploadBudget = 8 };
 typedef struct { int first, count; uint32_t serial; } Draw;
 
 typedef struct {
@@ -249,6 +257,7 @@ static struct {
   int ntex, cap_tex;
   Pend *pend;
   int npend, cap_pend;
+  size_t pend_bytes;
   float *vtx;
   int nvtx, cap_vtx;
   Draw *draws;
@@ -532,15 +541,52 @@ static void make_noise(void) {
   free(sy);
 }
 
-void water_take_texture(uint32_t serial, int w, int h, const uint8_t *rgba) {
-  if (w <= 0 || h <= 0 || !rgba) return;
-  if (W.npend == W.cap_pend) W.pend = realloc(W.pend, (W.cap_pend = W.cap_pend ? W.cap_pend * 2 : 64) * sizeof(Pend));
-  Pend *p = &W.pend[W.npend++];
-  p->serial = serial;
-  p->w = w;
-  p->h = h;
-  p->rgba = malloc((size_t)w * h * 4);
-  memcpy(p->rgba, rgba, (size_t)w * h * 4);
+// Pending water texture uploads stay owned here until the GPU accepts them.
+// Backpressure leaves unaccepted pixels with the terrain caller. A repeated
+// serial replaces only its queued copy, keeping memory bounded while offline.
+static void discard_pending(void) {
+  for (int i = 0; i < W.npend; i++) free(W.pend[i].rgba);
+  free(W.pend);
+  W.pend = NULL;
+  W.npend = W.cap_pend = 0;
+  W.pend_bytes = 0;
+}
+
+int water_take_texture(uint32_t serial, int w, int h, const uint8_t *rgba) {
+  if (g_mode == 0 || W.state < 0) {
+    discard_pending();
+    return 1;   // an inactive pass must never backpressure base terrain
+  }
+  if (w <= 0 || h <= 0 || !rgba || w > INT_MAX / 4) return 0;
+  size_t row = (size_t)w * 4;
+  if ((size_t)h > SIZE_MAX / row) return 0;
+  size_t bytes = row * (size_t)h;
+  if (bytes > kWaterPendingBytes) return 0;
+  int index = -1;
+  for (int i = 0; i < W.npend; i++)
+    if (W.pend[i].serial == serial) { index = i; break; }
+  size_t old_bytes = index >= 0 ? W.pend[index].bytes : 0;
+  if (bytes > kWaterPendingBytes - (W.pend_bytes - old_bytes)) return 0;
+  if (index < 0) {
+    if (W.npend == kWaterMaxPending) return 0;
+    if (W.npend == W.cap_pend) {
+      int capacity = W.cap_pend ? W.cap_pend * 2 : 64;
+      if (capacity > kWaterMaxPending) capacity = kWaterMaxPending;
+      Pend *grown = realloc(W.pend, (size_t)capacity * sizeof *grown);
+      if (!grown) return 0;
+      W.pend = grown;
+      W.cap_pend = capacity;
+    }
+  }
+  uint8_t *copy = index >= 0 && old_bytes == bytes ? W.pend[index].rgba : malloc(bytes);
+  if (!copy) return 0;
+  memcpy(copy, rgba, bytes);
+  int tried = index >= 0 ? W.pend[index].tried : 0;
+  if (index < 0) index = W.npend++;
+  else if (copy != W.pend[index].rgba) free(W.pend[index].rgba);
+  W.pend[index] = (Pend){serial, w, h, copy, bytes, tried};
+  W.pend_bytes = W.pend_bytes - old_bytes + bytes;
+  return 1;
 }
 
 static WTex *find_wtex(uint32_t serial) {
@@ -549,22 +595,51 @@ static WTex *find_wtex(uint32_t serial) {
   return NULL;
 }
 
+static int reserve_wtex(void) {
+  if (W.ntex < W.cap_tex) return 1;
+  if (W.cap_tex > INT_MAX / 2) return 0;
+  int capacity = W.cap_tex ? W.cap_tex * 2 : 64;
+  if ((size_t)capacity > SIZE_MAX / sizeof(WTex)) return 0;
+  WTex *grown = realloc(W.tex, (size_t)capacity * sizeof *grown);
+  if (!grown) return 0;
+  W.tex = grown;
+  W.cap_tex = capacity;
+  return 1;
+}
+
 static void upload_pending(void) {
+  // Healthy first uploads retain the original immediate behavior. Only old
+  // failures consume the retry budget. Queue admission bounds fresh work too.
+  Pend failed[kWaterMaxPending];
+  int nfailed = 0, kept = 0, retries = kWaterUploadBudget;
   for (int i = 0; i < W.npend; i++) {
-    Pend *p = &W.pend[i];
-    WTex *t = find_wtex(p->serial);
-    if (!t) {
-      if (W.ntex == W.cap_tex) W.tex = realloc(W.tex, (W.cap_tex = W.cap_tex ? W.cap_tex * 2 : 64) * sizeof(WTex));
-      t = &W.tex[W.ntex++];
-      memset(t, 0, sizeof *t);
-      t->serial = p->serial;
+    Pend p = W.pend[i];
+    if (p.tried && !retries) { W.pend[kept++] = p; continue; }
+    if (p.tried) retries--;
+    p.tried = 1;
+    WTex *t = find_wtex(p.serial);
+    int uploaded = 0;
+    if (t || reserve_wtex()) {
+      WTex replacement = {p.serial, NULL, NULL};
+      replacement.srv = make_tex(p.w, p.h, DXGI_FORMAT_R8G8B8A8_UNORM, p.rgba, p.w * 4, 1, &replacement.tex);
+      if (replacement.srv) {
+        if (t) { REL(t->srv); REL(t->tex); }
+        else t = &W.tex[W.ntex++];
+        *t = replacement;
+        uploaded = 1;
+      }
     }
-    REL(t->srv);
-    REL(t->tex);
-    t->srv = make_tex(p->w, p->h, DXGI_FORMAT_R8G8B8A8_UNORM, p->rgba, p->w * 4, 1, &t->tex);
-    free(p->rgba);
+    if (uploaded) {
+      W.pend_bytes -= p.bytes;
+      free(p.rgba);
+    } else {
+      failed[nfailed++] = p;
+    }
   }
-  W.npend = 0;
+  // Unattempted failures stay first, so a persistent failure cannot starve
+  // later entries. Each tile is attempted at most once in this render call.
+  if (nfailed) memcpy(W.pend + kept, failed, (size_t)nfailed * sizeof *failed);
+  W.npend = kept + nfailed;
 }
 
 // ------------------------------------------------------------------ the map: depth, flow, pools
@@ -1056,9 +1131,11 @@ static void live_reload(double now) {
 }
 
 void water_draw(SDL_Renderer *r, int x, int y, int w, int h, double now_ms) {
-  if (g_mode <= 0 || W.state < 0 || w <= 0 || h <= 0) return;
+  if (g_mode == 0 || W.state < 0) { discard_pending(); return; }
+  if (g_mode < 0 || w <= 0 || h <= 0) return;
   double c0 = host_now_ms();
   if (W.state == 0 && !init(r)) {
+    discard_pending();
     InterlockedExchange(&g_works, -1);
     return;
   }

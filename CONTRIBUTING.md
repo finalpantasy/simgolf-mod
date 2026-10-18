@@ -4,7 +4,8 @@ Forks, fixes, new features, mods and bug reports are all welcome.
 
 ## Easiest ways to help
 
-- **Report a bug or suggest an idea:** open an [issue](../../issues). Say what you did, what you saw, and attach a screenshot and your `golf.log` (next to `golf.exe`) if the game misbehaved.
+- **Report a bug:** follow the [beginner-friendly reporting guide](README.md#report-a-bug-no-coding-experience-needed), then use the [bug-report form](https://github.com/finalpantasy/simgolf-mod/issues/new?template=bug_report.yml). Include reproduction steps, version, the affected save and companions, logs and crash report when available. Review attachments for personal information before posting publicly.
+- **Suggest an idea:** open an [issue](../../issues) explaining the player benefit and how you expect it to work.
 - **Make a mod without building anything:** prices, wages, personalities, difficulty and more live in plain text tables. See [the modding guide](docs/modding/README.md) and the examples in `mods-examples` inside the release zip. Share a mod as a pull request into `mods/`, or as its own repo.
 
 ## Modding and source development

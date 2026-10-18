@@ -46,7 +46,9 @@ typedef struct {
 int hdt_scene(HdtScene *out);
 
 // Render thread.
-void water_take_texture(uint32_t serial, int w, int h, const uint8_t *rgba);   // a water tile texture (RGBA)
+// Copies a water tile (RGBA) for upload. 1: accepted (or water is inactive); 0: caller retains its
+// pixels and retries after allocation failure or pending-queue backpressure.
+int water_take_texture(uint32_t serial, int w, int h, const uint8_t *rgba);
 // Draws the water over the terrain layer just copied to (x, y, w, h) of the
 // renderer's current target (SDL logical coordinates). now_ms: the time the
 // picture is for.

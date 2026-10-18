@@ -15,7 +15,7 @@
 #include "port/fs.h"
 #include "port/host.h"
 #include "mods/mods.h"
-#include "mods/living_club.h"
+#include "port/save_group.h"
 
 // The folder a game-relative path lives in: the per-instance user folder
 // (SIMGOLF_USER_DIR, task-13) for saves and snapshots, else the game folder.
@@ -79,6 +79,11 @@ int fs_resolve(const char *dospath, char *out, int outlen, int for_write) {
   if (has_parent_part(rel)) { fprintf(stderr, "fs: refused a path with a parent part: %s\n", dospath); return 0; }
   int n = snprintf(out, outlen, "%s/%s", base_for(rel), rel);
   if (n < 0 || n >= outlen) { out[0] = 0; return 0; }
+  size_t len = strlen(out);
+  if (len > 4 && !_stricmp(out + len - 4, ".sve") && !save_group_recover(out)) {
+    fprintf(stderr, "save: recovery required before opening %s\n", out);
+    return 0;
+  }
   harness_note_file(out);
   DWORD a = GetFileAttributesA(out);
   if (a != INVALID_FILE_ATTRIBUTES) {
@@ -112,7 +117,7 @@ int fs_resolve(const char *dospath, char *out, int outlen, int for_write) {
 }
 
 // A .sve the game wrote gets a record of the loaded mods next to it (task-11).
-void fs_written(const char *realpath) { mods_save_written(realpath); living_written(realpath); }
+void fs_written(const char *realpath) { mods_save_written(realpath); }
 void fs_deleted(const char *realpath) { (void)realpath; }
 
 int fs_commit(int fd) { return _commit(fd) == 0; }

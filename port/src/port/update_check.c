@@ -216,15 +216,18 @@ static void status(UpdState *u, int busy, const char *text) {
   fprintf(stderr, "update: %s\n", text);
 }
 
-// Runs a command line hidden and waits (ms); returns the exit code or -1.
-static int run_wait(char *cmd, DWORD ms) {
+// Prepare owns the extraction timeout and reaps tar before it exits. An outer
+// timeout would abandon prepare (and its tar child), allowing a retry to reuse
+// the same stage while extraction is still writing there.
+static int run_wait(char *cmd) {
   STARTUPINFOA si = {sizeof si};
   PROCESS_INFORMATION pi;
   si.dwFlags = STARTF_USESHOWWINDOW;
   si.wShowWindow = SW_HIDE;
   if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return -1;
-  DWORD w = WaitForSingleObject(pi.hProcess, ms), code = (DWORD)-1;
-  if (w == WAIT_OBJECT_0) GetExitCodeProcess(pi.hProcess, &code);
+  while (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) Sleep(100);
+  DWORD code = (DWORD)-1;
+  GetExitCodeProcess(pi.hProcess, &code);
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
   return (int)code;
@@ -249,7 +252,7 @@ static DWORD WINAPI install_thread(LPVOID arg) {
   InterlockedExchange((LONG *)&u->download_per_mille,1000);
   status(u, 1, "Checking checksum and unpacking files");
   snprintf(cmd, sizeof cmd, "\"%s\\sgupdate.exe\" --prepare --zip \"%s\" --sha \"%s\" --stage \"%s\"", app, zipf, shaf, stage);
-  int rc = run_wait(cmd, 5 * 60 * 1000);
+  int rc = run_wait(cmd);
   if (rc != 0) {
     status(u, 2, rc == 2 ? "The download does not match its checksum, so it was not used. Nothing was changed."
                          : "The download could not be unpacked. Nothing was changed.");

@@ -26,7 +26,8 @@ static const char PLAYER_EXE[] = "Sim Golf Remastered.exe";
 static const char *const ITEMS[] = {"golf.exe", PLAYER_EXE, "SDL2.dll", "sgsetup.exe", "sgupdate.exe", "jgld-nops.json", "version.txt", "mods.ini.default", "fonts/", "ui/",
                                     "data/tables/", "data/living_club.json", "data/lighting-windows.csv",
                                     "data/weather-air.csv", "data/weather-atmosphere.csv", "data/weather-climate.csv",
-                                    "data/weather-surfaces.csv", "data/course-lights.csv", "data/course-lamps/", "mods-examples/"};
+                                    "data/weather-surfaces.csv", "data/course-lights.csv", "data/course-lamps/", "mods-examples/",
+                                    "Collect-Diagnostics.ps1", "DIAGNOSTICS.txt"};
 #define NITEMS ((int)(sizeof ITEMS / sizeof ITEMS[0]))
 
 static char g_log_path[MAX_PATH];
@@ -123,27 +124,47 @@ static int rm_tree(const char *path) {
 static int copy_tree(const char *from, const char *to) {
   DWORD attrs = 0;
   if (path_attributes(from, &attrs) != 1) return 0;
+  // Preserving player UI must not traverse junctions or symlinks outside the
+  // backup. Leave the original tree intact via rollback instead.
+  if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
+    SetLastError(ERROR_ACCESS_DENIED);
+    return 0;
+  }
   if (!(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
     mkparent(to);
     return CopyFileA(from, to, FALSE) != 0;
   }
   mkdirs(to);
+  if (path_attributes(to, &attrs) != 1) return 0;
+  if (!(attrs & FILE_ATTRIBUTE_DIRECTORY) || (attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    SetLastError(ERROR_ACCESS_DENIED);
+    return 0;
+  }
   char pat[MAX_PATH + 4];
   snprintf(pat, sizeof pat, "%s\\*", from);
   WIN32_FIND_DATAA fd;
   HANDLE h = FindFirstFileA(pat, &fd);
-  int ok = 1;
-  if (h != INVALID_HANDLE_VALUE) {
-    do {
-      if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
-      char a[MAX_PATH], b[MAX_PATH];
-      snprintf(a, sizeof a, "%s\\%s", from, fd.cFileName);
-      snprintf(b, sizeof b, "%s\\%s", to, fd.cFileName);
-      ok &= copy_tree(a, b);
-    } while (FindNextFileA(h, &fd));
-    FindClose(h);
+  if (h == INVALID_HANDLE_VALUE) return GetLastError() == ERROR_FILE_NOT_FOUND;
+  do {
+    if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
+    char a[MAX_PATH], b[MAX_PATH];
+    snprintf(a, sizeof a, "%s\\%s", from, fd.cFileName);
+    snprintf(b, sizeof b, "%s\\%s", to, fd.cFileName);
+    if (!copy_tree(a, b)) {
+      DWORD error = GetLastError();
+      FindClose(h);
+      SetLastError(error);
+      return 0;
+    }
+  } while (FindNextFileA(h, &fd));
+  // Capture the enumeration result before FindClose changes last-error.
+  DWORD error = GetLastError();
+  FindClose(h);
+  if (error != ERROR_NO_MORE_FILES) {
+    SetLastError(error);
+    return 0;
   }
-  return ok;
+  return 1;
 }
 
 static void winpath(char *s) {
@@ -241,8 +262,18 @@ static int do_prepare(const char *zip, const char *sha, const char *stage) {
   si.wShowWindow = SW_HIDE;
   DWORD code = 1;
   if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-    WaitForSingleObject(pi.hProcess, 5 * 60 * 1000);
-    GetExitCodeProcess(pi.hProcess, &code);
+    DWORD wait = WaitForSingleObject(pi.hProcess, 5 * 60 * 1000);
+    if (wait == WAIT_OBJECT_0) {
+      GetExitCodeProcess(pi.hProcess, &code);
+    } else {
+      // Termination is asynchronous. Never clean or reuse the stage until tar
+      // is confirmed stopped, even if termination fails and we must wait for
+      // it to exit naturally. A failed wait must not release the retry gate.
+      logf_("prepare: extraction timed out or wait failed; stopping tar");
+      if (!TerminateProcess(pi.hProcess, 3))
+        logf_("prepare: cannot stop tar (error %lu); waiting for it to exit", (unsigned long)GetLastError());
+      while (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) Sleep(100);
+    }
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
   }
@@ -363,6 +394,16 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
         break;
       }
       moved[i] = 1;
+    }
+    // ui contains optional/player-installed packs (notably terrain), which
+    // normal releases omit. Seed the new tree from the untouched backup, then
+    // overlay release-owned files. Rollback still restores the original tree.
+    // Without an ownership manifest, absence in a zip is not deletion consent.
+    if (moved[i] && !strcmp(rel, "ui") && !copy_tree(bak, dst)) {
+      logf_("apply: cannot preserve existing %s (error %lu)", rel, (unsigned long)GetLastError());
+      copied[i] = 1;
+      failed = 1;
+      break;
     }
     if (!copy_tree(src, dst)) {
       logf_("apply: cannot copy %s (error %lu)", rel, (unsigned long)GetLastError());

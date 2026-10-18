@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <errno.h>
 #include "mods/living_club.h"
 #include "mods/mods.h"
 #include "port/roster.h"
@@ -17,7 +18,8 @@
 #define G32(a) (*(uint32_t *)(uintptr_t)(a))
 static LcWorld world;
 static LcContent content;
-static int ready, loading, loaded, writing, live[SLOTS], ended[SLOTS], tee[SLOTS], last_on;
+static int ready, loading, loaded, live[SLOTS], ended[SLOTS], tee[SLOTS], last_on;
+static int writing_fd = -1, history_loaded, history_error;
 static struct { int event, arg, stamp; char text[LC_TEXT]; } utterance[SLOTS];
 
 static int profile(int slot) { return slot>=0&&slot<SLOTS ? G16(0x57956eu+(unsigned)slot*0x100u):-1; }
@@ -46,10 +48,12 @@ int living_enabled(void) { return ready && configured(); }
 void living_reset(void) {
   lc_reset(&world,content.seed);
   for(int i=0;i<SLOTS;i++){live[i]=-1;ended[i]=0;tee[i]=-1;utterance[i].event=-1;utterance[i].text[0]=0;}
-  loading=loaded=writing=0;
+  loading=loaded=history_loaded=history_error=0;
+  writing_fd=-1;
 }
 void living_init(const char *dir) {
-  if(!configured())return;
+  // Content is also needed to validate and preserve dormant histories.
+  // Gameplay/presentation remain gated by living_enabled().
   char path[1024],err[1200],release_dir[1024];snprintf(release_dir,sizeof release_dir,"%s/..",dir);
   release_data_path(path,sizeof path,release_dir,"living_club.json");
   const char *override=getenv("SIMGOLF_LIVING_CONTENT");if(override&&*override)snprintf(path,sizeof path,"%s",override);
@@ -118,21 +122,32 @@ int living_reaction(int slot,int event,int original) {
 }
 extern const char *crt_real_path(unsigned fd);
 void living_save_field(int fd,int reading) {
-  if(!living_enabled())return;
-  if(!reading){writing=1;return;}
+  if(!reading){writing_fd=fd;return;}
   living_reset();loading=1;
   const char *path=crt_real_path((unsigned)fd);char err[1200];
-  int ok=path&&lc_load(&world,&content,path,err,sizeof err);
-  fprintf(stderr,"living-club: %s\n",ok?"restored checksum-bound visit histories":path?err:"save path unavailable");
+  if(!path){history_error=1;return;}
+  char side[1024];int n=snprintf(side,sizeof side,"%s.living-club.json",path);
+  if(n<0 || n>=(int)sizeof side){history_error=1;return;}
+  FILE *f=fopen(side,"rb");
+  if(!f){history_error=errno!=ENOENT;return;}
+  if(fclose(f)){history_error=1;return;}
+  history_loaded=ready&&lc_load(&world,&content,path,err,sizeof err);
+  history_error=!history_loaded;
+  fprintf(stderr,"living-club: %s\n",history_loaded?"restored checksum-bound visit histories":ready?err:"content unavailable; history preserved");
 }
 void living_save_end(void) { if(loading){loading=0;loaded=1;} }
-void living_written(const char *path) {
-  if(!living_enabled()||!writing)return;
-  size_t len=strlen(path);if(len<4||_stricmp(path+len-4,".sve"))return;
-  writing=0;char err[1200];
+int living_written(int fd,const char *path) {
+  if(writing_fd!=fd)return 1;
+  // Never erase an invalid/unreadable history or bless it with a new save CRC.
+  if(history_error){fprintf(stderr,"living-club: save blocked by unreadable history\n");return 0;}
+  if(!ready || (!living_enabled()&&!history_loaded))return 1;
+  char err[1200];
   int ok=lc_save(&world,&content,path,err,sizeof err);
+  if(ok)history_loaded=1;
   fprintf(stderr,"living-club: %s\n",ok?"saved checksum-bound visit histories":err);
+  return ok;
 }
+void living_closed(int fd) { if(writing_fd==fd)writing_fd=-1; }
 void living_card(int slot,char *identity,size_t ni,char *story,size_t ns) {
   if(ni)*identity=0;if(ns)*story=0;
   if(!living_enabled()||slot<0||slot>=SLOTS)return;

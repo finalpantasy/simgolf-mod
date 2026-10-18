@@ -24,6 +24,8 @@
 #include "port/camera_tiles.h"
 #ifndef __EMSCRIPTEN__
 #include "port/path_styles.h"
+#include "mods/living_club.h"
+#include "port/save_group.h"
 #endif
 
 #define P(x) ((void *)(uintptr_t)(x))
@@ -216,6 +218,14 @@ int crt_open(nu path, nu flags, ...) {
   if (flags & 0x400) f |= O_EXCL;
   char tmp[530];
   int safe = write && (flags & 0x200) && is_save(real) && fs_safe_saves();
+#ifndef __EMSCRIPTEN__
+  if (is_save(real) && !save_group_recover(real)) {
+    fprintf(stderr, "save: recovery required before opening %s\n", real);
+    errno = EIO;
+    return -1;
+  }
+  if (safe && !save_group_clear_stage(real)) { errno = EIO; return -1; }
+#endif
   if (safe) snprintf(tmp, sizeof tmp, "%s.tmp", real);
   // Reserve bookkeeping before any destructive open. In particular, a failed
   // allocation must never silently turn a safe save into an untracked write.
@@ -276,25 +286,30 @@ int crt_close(nu fd) {
   int synced = fd < 256 && g_fd_final[fd] ? fs_commit((int)fd) : 1;
   int r = close((int)fd);
   if (fd < 256 && g_fd_failed[fd]) r = -1;
-  if (fd < 256 && g_fd_final[fd]) {   // the save is whole on the disk: put it in place of the old one
-    if (r == 0 && synced && fs_replace(g_fd_final[fd], g_fd_written[fd])) fprintf(stderr, "save: %s written safely\n", g_fd_written[fd]);
-    else {
-      fprintf(stderr, "save: could not finish %s (the previous save is kept, the new one is in %s)\n", g_fd_written[fd], g_fd_final[fd]);
-      r = -1;
-    }
-    free(g_fd_final[fd]);
-    g_fd_final[fd] = NULL;
-  }
+  if (!synced) r = -1;
   if (fd < 256 && g_fd_written[fd]) {
-    if (!r && !camera_tiles_written((int)fd, g_fd_written[fd])) r = -1;
-    if (!r && !lamps_game_written((int)fd, g_fd_written[fd])) r = -1;
+    // Writers checksum the completed temporary save and publish only staged
+    // companions. A corrupt lamp/history or an I/O failure cannot touch the
+    // old group. The journal handles replacement/rollback failures afterward.
+    const char *target = g_fd_final[fd] ? g_fd_final[fd] : g_fd_written[fd];
+    if (!r && !camera_tiles_written((int)fd, target)) r = -1;
+    if (!r && !lamps_game_written((int)fd, target)) r = -1;
 #ifndef __EMSCRIPTEN__
-    if (!r && !path_styles_written((int)fd, g_fd_written[fd])) r = -1;
+    if (!r && !path_styles_written((int)fd, target)) r = -1;
+    if (!r && !living_written((int)fd, target)) r = -1;
+    if (!r && g_fd_final[fd] && !save_group_commit(g_fd_written[fd], target)) r = -1;
+#else
+    if (!r && g_fd_final[fd] && !fs_replace(target, g_fd_written[fd])) r = -1;
 #endif
     if (!r) fs_written(g_fd_written[fd]);
+    else fprintf(stderr, "save: could not complete %s; inspect temporary files and any recovery journal\n", g_fd_written[fd]);
     free(g_fd_written[fd]);
     g_fd_written[fd] = NULL;
   }
+  if (fd < 256) { free(g_fd_final[fd]); g_fd_final[fd] = NULL; }
+#ifndef __EMSCRIPTEN__
+  living_closed((int)fd);
+#endif
   camera_tiles_closed((int)fd);
   lamps_game_closed((int)fd);
 #ifndef __EMSCRIPTEN__

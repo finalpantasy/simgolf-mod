@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a crash, freeze, broken feature, or visual problem.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve SimGolf Remastered! You do not need coding experience.
+        Read the [file-finding and upload guide](https://github.com/finalpantasy/simgolf-mod#report-a-bug-no-coding-experience-needed).
+        Copy golf.log promptly, preferably BEFORE restarting the game. Reports and attachments are public.
+        Please attach a ZIP of the affected save and same-name companion files, golf.log, and golf.log.crash.txt if present. Do not include original game programs, disc images, or the HD pack.
+  - type: input
+    id: version
+    attributes:
+      label: Remastered version
+      description: For example 0.1.21. If you cannot find it, write Unknown.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What went wrong?
+      options:
+        - Crash / game closed unexpectedly
+        - Freeze / game stopped responding
+        - Missing text or visual problem
+        - Save or load problem
+        - Setup or update problem
+        - Gameplay or controls problem
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Start with loading your attached save or creating a new game. Tell us which buttons or actions lead to the problem.
+      placeholder: |
+        1. Load the attached save.
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected result and actual result
+      placeholder: |
+        I expected:
+        What happened instead:
+    validations:
+      required: true
+  - type: textarea
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      description: Every time, sometimes, or once? How long had you played? Did you have to close the game yourself?
+  - type: textarea
+    id: setup
+    attributes:
+      label: PC and game settings
+      description: Unknown is fine. Include Windows version, graphics card, resolution, windowed/full-screen, course theme/size, texture mode, water/lighting, mod profile and extra mods. Mention fresh install versus update.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Save, log, crash report and screenshots
+      description: Drag your ZIP/screenshots into this box and wait for upload to finish. If a file is missing or cannot be shared publicly, explain here. A new-game crash may not have a save.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed my attachments for personal information and understand this report is public.
+          required: true
