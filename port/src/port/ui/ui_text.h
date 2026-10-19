@@ -61,3 +61,6 @@ int uit_fit(UiText *t, int weight, float px, const char *s, float tracking, floa
 // Longest fitting prefix at a complete character boundary, up to max_bytes.
 // Unlike wrapping, scans all eligible prefixes (tracking can be negative).
 int uit_prefix(UiText *t, int weight, float px, const char *s, float tracking, float max_w, int max_bytes, float suffix_w);
+
+// Render thread: retain CPU glyphs and fonts, recreate their GPU atlas on next draw.
+void uit_device_reset(UiText *t);

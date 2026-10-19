@@ -619,3 +619,13 @@ int hudf_original_rotate_enabled(void) {
   }
   return mode == HUD_MODE_ORIGINAL_ROTATE && g_registered && !g_failed;
 }
+
+// Render thread: published CPU pictures survive a device reset.
+void hudf_device_reset(void) {
+  for (int i=0;i<HUD_ART_MAX;i++) {
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i]=NULL;
+    g_tex_serial[i]=~0u;
+    g_tex_retry_at[i]=0;
+  }
+}

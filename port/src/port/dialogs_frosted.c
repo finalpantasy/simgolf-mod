@@ -333,3 +333,13 @@ int dlgf_enabled(void) {
   // only once the presenter has run the layer: with hd=0 nothing would draw the dialog
   return g_want && g_registered && !g_failed && host_now_ms() - g_drawn_t < 2000;
 }
+
+// Render thread: published CPU pictures survive a device reset.
+void dlgf_device_reset(void) {
+  for (int i=0;i<DLG_ART_MAX;i++) {
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i]=NULL;
+    g_tex_serial[i]=~0u;
+    g_tex_retry_at[i]=0;
+  }
+}

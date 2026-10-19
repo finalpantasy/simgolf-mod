@@ -812,3 +812,9 @@ void hdball_draw(SDL_Renderer *rd, int cdx, int cdy, const SDL_Rect *clip, float
   SDL_RenderSetClipRect(rd, NULL);
   if (g_cap.on) cap_frame(rd, cap_x, cap_y, cap_speed, now_ms);
 }
+
+void hdball_device_reset(void) {
+  for(int i=0;i<g_nbt;i++)if(g_bt[i].tex)SDL_DestroyTexture(g_bt[i].tex);
+  memset(g_bt,0,sizeof g_bt);g_nbt=0;
+  if(g_shadow)SDL_DestroyTexture(g_shadow);g_shadow=NULL;
+}

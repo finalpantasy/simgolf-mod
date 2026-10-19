@@ -409,3 +409,13 @@ int gwf_card_enabled(void) {
   }
   return g_want && g_card_registered && !g_failed && host_now_ms() - g_card_drawn_t < 2000;
 }
+
+// Render thread: published CPU pictures survive a device reset.
+void gwf_device_reset(void) {
+  for (int i=0;i<GW_ART_MAX;i++) {
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i]=NULL;
+    g_tex_serial[i]=~0u;
+    g_tex_retry_at[i]=0;
+  }
+}

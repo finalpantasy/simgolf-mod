@@ -1,5 +1,17 @@
 # SimGolf Remastered for Windows
 
+## 0.1.23 - 2026-10-19
+
+Safer Practice Round starts and smoother clubhouse loading.
+
+- Practice Round now safely reports when a playing partner is unavailable. Retry after a group finishes; failed attempts preserve existing golfers and course state.
+- Prevents the original clubhouse appearing briefly before its replacement finishes loading.
+- Adds recovery for graphics resets, including rebuilding text, terrain and artwork and cancelling an interrupted zoom effect. This addresses the graphics target path seen in crash reports; confirmation on affected PCs remains pending.
+- Restores only visible artwork after graphics resets, reducing memory pressure on large courses. Off-screen artwork loads when needed.
+- Keeps original-water texture updates bounded across resets and preserves switching back to HD water.
+- Improves crash reports with loaded-module information and protects font and interface asset paths across threads.
+- Retains all 0.1.22 features, saves, settings, assets and remastered defaults.
+
 ## 0.1.22 - 2026-10-18
 
 Repair repeated course welcome messages in notification history.

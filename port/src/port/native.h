@@ -20,6 +20,11 @@ typedef uint32_t nu;   // a 32-bit argument of any type
 // Typed helper shared by native and browser bridge rendering.
 float bridge_connections_heading(int heading);
 
+// Atomic Practice/Match allocation around the original visitor initializer.
+void practice_start_begin(void);
+int practice_start_failed(unsigned slot);
+void practice_start_commit(void);
+
 void crt_free(nu p);
 void crt_free_dbg(nu p, nu type);
 nu crt_malloc(nu n);

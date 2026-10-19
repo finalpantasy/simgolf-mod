@@ -75,8 +75,8 @@ int host_headless(void) { return g_headless; }
 int host_muted(void) { return g_mute; }
 
 const char *host_data_path(const char *virt) {
-  static char bufs[4][MAX_PATH + 64];
-  static int next;
+  static __declspec(thread) char bufs[4][MAX_PATH + 64];
+  static __declspec(thread) unsigned next;
   if (!virt || (strncmp(virt, "/image/", 7) && strncmp(virt, "/fonts/", 7) && strncmp(virt, "/ui/", 4))) return virt;
   char *b = bufs[next++ & 3];
   snprintf(b, sizeof bufs[0], "%s%s", g_exe_dir, virt);

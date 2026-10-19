@@ -387,3 +387,9 @@ int uit_fit(UiText *t, int weight, float px, const char *s, float tracking, floa
 int uit_prefix(UiText *t, int weight, float px, const char *s, float tracking, float max_w, int max_bytes, float suffix_w) {
   return fit_prefix(t, weight, px, s, tracking, max_w, max_bytes, suffix_w, 0);
 }
+
+void uit_device_reset(UiText *t) {
+  if(t->atlas)SDL_DestroyTexture(t->atlas);
+  t->atlas=NULL;t->atlas_retry_at=0;t->nv=t->ni=0;
+  t->dirty=1;t->dx0=t->dy0=0;t->dx1=t->aw;t->dy1=t->ah;
+}

@@ -534,13 +534,27 @@ static void make_noise(void) {
 
 void water_take_texture(uint32_t serial, int w, int h, const uint8_t *rgba) {
   if (w <= 0 || h <= 0 || !rgba) return;
-  if (W.npend == W.cap_pend) W.pend = realloc(W.pend, (W.cap_pend = W.cap_pend ? W.cap_pend * 2 : 64) * sizeof(Pend));
-  Pend *p = &W.pend[W.npend++];
-  p->serial = serial;
-  p->w = w;
-  p->h = h;
-  p->rgba = malloc((size_t)w * h * 4);
-  memcpy(p->rgba, rgba, (size_t)w * h * 4);
+  size_t bytes = (size_t)w * h * 4;
+  uint8_t *copy = malloc(bytes);
+  if (!copy) return;
+  memcpy(copy, rgba, bytes);
+  Pend *p = NULL;
+  // Original water does not drain this queue. A reset may resubmit the same
+  // terrain textures, so retain only their newest pixels until HD is enabled.
+  for (int i = 0; i < W.npend; i++)
+    if (W.pend[i].serial == serial) { p = W.pend + i; break; }
+  if (!p) {
+    if (W.npend == W.cap_pend) {
+      int cap = W.cap_pend ? W.cap_pend * 2 : 64;
+      Pend *grown = realloc(W.pend, (size_t)cap * sizeof(Pend));
+      if (!grown) { free(copy); return; }
+      W.pend = grown; W.cap_pend = cap;
+    }
+    p = W.pend + W.npend++;
+    memset(p, 0, sizeof *p);
+  }
+  free(p->rgba);
+  *p = (Pend){serial, w, h, copy};
 }
 
 static WTex *find_wtex(uint32_t serial) {
@@ -891,8 +905,10 @@ static int init(SDL_Renderer *r) {
     fprintf(stderr, "water: CreateDeviceContextState failed (0x%08lx)\n", (unsigned long)hr);
     return 0;
   }
-  HMODULE dc = LoadLibraryA("d3dcompiler_47.dll");
-  W.compile = dc ? (PFN_Compile)(void *)GetProcAddress(dc, "D3DCompile") : NULL;
+  if(!W.compile) {
+    HMODULE dc = LoadLibraryA("d3dcompiler_47.dll");
+    W.compile = dc ? (PFN_Compile)(void *)GetProcAddress(dc, "D3DCompile") : NULL;
+  }
   if (!W.compile) {
     fprintf(stderr, "water: d3dcompiler_47.dll not found\n");
     return 0;
@@ -1289,4 +1305,20 @@ void water_after_frame(SDL_Renderer *r, int cw, int ch) {
     W.clip = NULL;
     fprintf(stderr, "water: recorded %d frames to %s in %llu ms\n", W.clip_n, g_clip_path, (unsigned long long)(GetTickCount64() - W.clip_wall0));
   }
+}
+
+void water_device_reset(void) {
+  REL(W.vs_water);REL(W.vs_quad);REL(W.vs_imp);
+  REL(W.ps_water);REL(W.ps_sim);REL(W.ps_imp);REL(W.ps_fall);
+  REL(W.il);REL(W.cb);REL(W.vb);W.vb_cap=0;
+  REL(W.s_wrap);REL(W.s_clamp);REL(W.s_point);
+  REL(W.b_water);REL(W.b_add);REL(W.rs);REL(W.noise_srv);
+  REL(W.info_srv);REL(W.info);
+  for(int i=0;i<2;i++){REL(W.sim_srv[i]);REL(W.sim_rtv[i]);REL(W.sim[i]);}
+  for(int i=0;i<4;i++){REL(W.qd[i]);REL(W.q0[i]);REL(W.q1[i]);}
+  for(int i=0;i<W.ntex;i++){REL(W.tex[i].srv);REL(W.tex[i].tex);}
+  W.ntex=0;
+  REL(W.st);REL(W.ctx1);REL(W.ctx);REL(W.dev);
+  W.state=0;W.scene_serial=W.map_serial=-1;W.sim_w=W.sim_h=0;
+  W.qn=W.stat_n=0;W.gpu_sum=W.gpu_max=W.cpu_sum=W.cpu_max=0;
 }

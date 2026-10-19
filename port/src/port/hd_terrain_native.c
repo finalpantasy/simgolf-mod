@@ -294,7 +294,7 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
 
 // ------------------------------------------------------------------ render thread
 
-typedef struct { uint32_t serial; SDL_Texture *tex; } TexEntry;
+typedef struct { uint32_t serial; SDL_Texture *tex; int w,h,water; uint8_t *rgba; } TexEntry;
 
 typedef struct {
   SDL_Texture *texture;
@@ -393,14 +393,15 @@ static void take(SDL_Renderer *r, long shown) {
         for (int j = R.ntex - 1; j >= 0; j--) if (R.tex[j].serial == n->serial) { found = j; break; }
       if (found >= 0) {
         SDL_DestroyTexture(R.tex[found].tex);
-        R.tex[found].tex = t;
+        free(R.tex[found].rgba);
+        R.tex[found] = (TexEntry){n->serial,t,n->w,n->h,n->water,n->rgba};
       } else {
         GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry));
-        R.tex[R.ntex++] = (TexEntry){n->serial, t};
+        R.tex[R.ntex++] = (TexEntry){n->serial,t,n->w,n->h,n->water,n->rgba};
       }
     }
     if (n->water) water_take_texture(n->serial, n->w, n->h, n->rgba);   // task-78: the water pass keeps its own copy
-    free(n->rgba);
+    if(!t)free(n->rgba);
   }
   s->ntex = 0;
   R.serial = s->serial;
@@ -409,6 +410,14 @@ static void take(SDL_Renderer *r, long shown) {
 
 static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float ox, float oy, int guard) {
   take(r, shown);
+  for(int i=0;i<R.ntex;i++)if(!R.tex[i].tex) {
+    TexEntry *e=R.tex+i;
+    SDL_Texture *t=SDL_CreateTexture(r,SDL_PIXELFORMAT_ABGR8888,SDL_TEXTUREACCESS_STATIC,e->w,e->h);
+    if(t && SDL_UpdateTexture(t,NULL,e->rgba,e->w*4)!=0){SDL_DestroyTexture(t);t=NULL;}
+    if(t){SDL_SetTextureScaleMode(t,SDL_ScaleModeLinear);e->tex=t;
+      R.targets[0].serial=R.targets[1].serial=-1;
+      if(e->water)water_take_texture(e->serial,e->w,e->h,e->rgba);}
+  }
   TerrainTarget *target = &R.targets[guard];
   if (!R.nbatches || R.tw <= 0 || R.th <= 0) return NULL;
   if (!target->texture || target->w != w || target->h != h) {
@@ -512,4 +521,17 @@ int hdt_scene(HdtScene *out) {
   out->map_serial = R.map_serial;
   out->normals=R.normals;out->materials=R.materials;out->height_pixels=R.height_pixels;
   return 1;
+}
+
+void hdt_device_reset(void) {
+  for(int i=0;i<2;i++) {
+    TerrainTarget *t=R.targets+i;
+    if(t->texture)SDL_DestroyTexture(t->texture);
+    memset(t,0,sizeof *t);t->serial=-1;
+  }
+  // Old handles stay owned until recreation succeeds, never passed to a draw.
+  for(int i=0;i<R.ntex;i++) {
+    if(R.tex[i].tex)SDL_DestroyTexture(R.tex[i].tex);
+    R.tex[i].tex=NULL;
+  }
 }
