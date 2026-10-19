@@ -30,10 +30,20 @@ def main():
     start = source.index(marker) if marker in source else re.search(
         r"(?:void|int) water_take_texture\(", source).start()
     code = source[start:source.index("// ------------------------------------------------------------------ the map:", start)]
+    reset = source[source.index("void water_device_reset(void)"):]
+    # The reset body is compiled unchanged. Resource hooks exercise every
+    # released member without requiring SDL, a driver, or a physical GPU loss.
+    reset_fields = """
+      ID3D11Texture2D *vs_water,*vs_quad,*vs_imp,*ps_water,*ps_sim,*ps_imp,*ps_fall;
+      ID3D11Texture2D *il,*cb,*vb,*s_wrap,*s_clamp,*s_point,*b_water,*b_add,*rs,*noise_srv,*info_srv,*info;
+      ID3D11Texture2D *sim_srv[2],*sim_rtv[2],*sim[2],*qd[4],*q0[4],*q1[4],*st,*ctx1,*ctx,*dev;
+      int vb_cap,scene_serial,map_serial,sim_w,sim_h,qn,stat_n;
+      double gpu_sum,gpu_max,cpu_sum,cpu_max;
+    """
     with tempfile.TemporaryDirectory(prefix="simgolf-water-recovery-") as directory:
         directory = Path(directory)
         (directory / "water_upload.inc").write_text(
-            globals + "\n" + poll + types + "\nstatic struct {\n" + state + "\n" + fields + "} W;\n" + code)
+            globals + "\n" + poll + types + "\nstatic struct {\n" + state + "\n" + fields + reset_fields + "} W;\n" + code + reset)
         executable = directory / "water_recovery"
         command = shlex.split(os.environ.get("CC", "cc")) + [
             "-std=c11", "-Wall", "-Wextra", "-Werror", "-g",

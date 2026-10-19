@@ -739,6 +739,7 @@ typedef struct {
 
 typedef struct {
   Key key;
+  Req request;
   int w, h;
   uint8_t *rgba;   // NULL: failed
   double ms;
@@ -1214,6 +1215,7 @@ static void load_one(const Req *r, Done *d) {
   }
   if(r->view>=0&&r->alpha_edges)sprite_alpha_extrude(rgba,w,h,1);
   d->key = r->key;
+  d->request = *r;
   d->w = w;
   d->h = h;
   d->rgba = rgba;
@@ -2155,6 +2157,7 @@ void hd_art_publish(int layered, const uint16_t *screen, int retain_course) {
 typedef struct {
   Key key;
   SDL_Texture *tex, *emissive;
+  Req *request;
   int w, h, used_slot;
   uint32_t used;
 } Tex;
@@ -2162,6 +2165,7 @@ typedef struct {
 #define TEX_N (1 << 16)
 static Tex *g_tex;   // open addressing, render thread; slots stay used after eviction (tombstones)
 static int g_ntex, g_tex_slots;
+static int g_recover_cursor = TEX_N;
 static size_t g_tex_bytes, g_tex_peak;
 static uint32_t g_tick;
 static List g_cur[2];   // the lists being shown
@@ -2290,12 +2294,12 @@ static Tex *tex_find(Key k, int make) {
 
 // Drops the tombstones when the table gets full.
 static void tex_rehash(void) {
-  if (g_tex_slots < TEX_N * 3 / 4) return;
+  if (g_tex_slots < TEX_N * 3 / 4 || g_recover_cursor<TEX_N) return;
   Tex *old = g_tex;
   g_tex = calloc(TEX_N, sizeof(Tex));
   g_tex_slots = 0;
   for (int i = 0; i < TEX_N; i++)
-    if (old[i].tex) *tex_find(old[i].key, 1) = old[i];
+    if (old[i].tex || old[i].request) *tex_find(old[i].key, 1) = old[i];
   free(old);
 }
 
@@ -2315,11 +2319,40 @@ static void tex_evict(void) {
     KeyState *s = ks_find(old->key, 0);
     if (s) s->state = S_NONE;
     LeaveCriticalSection(&g_lock);
+    free(old->request);old->request=NULL;
     old->tex = NULL;   // the key stays as a tombstone so probing goes on past it
   }
 }
 
+static void recover_visible(void) {
+  if (g_recover_cursor >= TEX_N) return;
+  int pending = 0;
+  // Cached title screens and old animation frames are restored on demand.
+  // Replaying every cached request can exhaust the 32-bit address space.
+  EnterCriticalSection(&g_lock);
+  for (int w = 0; w < 2; w++) {
+    if (!g_cur_ok[w]) continue;
+    for (int i = 0; i < g_cur[w].n; i++) {
+      const Entry *e = &g_cur[w].e[i];
+      if (e->hidden) continue;
+      for (int shadow = 0; shadow <= (e->shadow_file >= 0); shadow++) {
+        Tex *t = tex_find(entry_key(e, shadow), 0);
+        if (!t || t->tex || !t->request) continue;
+        KeyState *s = ks_find(t->key, 1);
+        if (!s || s->state != S_NONE) continue;
+        if (g_qt - g_qh >= QN) { pending = 1; continue; }
+        g_q[g_qt++ % QN] = *t->request;
+        s->state = S_QUEUED;
+        SetEvent(g_wake);
+      }
+    }
+  }
+  LeaveCriticalSection(&g_lock);
+  if (!pending) g_recover_cursor = TEX_N;
+}
+
 static int upload_done(SDL_Renderer *r) {
+  recover_visible();
   int up = 0;
   for (int n = 0; n < 64; n++) {
     Done d;
@@ -2346,6 +2379,8 @@ static int upload_done(SDL_Renderer *r) {
           if(getenv("SIMGOLF_ATMOSPHERE_LOG"))fprintf(stderr,"lighting: windows %s view %u pixels %d\n",g_files[file].norm,(d.key.a>>8)&255,lit);
           free(mask);
         }
+        if(!x->request)x->request=malloc(sizeof *x->request);
+        if(x->request)*x->request=d.request;
         x->key = d.key;
         x->used_slot = 1;
         x->tex = t;
@@ -2418,6 +2453,27 @@ static int clubhouse_frame_ready(const List *list, int view) {
   return animation;
 }
 
+// Called only by the presenter, after releasing the frame publication locks.
+// Keep the already presented loading/course picture until a complete visible
+// clubhouse frame can replace it. Decode workers and uploads must keep running.
+static int clubhouse_loading(void) {
+  int pending = 0;
+  EnterCriticalSection(&g_lock);
+  for (int w = 0; w < 2; w++) {
+    if (!g_cur_ok[w]) continue;
+    for (int i = 0; i < g_cur[w].n; i++) {
+      const Entry *e = &g_cur[w].e[i];
+      if (e->hidden || !g_files[e->file].clubhouse) continue;
+      for (int shadow = 0; shadow <= (e->shadow_file >= 0); shadow++) {
+        KeyState *s = ks_find(entry_key(e, shadow), 0);
+        if (s && s->state == S_QUEUED) pending++;
+      }
+    }
+  }
+  LeaveCriticalSection(&g_lock);
+  return pending;
+}
+
 int hd_art_prepare(SDL_Renderer *r, int new_frame) {
   if (!g_on) return 0;
   if (!g_premul)
@@ -2425,6 +2481,19 @@ int hd_art_prepare(SDL_Renderer *r, int new_frame) {
                                           SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
   g_tick++;
   int up = upload_done(r);
+  if (new_frame && mods_get_int("fixes.clubhouse_loading", 1) && clubhouse_loading()) {
+    double started = host_now_ms();
+    // A broken/slow decoder must not trap the window indefinitely. Failed
+    // entries retain the existing complete original-art fallback below.
+    while (clubhouse_loading() && host_now_ms() - started < 3000) {
+      // Window events can discard D3D texture backing. Dispatch them only
+      // between frames, where the presenter can recover before using targets.
+      Sleep(1);
+      up += upload_done(r);
+    }
+    fprintf(stderr, "art: clubhouse frame waited %.1f ms, pending %d\n",
+            host_now_ms() - started, clubhouse_loading());
+  }
   if (!new_frame && !up) return 0;
   int changed = 0;
   for (int w = 0; w < 2; w++) {
@@ -2840,4 +2909,30 @@ void hd_art_init(int presenter_on) {
   fprintf(stderr, "art: %d files indexed from %s in %.1f ms; looks:", n, g_dir, host_now_ms() - t0);
   for (int i = 0; i < NCAT; i++) fprintf(stderr, " %s=%s", k_cat[i], k_look[g_look[i]]);
   fprintf(stderr, "; texture budget %d MB, %d loaders\n", texture_budget_mb(), g_loaders);
+}
+
+void hd_art_device_reset(void) {
+  if(!g_on || !g_tex)return;
+  cast_shadow_destroy(&g_cast);
+  course_enclosure_draw_destroy(&g_enclosure_draw);
+  g_cast_serial=-1;g_shadow_valid=0;
+  for(int i=0;i<HD_ART_PREVIEW_MAX;i++) {
+    if(g_preview_tex[i].texture)SDL_DestroyTexture(g_preview_tex[i].texture);
+    memset(g_preview_tex+i,0,sizeof g_preview_tex[i]);
+  }
+  g_preview_bytes=0;g_preview_build_tick=~0u;
+  EnterCriticalSection(&g_lock);
+  for(int i=0;i<TEX_N;i++) {
+    Tex *t=g_tex+i;
+    if(!t->tex)continue;
+    SDL_DestroyTexture(t->tex);t->tex=NULL;
+    if(t->emissive)SDL_DestroyTexture(t->emissive);t->emissive=NULL;
+    KeyState *s=ks_find(t->key,0);if(s)s->state=S_NONE;
+  }
+  LeaveCriticalSection(&g_lock);
+  g_ntex=0;g_tex_bytes=0;g_recover_cursor=0;
+  for(int w=0;w<2;w++)if(g_cur_ok[w]) {
+    memset(g_drawable[w],0,(size_t)g_cur[w].n+1);
+    memset(g_cut[w],0,(size_t)g_cur[w].w*g_cur[w].h);
+  }
 }

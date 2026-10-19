@@ -1,0 +1,17 @@
+{
+  "comment": "Issue74: startPlayerProPair must not use failed createGolfer results as array indexes. Keep original success behavior and optional fixes.practice_start=0. Roll back the bounded visitor state on failure and explain why the round cannot start.",
+  "patches": {
+    "FUN_0040f190": [
+      ["  iVar11 = DAT_004c2e14;", "  practice_start_begin();\n  iVar11 = DAT_004c2e14;"],
+      ["uVar6 = FUN_00421bc0(0);", "uVar6 = FUN_00421bc0(0);\n  if (practice_start_failed(uVar6)) return 0;"],
+      ["uVar7 = FUN_00421bc0(0);", "uVar7 = FUN_00421bc0(0);\n  if (practice_start_failed(uVar7)) return 0;\n  practice_start_commit();"]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040f190": [
+      ["  iVar11 = DAT_004c2e14;", 1],
+      ["uVar6 = FUN_00421bc0(0);", 2],
+      ["uVar7 = FUN_00421bc0(0);", 1]
+    ]
+  }
+}

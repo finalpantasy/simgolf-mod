@@ -241,3 +241,10 @@ void modsp_draw(UiCtx *c, SDL_Renderer *r, int w, int h, double now, int in_game
     g_config = NULL;
   }
 }
+
+void modsf_device_reset(void) {
+  for(int i=0;i<MAXMODS;i++) {
+    if(g_icon[i])SDL_DestroyTexture(g_icon[i]);
+    g_icon[i]=NULL;g_icon_tried[i]=0;
+  }
+}

@@ -85,6 +85,7 @@
 #include "port/hud_frosted.h"
 #include "port/hd_native.h"
 #include "port/legacy_text_native.h"
+#include "port/graphics_reset.h"
 #include "port/ui/ui_course_map.h"
 #include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
@@ -137,6 +138,14 @@ static int g_mod_on = 1;              // mods.ini hd_presentation (0: the origin
 static SDL_Window *g_window;
 static int g_start_w, g_start_h;
 static unsigned g_start_flags;
+
+static volatile LONG g_device_reset;
+static int SDLCALL watch_device_reset(void *user,SDL_Event *e) {
+  (void)user;
+  if(e->type==SDL_RENDER_DEVICE_RESET || e->type==SDL_RENDER_TARGETS_RESET)
+    InterlockedExchange(&g_device_reset,1);
+  return 1;
+}
 
 // SDL's window event watcher resizes the D3D swap chain synchronously.
 // The window owner must also own rendering, so maximize/restore cannot
@@ -511,6 +520,49 @@ static void fill(Rt *t, Layer *L, int mode, LONG serial) {
   }
   SDL_UnlockTexture(L->src);
   L->serial = serial;
+}
+
+static int recover_device(Rt *t) {
+  SDL_RenderFlush(t->r);
+  SDL_SetRenderTarget(t->r,NULL);
+  // A glide references the snapshot being discarded below. End its shared
+  // transform too, or zoom_settle immediately reactivates the stale view.
+  EnterCriticalSection(&g_zlock);
+  g_zoom.active=0;
+  t->zg.active=0;
+  LeaveCriticalSection(&g_zlock);
+  environment_fx_destroy(&t->environment_fx);
+  environment_destroy(&t->environment_renderer);
+  rainbow_destroy(&t->rainbow_draw);
+  water_device_reset();
+  hdt_device_reset();hd_art_device_reset();
+  legacy_text_device_reset(t->text_renderer);
+  hdball_device_reset();lamps_device_reset();
+  ui_device_reset(t->r);ui_course_map_clear(t->r);
+  fef_device_reset();dlgf_device_reset();hudf_device_reset();
+  gwf_device_reset();rpf_device_reset();modsf_device_reset();
+  SDL_Texture **extra[]={&t->canvas,&t->zsnap,&t->pix,&t->slast,&t->dump_tex};
+  for(int i=0;i<5;i++) {if(*extra[i])SDL_DestroyTexture(*extra[i]);*extra[i]=NULL;}
+  t->zsnap_ok=t->slast_ok=t->zon=t->have_prev=0;t->off_dur=0;
+  Layer *layers[]={&t->course[0],&t->course[1],&t->overlay,&t->ui};
+  int made=0;
+  for(int i=0;i<4;i++) {
+    Layer *l=layers[i];
+    if(l->src)SDL_DestroyTexture(l->src);
+    if(l->pre)SDL_DestroyTexture(l->pre);
+    memset(l,0,sizeof *l);l->serial=l->pre_serial=-1;
+    l->src=SDL_CreateTexture(t->r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,FRAME_W,FRAME_H);
+    made+=l->src!=NULL;
+  }
+  if(made!=4){fprintf(stderr,"hd: graphics recovery waiting for memory: %s\n",SDL_GetError());return 0;}
+  if(t->shown_serial>=0) {
+    t->cut=t->cut_ui=NULL;t->terrain_on=t->course_view && g_cfg.terrain;
+    fill(t,&t->course[t->cur],FILL_FRAME,t->shown_serial);
+    fill(t,&t->overlay,FILL_OVERLAY,t->shown_serial);
+    fill(t,&t->ui,FILL_UI,t->shown_serial);
+  }
+  fprintf(stderr,"hd: graphics resources recovered; course and input preserved\n");
+  return 1;
 }
 
 // Where course[cur] is now, relative to its place (canvas pixels).
@@ -1353,8 +1405,11 @@ static int write_bmp(const char *path, const uint32_t *argb, int w, int h) {
 
 static void take_shot(Rt *t, int cw, int ch) {
   uint32_t *px = malloc((size_t)cw * ch * 4);
-  int ok = px && !SDL_RenderReadPixels(t->r, NULL, SDL_PIXELFORMAT_ARGB8888, px, cw * 4) &&
-           write_bmp(g_shot_path, px, cw, ch);
+  int read_ok = px && !SDL_RenderReadPixels(t->r, NULL, SDL_PIXELFORMAT_ARGB8888, px, cw * 4);
+  int ok = read_ok && write_bmp(g_shot_path, px, cw, ch);
+  if (!px) fprintf(stderr, "hd: screenshot allocation failed (%zu bytes)\n", (size_t)cw * ch * 4);
+  else if (!read_ok) fprintf(stderr, "hd: screenshot readback failed: %s\n", SDL_GetError());
+  else if (!ok) fprintf(stderr, "hd: screenshot file write failed\n");
   free(px);
   fprintf(stderr, "hd: shot %s %dx%d%s\n", g_shot_path, cw, ch, ok ? "" : " FAILED");
   if (!ok) g_shot_path[0] = 0;
@@ -1528,6 +1583,8 @@ static DWORD WINAPI render_main(void *arg) {
   fprintf(stderr, "hd: render thread on %s, filter %s, vsync %d, fps cap %d (0 = none), canvas %s\n", info.name,
           k_filters[g_cfg.filter], g_cfg.vsync, g_cfg.fps, g_cfg.render_w ? "off screen" : "the window");
 
+  const char *reset_file=getenv("SIMGOLF_TEST_GRAPHICS_RESET_FILE");
+  SDL_AddEventWatch(watch_device_reset,NULL);
   Stats st = {0};
   st.t0 = host_now_ms();
   double last = st.t0, next = st.t0;
@@ -1539,6 +1596,12 @@ static DWORD WINAPI render_main(void *arg) {
     // Dispatch native window messages and SDL resize watchers between frames,
     // on the same thread that owns the window and its renderer.
     SDL_PumpEvents();
+    if(reset_file && DeleteFileA(reset_file)) {
+      SDL_Event reset={0};reset.type=SDL_RENDER_DEVICE_RESET;SDL_PushEvent(&reset);
+    }
+    if(InterlockedExchange(&g_device_reset,0)) {
+      if(!recover_device(t)) { Sleep(100);InterlockedExchange(&g_device_reset,1);continue; }
+    }
     if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MINIMIZED) {
       Sleep(20);
       last = next = host_now_ms();

@@ -966,8 +966,10 @@ static int init(SDL_Renderer *r) {
     fprintf(stderr, "water: CreateDeviceContextState failed (0x%08lx)\n", (unsigned long)hr);
     return 0;
   }
-  HMODULE dc = LoadLibraryA("d3dcompiler_47.dll");
-  W.compile = dc ? (PFN_Compile)(void *)GetProcAddress(dc, "D3DCompile") : NULL;
+  if(!W.compile) {
+    HMODULE dc = LoadLibraryA("d3dcompiler_47.dll");
+    W.compile = dc ? (PFN_Compile)(void *)GetProcAddress(dc, "D3DCompile") : NULL;
+  }
   if (!W.compile) {
     fprintf(stderr, "water: d3dcompiler_47.dll not found\n");
     return 0;
@@ -1366,4 +1368,20 @@ void water_after_frame(SDL_Renderer *r, int cw, int ch) {
     W.clip = NULL;
     fprintf(stderr, "water: recorded %d frames to %s in %llu ms\n", W.clip_n, g_clip_path, (unsigned long long)(GetTickCount64() - W.clip_wall0));
   }
+}
+
+void water_device_reset(void) {
+  REL(W.vs_water);REL(W.vs_quad);REL(W.vs_imp);
+  REL(W.ps_water);REL(W.ps_sim);REL(W.ps_imp);REL(W.ps_fall);
+  REL(W.il);REL(W.cb);REL(W.vb);W.vb_cap=0;
+  REL(W.s_wrap);REL(W.s_clamp);REL(W.s_point);
+  REL(W.b_water);REL(W.b_add);REL(W.rs);REL(W.noise_srv);
+  REL(W.info_srv);REL(W.info);
+  for(int i=0;i<2;i++){REL(W.sim_srv[i]);REL(W.sim_rtv[i]);REL(W.sim[i]);}
+  for(int i=0;i<4;i++){REL(W.qd[i]);REL(W.q0[i]);REL(W.q1[i]);}
+  for(int i=0;i<W.ntex;i++){REL(W.tex[i].srv);REL(W.tex[i].tex);}
+  W.ntex=0;
+  REL(W.st);REL(W.ctx1);REL(W.ctx);REL(W.dev);
+  W.state=0;W.scene_serial=W.map_serial=-1;W.sim_w=W.sim_h=0;
+  W.qn=W.stat_n=0;W.gpu_sum=W.gpu_max=W.cpu_sum=W.cpu_max=0;
 }

@@ -494,3 +494,13 @@ int fef_enabled(void) {
   // window) nothing would draw the new screens, so the original ones stay.
   return g_want && g_registered && !g_failed && host_now_ms() - g_drawn_t < 2000;
 }
+
+// Render thread: published CPU pictures survive a device reset.
+void fef_device_reset(void) {
+  for (int i=0;i<FE_ART_MAX;i++) {
+    if (g_tex[i]) SDL_DestroyTexture(g_tex[i]);
+    g_tex[i]=NULL;
+    g_tex_serial[i]=~0u;
+    g_tex_retry_at[i]=0;
+  }
+}

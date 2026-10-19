@@ -1085,3 +1085,15 @@ void ui_tag(UiCtx *c, float cx, float y, const char *text, int selected) {
   }
   ui_text_in(c, r, UI_TYPE_CAPTION, selected ? t->text_on_accent : t->text_primary, text, 0.5f);
 }
+
+// Discard only GPU resources. Fonts, input queues and active controls survive.
+void ui_device_reset(SDL_Renderer *r) {
+  for(int i=0;i<g_ndbg;i++) {
+    UiCtx *c=g_dbg[i].c;
+    if(c->r!=r)continue;
+    for(int k=0;k<c->nicons;k++)if(c->icons[k].tex)SDL_DestroyTexture(c->icons[k].tex);
+    memset(c->icons,0,sizeof c->icons);c->nicons=0;
+    uid_free(&c->d);uid_init(&c->d,r);
+    uit_device_reset(&c->t);
+  }
+}

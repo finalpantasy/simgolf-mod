@@ -121,6 +121,23 @@ static void run_case(const char *name, const char *fonts) {
     assert(uit_init(&t, &renderer, fonts, 1) == 5);
     upload_fail = 1; draw(&t); assert(t.dirty && uploads == 1);
     draw(&t); assert(!t.dirty && uploads == 2);
+  } else if (!strcmp(name, "device_reset") || !strcmp(name, "reset_late_uptime")) {
+    assert(uit_init(&t, &renderer, fonts, 1) == 5);draw(&t);
+    void *alpha=t.alpha,*font=t.f[0].data;
+    for(int reset=0;reset<12;reset++) {
+      ticks=(!strcmp(name,"reset_late_uptime")?0x90000000u:100u)+(Uint32)reset*4000;
+      Uint32 start=ticks;int attempts=gpu_attempts;
+      uit_device_reset(&t);assert(!t.atlas && !t.nv && !t.ni && t.alpha==alpha && t.f[0].data==font);
+      gpu_fail=1;draw(&t);assert(!t.atlas && gpu_attempts==attempts+1);
+      for(int i=0;i<20;i++)draw(&t);assert(gpu_attempts==attempts+1);
+      ticks=start+999;draw(&t);assert(gpu_attempts==attempts+1);
+      ticks=start+1000;upload_fail=1;draw(&t);assert(t.atlas && t.dirty);
+      draw(&t);assert(!t.dirty && t.alpha==alpha && t.f[0].data==font);
+    }
+  } else if (!strcmp(name, "reset_without_cpu")) {
+    cpu_fail=1;assert(uit_init(&t,&renderer,fonts,1)==5);assert(!t.alpha);
+    ticks=UINT32_MAX-1;uit_device_reset(&t);draw(&t);
+    assert(t.alpha && t.atlas && !t.dirty);
   } else if (!strcmp(name, "cleanup_failed")) {
     cpu_fail = 1; assert(uit_init(&t, &renderer, fonts, 1) == 5);
     assert(!t.alpha && !t.atlas);
@@ -132,7 +149,7 @@ static void run_case(const char *name, const char *fonts) {
 }
 int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--list")) {
-    puts("normal\ncpu_retry\ncpu_gpu_retry\ntick_wrap\ntick_zero\nupload_retry\ncleanup_failed"); return 0;
+    puts("normal\ncpu_retry\ncpu_gpu_retry\ntick_wrap\ntick_zero\nupload_retry\ncleanup_failed\ndevice_reset\nreset_late_uptime\nreset_without_cpu"); return 0;
   }
   assert(argc == 3); run_case(argv[1], argv[2]); return 0;
 }

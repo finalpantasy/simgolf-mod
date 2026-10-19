@@ -78,3 +78,9 @@ void legacy_text_draw(LegacyRenderer *t,const LegacyText *text,float x,float y,f
   }
   SDL_RenderSetClipRect(t->r,clipped?&saved:NULL);
 }
+
+void legacy_text_device_reset(LegacyRenderer *t) {
+  if(!t)return;
+  for(int i=0;i<CACHE;i++)if(t->glyph[i].texture)SDL_DestroyTexture(t->glyph[i].texture);
+  memset(t->glyph,0,sizeof t->glyph);t->next=0;
+}

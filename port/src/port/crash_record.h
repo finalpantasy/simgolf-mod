@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <tlhelp32.h>
 
 // Independent of stdout/stderr: a GUI launch can lack usable CRT streams.
 // Keep exception breadcrumbs even if stream redirection failed or was closed.
@@ -66,6 +67,23 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
         (DWORD)((uintptr_t)e->ExceptionAddress - (uintptr_t)module));
       ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
     }
+  }
+  // Driver/Windows faults are outside the fixed game image. Record the
+  // loaded image ranges so an ASLR address and stack can identify the DLL.
+  // Use only basenames: installation and user directory names are irrelevant.
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+  if (snapshot != INVALID_HANDLE_VALUE) {
+    MODULEENTRY32 module = {0};
+    module.dwSize = sizeof module;
+    if (Module32First(snapshot, &module)) do {
+      uintptr_t base = (uintptr_t)module.modBaseAddr;
+      uintptr_t fault = (uintptr_t)e->ExceptionAddress;
+      n = snprintf(line, sizeof line, "module %08lx size %08lx %s%s\r\n",
+        (DWORD)base, module.modBaseSize, module.szModule,
+        fault >= base && fault - base < module.modBaseSize ? " [fault]" : "");
+      ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
+    } while (Module32Next(snapshot, &module));
+    CloseHandle(snapshot);
   }
   FlushFileBuffers(f); CloseHandle(f); return ok;
 }

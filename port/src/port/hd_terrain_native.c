@@ -104,6 +104,8 @@ static uint8_t shade(uint16_t s, uint16_t t) {
 
 // The hand-over: a recorded scene and the textures it needs that the render
 // thread hasn't had yet.
+// Pending owns rgba until terrain upload succeeds; the render cache then owns
+// it, including while this entry waits for water acceptance or a device reset.
 typedef struct { uint32_t serial; int w, h; uint8_t *rgba; int water, retry, uploaded; } NewTex;
 typedef struct {
   float *verts;
@@ -366,7 +368,7 @@ allocation_failed:
 
 // ------------------------------------------------------------------ render thread
 
-typedef struct { uint32_t serial; SDL_Texture *tex; } TexEntry;
+typedef struct { uint32_t serial; SDL_Texture *tex; int w,h,water; uint8_t *rgba; int water_pending; } TexEntry;
 
 typedef struct {
   SDL_Texture *texture;
@@ -379,6 +381,7 @@ typedef struct {
 static struct {
   TexEntry *tex;
   int ntex, cap_tex;
+  int retry_cursor;
   float *verts;
   int nverts, cap_verts;
   float *world;
@@ -405,10 +408,14 @@ static struct {
   int logged;
 } R = {.serial = 0};
 
-static SDL_Texture *find_tex(uint32_t serial) {
+static TexEntry *find_entry(uint32_t serial) {
   for (int i = R.ntex - 1; i >= 0; i--)
-    if (R.tex[i].serial == serial) return R.tex[i].tex;
+    if (R.tex[i].serial == serial) return R.tex+i;
   return NULL;
+}
+static SDL_Texture *find_tex(uint32_t serial) {
+  TexEntry *entry=find_entry(serial);
+  return entry ? entry->tex : NULL;
 }
 
 // Takes the newest scene, if there is one and the course frame it belongs
@@ -468,14 +475,20 @@ static void take(SDL_Renderer *r, long shown) {
       }
       if (t) {
         SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
-        if (found >= 0) { SDL_DestroyTexture(R.tex[found].tex); R.tex[found].tex = t; }
-        else R.tex[R.ntex++] = (TexEntry){n.serial, t};
+        if (found < 0) found=R.ntex++;
+        else { SDL_DestroyTexture(R.tex[found].tex); free(R.tex[found].rgba); }
+        R.tex[found]=(TexEntry){n.serial,t,n.w,n.h,n.water,n.rgba,n.water};
+        n.rgba=NULL;   // retain these exact pixels for device-reset recovery
         n.uploaded = 1;
         R.targets[0].serial = R.targets[1].serial = -1;
       }
     }
     // Water backpressure must not hide an otherwise successful terrain upload.
-    int complete = n.uploaded && (!n.water || water_take_texture(n.serial, n.w, n.h, n.rgba));
+    TexEntry *entry=n.uploaded ? find_entry(n.serial) : NULL;
+    if (entry && entry->tex && entry->water_pending &&
+        water_take_texture(entry->serial,entry->w,entry->h,entry->rgba))
+      entry->water_pending=0;
+    int complete = entry && entry->tex && !entry->water_pending;
     if (complete) {
       if (!sent(n.serial)) g_sent[g_nsent++] = n.serial;
       free(n.rgba);
@@ -491,6 +504,24 @@ done:
 
 static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float ox, float oy, int guard) {
   take(r, shown);
+  // Failed reset uploads and water admission remain retryable even after the
+  // SDL texture exists. Rotate a bounded number so one failure cannot starve
+  // the rest of a large course or monopolize the presenter.
+  int visited=0,budget=kUploadsPerTake;
+  while(visited++<R.ntex && budget>0) {
+    if(R.retry_cursor>=R.ntex)R.retry_cursor=0;
+    TexEntry *e=R.tex+R.retry_cursor++;
+    if(e->tex && !e->water_pending)continue;
+    budget--;
+    if(!e->tex) {
+      SDL_Texture *t=SDL_CreateTexture(r,SDL_PIXELFORMAT_ABGR8888,SDL_TEXTUREACCESS_STATIC,e->w,e->h);
+      if(t && SDL_UpdateTexture(t,NULL,e->rgba,e->w*4)!=0){SDL_DestroyTexture(t);t=NULL;}
+      if(!t)continue;
+      SDL_SetTextureScaleMode(t,SDL_ScaleModeLinear);e->tex=t;
+      R.targets[0].serial=R.targets[1].serial=-1;
+    }
+    if(e->water_pending && water_take_texture(e->serial,e->w,e->h,e->rgba))e->water_pending=0;
+  }
   TerrainTarget *target = &R.targets[guard];
   if (!R.nbatches || R.tw <= 0 || R.th <= 0) return NULL;
   if (!target->texture || target->w != w || target->h != h) {
@@ -602,4 +633,19 @@ int hdt_scene(HdtScene *out) {
   out->map_serial = R.map_serial;
   out->normals=R.normals;out->materials=R.materials;out->height_pixels=R.height_pixels;
   return 1;
+}
+
+void hdt_device_reset(void) {
+  for(int i=0;i<2;i++) {
+    TerrainTarget *t=R.targets+i;
+    if(t->texture)SDL_DestroyTexture(t->texture);
+    memset(t,0,sizeof *t);t->serial=-1;
+  }
+  // Preserve CPU copies and pending ownership; only the lost GPU handles go.
+  for(int i=0;i<R.ntex;i++) {
+    if(R.tex[i].tex)SDL_DestroyTexture(R.tex[i].tex);
+    R.tex[i].tex=NULL;
+    R.tex[i].water_pending=R.tex[i].water;
+  }
+  R.retry_cursor=0;
 }

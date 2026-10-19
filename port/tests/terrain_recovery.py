@@ -23,7 +23,7 @@ typedef int SDL_BlendMode;
 #define SDL_PIXELFORMAT_ABGR8888 0
 #define SDL_TEXTUREACCESS_STATIC 0
 #define SDL_ScaleModeLinear 0
-static int fail_malloc, fail_alloc, fail_at, alloc_calls, fail_create, fail_upload, fail_water, destroyed, locks, create_calls;
+static int fail_malloc, fail_alloc, fail_at, alloc_calls, fail_create, fail_upload, fail_water, destroyed, locks, create_calls, water_calls, fail_pixel, grid_side;
 static void *test_realloc(void *p,size_t n) { if(fail_alloc || (++alloc_calls == fail_at)) return NULL; return realloc(p,n); }
 static void *test_malloc(size_t n) {if(fail_malloc)return NULL;return malloc(n);}
 #define malloc test_malloc
@@ -34,13 +34,13 @@ static SDL_Texture *SDL_CreateTexture(SDL_Renderer *r,int a,int b,int w,int h) {
  (void)r;(void)a;(void)b;(void)w;(void)h;create_calls++; return fail_create?NULL:malloc(sizeof(int));
 }
 static int SDL_UpdateTexture(SDL_Texture *t,void *a,const void *p,int pitch) {
- (void)t;(void)a;(void)p;(void)pitch;return fail_upload?-1:0;
+ (void)t;(void)a;(void)pitch;return fail_upload || (fail_pixel && *(const uint8_t *)p==fail_pixel)?-1:0;
 }
 static void SDL_DestroyTexture(SDL_Texture *t) {if(t){destroyed++;free(t);}}
 static void SDL_SetTextureScaleMode(SDL_Texture *t,int m) {(void)t;(void)m;}
 static int mods_get_int(const char *n,int v) {(void)n;return v;}
 static int water_take_texture(uint32_t s,int w,int h,const uint8_t *p) {
- (void)s;(void)w;(void)h;(void)p;return !fail_water;
+ (void)s;(void)w;(void)h;(void)p;water_calls++;return !fail_water;
 }
 '''
 preamble += r'''
@@ -71,8 +71,8 @@ static void terrain_hd_view(float *p){memset(p,0,6*sizeof(float));}
 static float terrain_hd_height_pixels(void){return 1;}
 static int course_relief_material(const char *s){(void)s;return 0;}
 static const char *terrain_hd_texture_src(int i){(void)i;return "fixture";}
-static int terrain_grid_size(int *w,int *h){(void)w;(void)h;return 0;}
-static int terrain_water_tiles(uint8_t *c,float *h,int n){(void)c;(void)h;return n;}
+static int terrain_grid_size(int *w,int *h){*w=*h=grid_side;return grid_side>0;}
+static int terrain_water_tiles(uint8_t *c,float *h,int n){memset(c,1,(size_t)n);for(int i=0;i<n;i++)h[i]=(float)i;return n;}
 static const uint8_t *terrain_hd_texture(int i,int32_t *s){(void)i;s[0]=s[1]=1;return pixels;}
 static int terrain_hd_texture_path_style(int i){(void)i;return 0;}
 static uint8_t *hd_art_terrain_style(const char *src,const uint8_t *rgba,int w,int h,int *uw,int *uh,int style){
@@ -107,17 +107,18 @@ helpers = span('enum { kMaxPendingTextures', '// Decode the first')
 types = span('typedef struct { uint32_t serial; int w, h;', 'void hdt_init(')
 capture = span('// Decode the first', '// ------------------------------------------------------------------ render thread')
 render = span('typedef struct { uint32_t serial; SDL_Texture *tex;', 'SDL_Texture *hdt_render(')
+device_reset = src[src.index('void hdt_device_reset('):]
 main = r'''
 static void cleanup(void) {
  for(int i=0;i<g_pending.ntex;i++)free(g_pending.tex[i].rgba);
  free(g_pending.tex);free(g_pending.verts);free(g_pending.world);free(g_pending.normals);
  free(g_pending.materials);free(g_pending.batches);free(g_pending.wcode);free(g_pending.wheight);
  memset(&g_pending,0,sizeof g_pending);
- for(int i=0;i<R.ntex;i++)SDL_DestroyTexture(R.tex[i].tex);
+ for(int i=0;i<R.ntex;i++){SDL_DestroyTexture(R.tex[i].tex);free(R.tex[i].rgba);}
  free(R.tex);free(R.verts);free(R.world);free(R.normals);free(R.materials);free(R.batches);free(R.wcode);free(R.wheight);
  SDL_DestroyTexture(R.targets[0].texture);SDL_DestroyTexture(R.targets[1].texture);free(R.sv);
  memset(&R,0,sizeof R);free(g_sent);g_sent=NULL;g_nsent=g_cap_sent=0;
- fail_malloc=fail_alloc=fail_at=alloc_calls=fail_create=fail_upload=fail_water=create_calls=0;
+ fail_malloc=fail_alloc=fail_at=alloc_calls=fail_create=fail_upload=fail_water=create_calls=water_calls=fail_pixel=grid_side=0;
  assert(locks==0);
 }
 static void enqueue(uint32_t serial,int water) {
@@ -220,11 +221,54 @@ int main(void) {
   fail_create=0;assert(render_at(&r,3,3,500,0,0,0));
  }
  cleanup();
- puts("terrain recovery: PASS (GPU failures, ownership, allocation, bounds, fair retry, lock release)");return 0;
+ // An accepted tile must retain the CPU copy needed after device loss.
+ {uint8_t mask;batches[3]=70;batches[4]=kTextured|kWater;hdt_capture(&screen_pixel,&mask,1);take(&r,1);}
+ assert(R.ntex==1 && R.tex[0].rgba && "accepted pixels must survive in reset cache");
+ uint8_t *retained=R.tex[0].rgba;retained[0]=93;
+ for(int reset=0;reset<12;reset++){
+  hdt_device_reset();assert(!R.tex[0].tex && R.tex[0].rgba==retained && retained[0]==93);
+  fail_create=1;render_at(&r,2,2,1,0,0,0);assert(!R.tex[0].tex && R.tex[0].rgba==retained);
+  fail_create=0;fail_upload=1;render_at(&r,2,2,1,0,0,0);assert(!R.tex[0].tex && R.tex[0].rgba==retained);
+  fail_upload=0;assert(render_at(&r,2,2,1,0,0,0));assert(R.tex[0].tex && R.tex[0].rgba==retained);
+ }
+ cleanup();
+ // A recreated SDL tile must keep retrying rejected water without recreating
+ // that SDL tile or hiding base terrain.
+ {uint8_t mask;batches[3]=71;batches[4]=kTextured|kWater;hdt_capture(&screen_pixel,&mask,1);take(&r,1);}
+ hdt_device_reset();fail_water=1;assert(render_at(&r,2,2,1,0,0,0));
+ assert(R.tex[0].water_pending);SDL_Texture *base=R.tex[0].tex;int calls=water_calls;
+ fail_water=0;assert(render_at(&r,2,2,1,0,0,0));
+ assert(!R.tex[0].water_pending && water_calls>calls && R.tex[0].tex==base);cleanup();
+ // Reset with an in-flight water acknowledgement must not release the CPU
+ // pixels through the pending queue or acknowledge a missing SDL texture.
+ {uint8_t mask;batches[3]=72;batches[4]=kTextured|kWater;fail_water=1;hdt_capture(&screen_pixel,&mask,1);take(&r,1);}
+ assert(g_pending.ntex==1 && !g_pending.tex[0].rgba && R.tex[0].rgba);
+ hdt_device_reset();fail_create=1;take(&r,1);assert(!g_nsent && g_pending.ntex==1);
+ fail_create=0;fail_water=0;assert(render_at(&r,2,2,1,0,0,0));take(&r,1);
+ assert(g_nsent==1 && !g_pending.ntex && R.tex[0].rgba);cleanup();
+ // Cache reuploads are bounded and fair even if the first tile keeps failing.
+ g_pending.serial=1;g_pending.frame=1;
+ for(unsigned i=0;i<20;i++){enqueue(100+i,0);g_pending.tex[i].rgba[0]=(uint8_t)(i?i:77);}
+ take(&r,1);hdt_device_reset();create_calls=0;fail_create=1;render_at(&r,2,2,1,0,0,0);
+ assert(create_calls==kUploadsPerTake && R.retry_cursor==kUploadsPerTake);
+ fail_create=0;fail_pixel=77;for(int i=0;i<3;i++)render_at(&r,2,2,1,0,0,0);
+ assert(!find_tex(100) && find_tex(119));fail_pixel=0;
+ for(int i=0;i<3;i++)render_at(&r,2,2,1,0,0,0);assert(find_tex(100));cleanup();
+ // Controlled large-course map buffers survive repeated GPU-only cleanup.
+ for(int size=100;size<=250;size+=150){
+  uint8_t mask;grid_side=size;batches[3]=(int)size;batches[4]=kTextured|kWater;
+  assert(hdt_capture(&screen_pixel,&mask,1));take(&r,1);
+  assert(R.map_w==size && R.map_h==size && R.wcode[size*size-1]==1 && R.wheight[size*size-1]==(float)(size*size-1));
+  uint8_t *code=R.wcode;float *height=R.wheight,*geometry=R.verts;
+  for(int reset=0;reset<12;reset++){hdt_device_reset();assert(render_at(&r,2,2,1,0,0,0));
+   assert(R.wcode==code && R.wheight==height && R.verts==geometry && locks==0);}
+  cleanup();
+ }
+ puts("terrain recovery: PASS (GPU failures, CPU ownership, 36 resets, 100/250 maps, water backpressure, bounded fair retry)");return 0;
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:
-    c=pathlib.Path(tmp)/'test.c';c.write_text(preamble+types+span('void hdt_resend(', '// Bounded CPU')+helpers+capture+render+main)
+    c=pathlib.Path(tmp)/'test.c';c.write_text(preamble+types+span('void hdt_resend(', '// Bounded CPU')+helpers+capture+render+device_reset+main)
     exe=pathlib.Path(tmp)/'test'
     subprocess.run([os.environ.get('CC','gcc'),'-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-g','-fsanitize='+os.environ.get('SANITIZERS','undefined'),'-o',str(exe),str(c)],check=True)
     subprocess.run([str(exe)],check=True)

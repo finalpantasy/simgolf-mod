@@ -144,3 +144,14 @@ void lamps_render(SDL_Renderer *r,const LampFrame *f,SDL_Rect clip,const uint8_t
   }
   SDL_SetRenderDrawBlendMode(r,oldblend);SDL_SetRenderDrawColor(r,cr,cg,cb,ca);SDL_RenderSetClipRect(r,clipped?&old:NULL);
 }
+
+void lamps_device_reset(void) {
+  for(int s=0;s<LAMP_STYLES;s++) {
+    if(tex[s])SDL_DestroyTexture(tex[s]);tex[s]=NULL;
+    for(int v=0;v<4;v++)for(int n=0;n<2;n++) {
+      if(model[s][v][n])SDL_DestroyTexture(model[s][v][n]);model[s][v][n]=NULL;
+    }
+  }
+  if(spill)SDL_DestroyTexture(spill);spill=NULL;
+  model_tried=valid=0;
+}

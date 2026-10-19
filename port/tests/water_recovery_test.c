@@ -384,6 +384,31 @@ static void reenabling_water_resends_discarded_textures(void) {
   CHECK(g_mode == 1 && resends == 2);
 }
 
+static void repeated_reset_retains_pending_and_releases_resources(void) {
+  Resource **handles[]={&W.vs_water,&W.vs_quad,&W.vs_imp,&W.ps_water,&W.ps_sim,&W.ps_imp,&W.ps_fall,
+    &W.il,&W.cb,&W.vb,&W.s_wrap,&W.s_clamp,&W.s_point,&W.b_water,&W.b_add,&W.rs,&W.noise_srv,
+    &W.info_srv,&W.info,&W.st,&W.ctx1,&W.ctx,&W.dev};
+  uint8_t pixels[4]={81};
+  for(int reset=0;reset<24;reset++) {
+    for(size_t i=0;i<sizeof handles/sizeof handles[0];i++)*handles[i]=new_resource();
+    for(int i=0;i<2;i++){W.sim_srv[i]=new_resource();W.sim_rtv[i]=new_resource();W.sim[i]=new_resource();}
+    for(int i=0;i<4;i++){W.qd[i]=new_resource();W.q0[i]=new_resource();W.q1[i]=new_resource();}
+    W.state=1;CHECK(water_take_texture(7,1,1,pixels));upload_pending();CHECK(find_wtex(7));
+    pixels[0]++;CHECK(water_take_texture(9,1,1,pixels));fail_gpu=1;upload_pending();
+    CHECK(W.npend==1);uint8_t *pending=W.pend[0].rgba;size_t bytes=W.pend_bytes;
+    water_device_reset();
+    CHECK(!W.ntex && !W.state && W.scene_serial==-1 && W.map_serial==-1);
+    CHECK(W.npend==1 && W.pend[0].rgba==pending && W.pend_bytes==bytes);
+    for(size_t i=0;i<sizeof handles/sizeof handles[0];i++)CHECK(!*handles[i]);
+    for(int i=0;i<2;i++)CHECK(!W.sim_srv[i]&&!W.sim_rtv[i]&&!W.sim[i]);
+    for(int i=0;i<4;i++)CHECK(!W.qd[i]&&!W.q0[i]&&!W.q1[i]);
+    // Cached terrain resubmission and the pre-reset pending copy both drain.
+    CHECK(water_take_texture(7,1,1,pixels));upload_pending();
+    CHECK(!W.npend && !W.pend_bytes && find_wtex(7) && find_wtex(9));
+    water_device_reset();
+  }
+}
+
 static const struct { const char *name; void (*run)(void); } cases[] = {
   {"retains_failed_upload", retains_failed_upload},
   {"preserves_existing_texture", preserves_existing_texture},
@@ -405,6 +430,7 @@ static const struct { const char *name; void (*run)(void); } cases[] = {
   {"permanent_failure_does_not_backpressure_terrain", permanent_failure_does_not_backpressure_terrain},
   {"initial_unknown_mode_retains_uploads", initial_unknown_mode_retains_uploads},
   {"reenabling_water_resends_discarded_textures", reenabling_water_resends_discarded_textures},
+  {"repeated_reset_retains_pending_and_releases_resources", repeated_reset_retains_pending_and_releases_resources},
 };
 
 int main(int argc, char **argv) {

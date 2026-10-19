@@ -124,9 +124,12 @@ existing exception/parameter/register/stack evidence and adds
 resolve the faulting address to a loaded module, `module` includes its basename,
 load `base`, and relative `offset`. Core exception/register/stack evidence is
 flushed before this best-effort loader lookup, which can stall in a damaged
-process. Unmapped/generated image addresses may have
-no module line. Pair this report with `version.txt` and binary SHA-256 values to
-identify a precise build; compiler time alone is not a unique build identifier.
+process. The v0.1.23 loaded-module range list is retained as well: it records
+each module's base, size and basename and marks the range containing the fault.
+Both module lookups happen after the core evidence is flushed. Unmapped/generated
+image addresses may have no matching module line. Pair this report with
+`version.txt` and binary SHA-256 values to identify a precise build; compiler
+time alone is not a unique build identifier.
 The local crash file still contains raw stack words and grows until the player
 archives/removes it, so share the reviewed export rather than the raw file.
 
