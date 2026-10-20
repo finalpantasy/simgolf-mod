@@ -1,6 +1,7 @@
 // Frosted Mint course HUD screen, see ui_hud.h. Layout: docs/ui/DESIGN_SYSTEM.md
 // section 4 (D5); what each control does in the game: docs/ui/HUD_DISPATCH.md.
 #include "port/ui/ui_hud.h"
+#include "port/ui/hud_skill_format.h"
 #include "port/ui/ui_rules.h"
 #include "port/path_style_catalog.h"
 
@@ -137,7 +138,7 @@ static void capsule(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *
   else ui_hud_money(money, sizeof money, s->money);
   if (s->cheat && !s->sandbox) strncat(money, "*", sizeof money - strlen(money) - 1);
   snprintf(fun, sizeof fun, "%d", s->fun);
-  snprintf(skill, sizeof skill, "%d.%02d", s->skill_x100 / 100, (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100);
+  ui_hud_skill_format(skill, sizeof skill, s->skill_x100);
   snprintf(golfers, sizeof golfers, "%d", s->golfers);
   snprintf(tip, sizeof tip, "%s, %s", s->course, s->date);
   if (dens == 1) ui_push_scale(c, 0.7f);
@@ -782,9 +783,9 @@ static UiRect hub(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *ar
     uint32_t mid = ui_idi(base, 30);
     UiRect mr = ui_rect(cx - R + ui_s(c, 14), y, 2 * R - ui_s(c, 28), nf.line);
     ui_hit(c, mr, 0, mid, UI_HIT_BLOCK | UI_HIT_INTERACT);
-    char tip[160];
-    snprintf(tip, sizeof tip, "%s. Fun %d, skill %d.%02d, %d golfers", s->course, s->fun, s->skill_x100 / 100,
-             (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100, s->golfers);
+    char tip[160], skill[16];
+    ui_hud_skill_format(skill, sizeof skill, s->skill_x100);
+    snprintf(tip, sizeof tip, "%s. Fun %d, skill %s, %d golfers", s->course, s->fun, skill, s->golfers);
     ui_tooltip(c, mid, mr, tip);
     float sw = ui_stat_width(c, UI_ICON_COINS, money, NULL);
     ui_stat(c, cx - sw / 2, y + nf.line / 2, UI_ICON_COINS, money, NULL);
@@ -813,9 +814,9 @@ static void stats_box(UiCtx *c, const HudSnap *s, UiRect box, Acts *a, int row) 
   static const char *const none[2] = {NULL, NULL};
   float segw = ui_segmented_width(c, none, seg_icons, 2), segh = ui_s(c, 32);
   uint32_t mid = ui_id("hud.stats");
-  char tip[160];
-  snprintf(tip, sizeof tip, "%s. Fun %d, skill %d.%02d, %d golfers", s->course, s->fun, s->skill_x100 / 100,
-           (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100, s->golfers);
+  char tip[160], skill[16];
+  ui_hud_skill_format(skill, sizeof skill, s->skill_x100);
+  snprintf(tip, sizeof tip, "%s. Fun %d, skill %s, %d golfers", s->course, s->fun, skill, s->golfers);
   int sel = s->paused ? 1 : 0, want = sel;
   if (row) {   // money and date at the left, play/pause at the right
     UiRect tr = ui_rect(box.x, box.y, box.w - segw - ui_s(c, 6), box.h);
@@ -1042,7 +1043,7 @@ static void stat_texts(const HudSnap *s, char *money, char *fun, char *skill, ch
   if (s->sandbox) snprintf(money, 32, "Unlimited");
   else ui_hud_money(money, 32, s->money);
   snprintf(fun, 16, "%d", s->fun);
-  snprintf(skill, 16, "%d.%02d", s->skill_x100 / 100, (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100);
+  ui_hud_skill_format(skill, 16, s->skill_x100);
   snprintf(golfers, 16, "%d", s->golfers);
 }
 
