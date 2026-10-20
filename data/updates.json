@@ -2,6 +2,20 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.24",
+      "date": "2026-10-19",
+      "name": "Faster play on large, busy courses with HD art",
+      "summary": "Faster play on large, busy courses with HD art.",
+      "notes": [
+        "Fixes the slowdown on large, busy courses with HD art reported in #73. A memory safety check ran for every HD sprite in every frame; it now reuses its result within a frame. On the reported course, game speed returns to normal.",
+        "Mod profile names with quotes or other special characters now save and load correctly. A load order file that cannot be read is kept as a backup instead of being replaced.",
+        "The game now starts from install folders named in other alphabets, such as Japanese or Cyrillic, on the main Windows drive.",
+        "Very large courses handle low memory more safely: ground, water and HD art keep the last complete picture instead of failing.",
+        "Ground textures retry a failed graphics upload and keep the working picture meanwhile.",
+        "Retains all 0.1.23 features, saves, settings, assets and remastered defaults."
+      ]
+    },
+    {
       "version": "0.1.23",
       "date": "2026-10-19",
       "name": "Safer Practice Round starts and smoother clubhouse loading",

@@ -5,6 +5,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "platform/exe_path.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,7 +80,8 @@ static int is_file(const char *p) {
 
 static void full_path(char *dst, size_t len, const char *src) {
   char tmp[MAX_PATH];
-  if (GetFullPathNameA(src, MAX_PATH, tmp, NULL)) snprintf(dst, len, "%s", tmp);
+  DWORD got = GetFullPathNameA(src, MAX_PATH, tmp, NULL);   // too long: returns the size needed, tmp unset
+  if (got && got < MAX_PATH) snprintf(dst, len, "%s", tmp);
   else snprintf(dst, len, "%s", src);
   slashes(dst);
   size_t n = strlen(dst);
@@ -120,7 +122,7 @@ void mods_init(int argc, char **argv) {
     else if (!strcmp(argv[i], "--no-mods")) g_no_mods = 1;
   }
   char exe[MAX_PATH], p[MAX_PATH + 32];
-  GetModuleFileNameA(NULL, exe, MAX_PATH);
+  exe_path_ansi(exe, MAX_PATH);
   slashes(exe);
   char *slash = strrchr(exe, '/');
   if (slash) *slash = 0;
@@ -185,12 +187,17 @@ void mods_init(int argc, char **argv) {
         char *eq = strchr(sl, '=');
         if (!eq) continue;
         *eq = 0;
+        // Hand edits like "scale = 2": trim around '=' as the mods.ini parser does.
+        for (char *k = eq; k > sl && (k[-1] == ' ' || k[-1] == '\t');) *--k = 0;
+        char *val = eq + 1;
+        while (*val == ' ' || *val == '\t') val++;
+        for (size_t vn = strlen(val); vn && (val[vn - 1] == ' ' || val[vn - 1] == '\t');) val[--vn] = 0;
         char full[160];
         snprintf(full, sizeof full, "%s.%s", section, sl);
         if (g_nopt < OPT_MAX) {
           g_okey[g_nopt] = mods_strdup(full);
-          g_oval[g_nopt++] = mods_strdup(eq + 1);
-          mods_store_put(MS_INI, full, eq + 1, NULL);
+          g_oval[g_nopt++] = mods_strdup(val);
+          mods_store_put(MS_INI, full, val, NULL);
         }
       }
       free(text);

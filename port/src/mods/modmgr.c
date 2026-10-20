@@ -545,6 +545,21 @@ int modmgr_restart_needed(const ModMgr *m) {
 int modmgr_apply(ModMgr *m, char *err, size_t en) {
   char p[800];
   snprintf(p, sizeof p, "%s/load_order.toml", m->dir);
+  if (m->disk.error) {
+    // The file on disk did not parse: keep the player's copy before replacing it.
+    char bak[820];
+    snprintf(bak, sizeof bak, "%s.unreadable", p);
+    size_t len = 0;
+    char *text = mods_read_file(p, &len);
+    FILE *f = text ? fopen(bak, "wb") : NULL;
+    int saved = f && fwrite(text, 1, len, f) == len;
+    if (f && fclose(f) != 0) saved = 0;
+    free(text);
+    if (!saved) {
+      snprintf(err, en, "%s cannot be read and could not be backed up; fix or remove it first", p);
+      return 0;
+    }
+  }
   if (!loadorder_write(&m->draft, p)) {
     snprintf(err, en, "Could not write %s", p);
     return 0;

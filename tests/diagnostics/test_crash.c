@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "port/crash_record.h"
-static int registers_written, core_flushed, snapshot_fails, snapshots;
+static int registers_written, core_flushed, snapshot_fails, snapshots, module_lookup_fails;
 HANDLE CreateFileA(const char *p, DWORD access, DWORD share, void *security, DWORD creation, DWORD attrs, HANDLE template) {
   (void)share; (void)security; (void)attrs; (void)template;
   assert(access == FILE_APPEND_DATA && creation == OPEN_ALWAYS);
@@ -17,6 +17,7 @@ DWORD GetCurrentThreadId(void) { return 42; }
 int GetModuleHandleExA(DWORD flags, LPCSTR addr, HMODULE *module) {
   assert(registers_written && core_flushed);
   assert(flags == 6); assert((uintptr_t)addr == 0x6ebf397b);
+  if (module_lookup_fails) return 0;
   *module = (HMODULE)(uintptr_t)0x6eb00000; return 1;
 }
 DWORD GetModuleFileNameA(HMODULE m, char *out, DWORD cap) {
@@ -48,6 +49,11 @@ int main(void) {
   assert(host_write_crash_record("golf.log", &ep));
   assert(host_write_crash_record("golf.log", &ep));
   snapshot_fails=1;assert(host_write_crash_record("golf.log", &ep));assert(snapshots==3);
+  /* Neither loader lookup nor module enumeration is needed for the core
+     exception record, including the C++ exception seen in reporter logs. */
+  module_lookup_fails=1;e.ExceptionCode=0xe06d7363;
+  assert(host_write_crash_record("golf.log", &ep));assert(snapshots==4);
+  assert(registers_written && core_flushed);
   FILE *f = fopen("golf.log.crash.txt", "rb"); assert(f);
   char out[4096]; size_t n = fread(out, 1, sizeof out - 1, f); out[n] = 0; fclose(f);
   char *first = strstr(out, "crash_record_version 2"); assert(first);
@@ -56,5 +62,6 @@ int main(void) {
   assert(strstr(out, "module 6eb00000 size 00100000 golf.exe [fault]"));
   assert(strstr(out, "utc 2026-10-18T12:00:00Z"));
   assert(strstr(out, "EIP ")); assert(!strstr(out, "Private"));
+  assert(strstr(out, "exception e06d7363 at 6ebf397b"));
   puts("crash writer tests passed"); return 0;
 }

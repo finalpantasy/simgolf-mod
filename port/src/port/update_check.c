@@ -4,6 +4,7 @@
 // its own exe while it runs).
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "platform/exe_path.h"
 #include <winhttp.h>
 
 #include <SDL.h>
@@ -150,7 +151,7 @@ static int fetch(const char *url,char **mem,size_t *mem_len,size_t max,const cha
 
 
 static void app_dir(char *out, size_t n) {
-  GetModuleFileNameA(NULL, out, (DWORD)n);
+  exe_path_ansi(out, (DWORD)n);
   char *s = strrchr(out, '\\');
   if (s) *s = 0;
 }
@@ -176,6 +177,11 @@ static DWORD WINAPI check_thread(LPVOID arg) {
     return 0;
   }
   free(body);
+  // The tag names update files and the stage folder: plain version characters only.
+  if (!ver[0] || strspn(ver, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.-") != strlen(ver) || strstr(ver, "..")) {
+    fprintf(stderr, "update: ignoring release tag with unexpected characters\n");
+    return 0;
+  }
   const char *later = mods_get("updates.later");
   int newer = upd_version_cmp(SIMGOLF_VERSION, ver) > 0;
   int hidden = later && *later && !upd_version_cmp(later, ver);

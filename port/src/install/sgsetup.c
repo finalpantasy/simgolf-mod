@@ -15,6 +15,7 @@
 // end; "error: <plain sentence>" on stderr and exit 2 for a wrong file, 1
 // for anything else.
 #include <windows.h>
+#include "../platform/exe_path.h"
 #include <bcrypt.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -400,7 +401,7 @@ static void rmtree(const char *dir) {   // the scratch folder: plain files, no l
 
 static int install(const char *disc_path, const char *exe_path, const char *out, int from_folder) {
   char nops[MAX_PATH], gamedir[MAX_PATH * 2], scratch[MAX_PATH * 2], p[MAX_PATH * 3];
-  GetModuleFileNameA(NULL, nops, MAX_PATH);
+  exe_path_ansi(nops, MAX_PATH);
   char *sl = strrchr(nops, '\\');
   snprintf(sl ? sl + 1 : nops, MAX_PATH - (sl ? (size_t)(sl + 1 - nops) : 0), "jgld-nops.json");
   snprintf(gamedir, sizeof gamedir, "%s\\game", out);

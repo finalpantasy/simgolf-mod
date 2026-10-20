@@ -125,8 +125,29 @@ static void enqueue(uint32_t serial,int water) {
  NewTex n={serial,1,1,malloc(4),water,0,0};
  assert(queue_texture(&g_pending,&n));assert(!n.rgba);
 }
-int main(void) {
+int main(int argc,char **argv) {
  SDL_Renderer r=0;g_on=1;
+  // Each process starts with empty static scratch buffers. Check every
+  // geometry and map reserve independently, including separate height capacity.
+  if(argc==3) {
+   uint8_t mask=0;grid_side=100;
+   int point=atoi(argv[2]);assert(point>0);
+   if(!strcmp(argv[1],"capture-map-failure")) {
+    alloc_calls=0;fail_at=point;
+    assert(hdt_capture(&screen_pixel,&mask,1));
+    assert(invalidated==1 && !g_pending.serial && !g_pending.nverts && !g_pending.map_serial && locks==0);
+    fail_at=0;assert(hdt_capture(&screen_pixel,&mask,2));
+   } else {
+    assert(!strcmp(argv[1],"render-map-failure"));
+    assert(hdt_capture(&screen_pixel,&mask,2));
+    alloc_calls=0;fail_at=point;take(&r,2);
+    assert(!R.serial && !R.nverts && !R.map_serial && g_pending.serial && locks==0);
+    fail_at=0;
+   }
+   take(&r,2);assert(R.map_w==100 && R.map_h==100 && find_tex(22));
+   assert(R.wheight[9999]==9999 && R.wcode[9999]==1);
+   cleanup();printf("PASS %s reserve %d\n",argv[1],point);return 0;
+  }
  size_t bytes=0;int cap=77;
  assert(!texture_bytes(0,1,&bytes));assert(!texture_bytes(-1,1,&bytes));
  assert(!texture_bytes(INT_MAX,INT_MAX,&bytes));assert(!texture_bytes(16384,16384,&bytes));
@@ -272,3 +293,6 @@ with tempfile.TemporaryDirectory() as tmp:
     exe=pathlib.Path(tmp)/'test'
     subprocess.run([os.environ.get('CC','gcc'),'-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-g','-fsanitize='+os.environ.get('SANITIZERS','undefined'),'-o',str(exe),str(c)],check=True)
     subprocess.run([str(exe)],check=True)
+    for mode,count in [('capture-map-failure',9),('render-map-failure',7)]:
+        for point in range(1,count+1):
+            subprocess.run([str(exe),mode,str(point)],check=True)

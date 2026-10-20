@@ -648,7 +648,25 @@ static void build_map(const HdtScene *sc) {
   int w = sc->map_w, h = sc->map_h, n = w * h;
   W.map_w = w;
   W.map_h = h;
+  int cw = w * kInfo, ch = h * kInfo, cn = cw * ch;
   float *phi = malloc(n * sizeof(float)), *tmp = malloc(n * sizeof(float)), *tf = calloc((size_t)n * 3, sizeof(float));
+  float *dist = malloc((size_t)cn * sizeof(float));
+  uint8_t *px = calloc((size_t)cn, 4);
+  free(W.wet);
+  free(W.pools);
+  W.wet = malloc(n * sizeof(int));
+  W.pools = malloc(n * sizeof(int));
+  W.nwet = W.npools = 0;
+  if (!phi || !tmp || !tf || !dist || !px || !W.wet || !W.pools) {
+    // A large course in the 32-bit process: no water motion this time, no
+    // crash. The map is built again on the next frame.
+    free(phi); free(tmp); free(tf); free(dist); free(px);
+    free(W.wet); free(W.pools);
+    W.wet = W.pools = NULL;
+    W.map_serial = -1;
+    fprintf(stderr, "water: map %dx%d needs more memory than is free; water motion waits\n", w, h);
+    return;
+  }
   // water level smoothed along the water (the flow follows its slope through flat reaches)
   for (int i = 0; i < n; i++) phi[i] = sc->wheight[i];
   for (int it = 0; it < 40; it++) {
@@ -668,11 +686,6 @@ static void build_map(const HdtScene *sc) {
     phi = tmp;
     tmp = sw;
   }
-  free(W.wet);
-  free(W.pools);
-  W.wet = malloc(n * sizeof(int));
-  W.pools = malloc(n * sizeof(int));
-  W.nwet = W.npools = 0;
   for (int i = 0; i < n; i++) {   // per tile: flow (down the smoothed level, along the water) and turbulence
     if (!sc->wcode[i]) continue;
     W.wet[W.nwet++] = i;
@@ -698,8 +711,6 @@ static void build_map(const HdtScene *sc) {
     tf[i * 3] = fx, tf[i * 3 + 1] = fy, tf[i * 3 + 2] = turb;
   }
   // depth from the distance to the shore, kInfo cells per tile (8-neighbour chamfer; the map edge is open water)
-  int cw = w * kInfo, ch = h * kInfo, cn = cw * ch;
-  float *dist = malloc((size_t)cn * sizeof(float));
   for (int i = 0; i < cn; i++) dist[i] = sc->wcode[(i / cw / kInfo) * w + (i % cw) / kInfo] ? 1e6f : 0;
   for (int pass = 0; pass < 2; pass++)
     for (int k = 0; k < cn; k++) {
@@ -713,7 +724,6 @@ static void build_map(const HdtScene *sc) {
           d = dist[ny[j] * cw + nx[j]] + c[j];
       dist[i] = d;
     }
-  uint8_t *px = calloc((size_t)cn, 4);
   for (int i = 0; i < cn; i++) {
     int t = (i / cw / kInfo) * w + (i % cw) / kInfo;
     if (!sc->wcode[t]) continue;
@@ -1231,7 +1241,7 @@ void water_draw(SDL_Renderer *r, int x, int y, int w, int h, double now_ms) {
     for (int j = 0; j < nbnew && W.nball < 8; j++) W.ball[W.nball][0] = bnew[j].x, W.ball[W.nball][1] = bnew[j].y, W.ball[W.nball++][2] = tt;
   }
   W.drop_acc += dt * L->drops * W.nwet / 100.0;
-  while (W.drop_acc >= 1 && nimp < kMaxImp) {
+  while (W.nwet && W.drop_acc >= 1 && nimp < kMaxImp) {
     W.drop_acc -= 1;
     int i = W.wet[(int)(frand() * W.nwet) % (W.nwet ? W.nwet : 1)];
     imp[nimp++] = (Imp){i % W.map_w + frand(), i / W.map_w + frand(), (0.15f + 0.25f * frand()) * (frand() < 0.5f ? -1 : 1), 0.10f};

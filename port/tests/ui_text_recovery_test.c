@@ -138,6 +138,35 @@ static void run_case(const char *name, const char *fonts) {
     cpu_fail=1;assert(uit_init(&t,&renderer,fonts,1)==5);assert(!t.alpha);
     ticks=UINT32_MAX-1;uit_device_reset(&t);draw(&t);
     assert(t.alpha && t.atlas && !t.dirty);
+  } else if (!strcmp(name, "independent_contexts")) {
+    /* The golfer world and card layers own separate atlases. A card-only
+       failure must recover without rebuilding or interrupting world text. */
+    assert(uit_init(&healthy, &renderer, fonts, 1) == 5);
+    draw(&healthy);
+    SDL_Texture *world_atlas = healthy.atlas;
+    void *world_alpha = healthy.alpha, *world_font = healthy.f[0].data;
+    cpu_fail = 1;
+    assert(uit_init(&t, &renderer, fonts, 1) == 5);
+    assert(!t.alpha && !t.atlas);
+    int before = draws;
+    draw(&healthy); draw(&t);
+    assert(draws == before + 1 && healthy.atlas == world_atlas);
+    ticks += 1000; gpu_fail = 1; draw(&t);
+    assert(t.alpha && !t.atlas);
+    draw(&healthy); assert(healthy.atlas == world_atlas);
+    ticks += 1000; draw(&t); assert(t.atlas && !t.dirty);
+    assert(healthy.alpha == world_alpha && healthy.f[0].data == world_font);
+    void *card_alpha = t.alpha;
+    for (int i = 0; i < 12; ++i) {
+      uit_device_reset(&healthy); uit_device_reset(&t);
+      assert(!healthy.atlas && !t.atlas);
+      gpu_fail = 1; draw(&t); draw(&healthy);
+      assert(!t.atlas && healthy.atlas && healthy.alpha == world_alpha);
+      ticks += 1000; upload_fail = 1; draw(&t);
+      assert(t.atlas && t.dirty); draw(&t); draw(&healthy);
+      assert(!t.dirty && !healthy.dirty && t.alpha == card_alpha);
+    }
+    uit_free(&healthy);
   } else if (!strcmp(name, "cleanup_failed")) {
     cpu_fail = 1; assert(uit_init(&t, &renderer, fonts, 1) == 5);
     assert(!t.alpha && !t.atlas);
@@ -149,7 +178,7 @@ static void run_case(const char *name, const char *fonts) {
 }
 int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--list")) {
-    puts("normal\ncpu_retry\ncpu_gpu_retry\ntick_wrap\ntick_zero\nupload_retry\ncleanup_failed\ndevice_reset\nreset_late_uptime\nreset_without_cpu"); return 0;
+    puts("normal\ncpu_retry\ncpu_gpu_retry\ntick_wrap\ntick_zero\nupload_retry\ncleanup_failed\ndevice_reset\nreset_late_uptime\nreset_without_cpu\nindependent_contexts"); return 0;
   }
   assert(argc == 3); run_case(argv[1], argv[2]); return 0;
 }

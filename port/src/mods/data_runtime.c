@@ -5,6 +5,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "platform/exe_path.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -244,7 +245,7 @@ void mdata_init(int argc, char **argv) {
     return;
   }
   char exe[MAX_PATH], p[MAX_PATH + 32];
-  GetModuleFileNameA(NULL, exe, MAX_PATH);
+  exe_path_ansi(exe, MAX_PATH);
   char *slash = strrchr(exe, '\\');
   if (slash) *slash = 0;
   const char *gi = mods_get("golf.data_dir");

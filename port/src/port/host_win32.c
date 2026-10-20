@@ -18,6 +18,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "platform/exe_path.h"
 #include <timeapi.h>
 
 #include <fcntl.h>
@@ -307,7 +308,7 @@ int host_main(int argc, char **argv, int (*game_main)(void)) {
     if (!commit_range(&k_ranges[i])) committed = 0;
   if (!committed && !getenv("SIMGOLF_RELAUNCHED")) return relaunch_reserved();
 
-  GetModuleFileNameA(NULL, g_exe_dir, MAX_PATH);
+  exe_path_ansi(g_exe_dir, MAX_PATH);
   slashes(g_exe_dir);
   char *slash = strrchr(g_exe_dir, '/');
   if (slash) *slash = 0;
