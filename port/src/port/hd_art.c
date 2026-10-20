@@ -464,14 +464,43 @@ static int load_index(void) {
 #define U32(a) (*(volatile uint32_t *)(uintptr_t)(a))
 #define I32(a) (*(volatile int32_t *)(uintptr_t)(a))
 
+// Regions VirtualQuery found readable since the last list close. One sprite
+// draw checks 10 to 20 pointers, nearly all in the same few regions, and each
+// query is a system call: on a large busy course they took a third of the game
+// thread (issue 73). Only the drawing thread uses the cache, and list_close
+// empties it every frame (and anything older than 100 ms is dropped in case
+// frames stop closing), so memory freed between frames is queried again.
+typedef struct { uint32_t lo; uint64_t hi; } OkRegion;
+static OkRegion g_okc[16];
+static int g_nokc, g_okc_next;
+static DWORD g_okc_thread, g_okc_tick;
+
+static void mem_ok_forget(void) {
+  g_nokc = g_okc_next = 0;
+  g_okc_thread = GetCurrentThreadId();
+  g_okc_tick = GetTickCount();
+}
+
 static int mem_ok(uint32_t p, uint32_t n) {
   if (p < 0x10000 || p + n < p) return 0;
+  int cache = g_okc_thread == GetCurrentThreadId();
+  if (cache && GetTickCount() - g_okc_tick > 100) mem_ok_forget();
   MEMORY_BASIC_INFORMATION mi;
-  for (uint32_t a = p; a < p + n;) {
+  for (uint64_t a = p, end = (uint64_t)p + n; a < end;) {
+    int hit = 0;
+    for (int i = 0; cache && i < g_nokc && !hit; i++)
+      if (a >= g_okc[i].lo && a < g_okc[i].hi) a = g_okc[i].hi, hit = 1;
+    if (hit) continue;
     if (!VirtualQuery((void *)(uintptr_t)a, &mi, sizeof mi) || mi.State != MEM_COMMIT ||
         (mi.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
       return 0;
-    a = (uint32_t)((uintptr_t)mi.BaseAddress + mi.RegionSize);
+    OkRegion r = {(uint32_t)(uintptr_t)mi.BaseAddress, (uint64_t)(uintptr_t)mi.BaseAddress + mi.RegionSize};
+    if (cache) {
+      g_okc[g_okc_next] = r;
+      g_okc_next = (g_okc_next + 1) % 16;
+      if (g_nokc < 16) g_nokc++;
+    }
+    a = r.hi;
   }
   return 1;
 }
@@ -706,6 +735,7 @@ static void list_reset(List *L, int w, int h) {
 // holds what the entry wrote (bits: the canvas, pitch in pixels).
 static void list_close(int which, const uint16_t *bits, int pitch) {
   List *L = &g_rec;
+  mem_ok_forget();
   if (!L->owner || L->w != HD_FRAME_W || L->h != HD_FRAME_H) {
     list_reset(L, HD_FRAME_W, HD_FRAME_H);
     g_closed_ok[which] = 0;
@@ -764,7 +794,31 @@ static double g_load_ms;
 static int key_eq(Key x, Key y) { return x.a == y.a && x.b == y.b; }
 static uint32_t key_hash(Key k) { return k.a * 2654435761u ^ k.b * 2246822519u ^ (k.b >> 13); }
 
+// The table only grows: every sprite and palette pairing seen gets a key, and
+// evicted textures go back to S_NONE without leaving. On a long session over a
+// big course it would fill and new art would never load again. S_NONE keys hold
+// nothing, so rebuild the table without them. Under g_lock.
+static int g_ks_compacted;   // live keys after the last compaction
+static void ks_compact(void) {
+  KeyState *live = malloc((size_t)g_nks * sizeof *live);
+  if (!live) return;
+  int n = 0;
+  for (int i = 0; i < KS_N; i++)
+    if (g_ks[i].used && g_ks[i].state != S_NONE) live[n++] = g_ks[i];
+  memset(g_ks, 0, (size_t)KS_N * sizeof *g_ks);
+  for (int j = 0; j < n; j++) {
+    uint32_t h = key_hash(live[j].key) & (KS_N - 1);
+    while (g_ks[h].used) h = (h + 1) & (KS_N - 1);
+    g_ks[h] = live[j];
+  }
+  fprintf(stderr, "art: key table compacted from %d to %d keys\n", g_nks, n);
+  g_nks = g_ks_compacted = n;
+  free(live);
+}
+
 static KeyState *ks_find(Key k, int make) {
+  // Only once enough keys arrived since the last pass to make it worth a sweep.
+  if (make && g_nks > KS_N * 3 / 4 && g_nks - g_ks_compacted >= KS_N / 8) ks_compact();
   uint32_t h = key_hash(k) & (KS_N - 1);
   for (int n = 0; n < KS_N; n++, h = (h + 1) & (KS_N - 1)) {
     KeyState *s = &g_ks[h];
@@ -2351,8 +2405,13 @@ static void recover_visible(void) {
   if (!pending) g_recover_cursor = TEX_N;
 }
 
+// Issue 73 diagnosis: a slow step (over 30 ms) is logged with what it spent
+// the time on. On the reported course the driver took 30 to 200 ms to create
+// even one small texture while scrolling.
 static int upload_done(SDL_Renderer *r) {
+  double prof_start = host_now_ms(), prof_gpu = 0; size_t prof_bytes = 0; int prof_n = 0;
   recover_visible();
+  double prof_recover = host_now_ms() - prof_start;
   int up = 0;
   for (int n = 0; n < 64; n++) {
     Done d;
@@ -2361,9 +2420,11 @@ static int upload_done(SDL_Renderer *r) {
     if (have) d = g_done[g_dh++ % QN];
     LeaveCriticalSection(&g_lock);
     if (!have) break;
+    double prof_t = host_now_ms();
     SDL_Texture *t = d.rgba ? SDL_CreateTexture(r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, d.w, d.h) : NULL;
+    if (t && SDL_UpdateTexture(t, NULL, d.rgba, d.w * 4) != 0) { SDL_DestroyTexture(t); t = NULL; }
+    prof_gpu += host_now_ms() - prof_t; prof_n++; prof_bytes += (size_t)d.w * d.h * 4;
     if (t) {
-      SDL_UpdateTexture(t, NULL, d.rgba, d.w * 4);
       SDL_SetTextureBlendMode(t, (d.key.b >> 28) == V_MASKED ? g_premul : SDL_BLENDMODE_BLEND);
       SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
       Tex *x = tex_find(d.key, 1);
@@ -2402,8 +2463,16 @@ static int upload_done(SDL_Renderer *r) {
     free(d.rgba);
     up += t != NULL;
   }
+  double prof_evict = host_now_ms();
   tex_evict();
   tex_rehash();
+  double prof_end = host_now_ms();
+  if (prof_end - prof_start > 30) {
+    static int logged;
+    if (logged++ < 40)
+      fprintf(stderr, "art: slow upload %.1f ms: %d textures %.1f MB in %.1f ms, recover %.1f ms, evict %.1f ms, %d textures %.1f MB held\n",
+              prof_end - prof_start, prof_n, prof_bytes / 1048576.0, prof_gpu, prof_recover, prof_end - prof_evict, g_ntex, g_tex_bytes / 1048576.0);
+  }
   return up;
 }
 
@@ -2422,7 +2491,7 @@ void hd_art_take(void) {
     g_cur_ok[w] = g_pub_ok[w];
     if (!g_cur_ok[w]) continue;
     List *c = &g_cur[w], *p = &g_pub[w];
-    if (c->w != p->w || c->h != p->h || !c->owner) {
+    if (c->w != p->w || c->h != p->h || !c->owner || !g_cut[w]) {
       free(c->owner);
       free(g_cut[w]);
       c->owner = malloc((size_t)p->w * p->h * 2);
@@ -2430,8 +2499,22 @@ void hd_art_take(void) {
       c->w = p->w;
       c->h = p->h;
     }
+    if (c->cap < p->n) {
+      Entry *grown = realloc(c->e, ((size_t)p->n + 256) * sizeof(Entry));
+      if (grown) c->e = grown, c->cap = p->n + 256;
+    }
+    // Out of address space: this list draws in original art until memory allows.
+    if (!c->owner || !g_cut[w] || c->cap < p->n) {
+      free(c->owner);
+      free(g_cut[w]);
+      c->owner = NULL;
+      g_cut[w] = NULL;
+      c->w = c->h = 0;
+      c->n = 0;
+      g_cur_ok[w] = 0;
+      continue;
+    }
     memcpy(c->owner, p->owner, (size_t)p->w * p->h * 2);
-    if (c->cap < p->n) c->e = realloc(c->e, (c->cap = p->n + 256) * sizeof(Entry));
     memcpy(c->e, p->e, (size_t)p->n * sizeof(Entry));
     c->n = p->n;
   }
@@ -2501,7 +2584,9 @@ int hd_art_prepare(SDL_Renderer *r, int new_frame) {
     List *c = &g_cur[w];
     // an entry is drawn when all its textures are here; only those own pixels
     if (new_frame) {
-      g_drawable[w] = realloc(g_drawable[w], (size_t)c->n + 1);
+      uint8_t *grown = realloc(g_drawable[w], (size_t)c->n + 1);
+      if (!grown) { g_cur_ok[w] = 0; continue; }   // original art for this list until memory allows
+      g_drawable[w] = grown;
       memset(g_drawable[w], 0, (size_t)c->n + 1);
     }
     int diff = new_frame;

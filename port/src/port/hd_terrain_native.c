@@ -22,6 +22,8 @@
 
 #include <SDL.h>
 #include <stdio.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -117,7 +119,7 @@ typedef struct {
   float view[6];             // toward the viewer, toward the light (world)
   uint8_t *wcode;            // task-78: the whole map's water tiles (terrain_water_tiles)
   float *wheight;
-  int map_w, map_h, cap_map;
+  int map_w, map_h, cap_map, cap_wheight;
   LONG map_serial;
   int32_t *batches;
   int nbatches, cap_batches;
@@ -148,13 +150,35 @@ void hdt_resend(void) {
 static int sent(uint32_t serial) {
   for (int i = 0; i < g_nsent; i++)
     if (g_sent[i] == serial) return 1;
-  if (g_nsent == g_cap_sent) g_sent = realloc(g_sent, (g_cap_sent = g_cap_sent ? g_cap_sent * 2 : 256) * 4);
+  if (g_nsent == g_cap_sent) {
+    int cap = g_cap_sent ? g_cap_sent * 2 : 256;
+    uint32_t *grown = realloc(g_sent, (size_t)cap * 4);
+    if (!grown) return 0;   // not recorded: sent again later, which only costs a duplicate upload
+    g_sent = grown;
+    g_cap_sent = cap;
+  }
   g_sent[g_nsent++] = serial;
   return 0;
 }
 
-#define GROW(p, cap, n, sz) \
-  do { if ((n) > (cap)) { (cap) = (n) + (n) / 2; (p) = realloc((p), (size_t)(cap) * (sz)); } } while (0)
+// Grows a buffer to hold n items. On failure the buffer and its capacity stay
+// as they were and it returns 0: in the 32-bit process a large course can run
+// out of address space, and the last complete ground must stand, not crash.
+static int grow_buf(void **p, int *cap, long long n, size_t sz) {
+  if (n <= *cap) return 1;
+  long long want = n + n / 2;
+  void *q = want > 0 && want <= INT_MAX && (unsigned long long)want * sz <= SIZE_MAX ? realloc(*p, (size_t)want * sz) : NULL;
+  if (!q) {
+    static volatile LONG logged;
+    if (InterlockedIncrement(&logged) <= 4)
+      fprintf(stderr, "hd: terrain buffer of %lld bytes unavailable; keeping the last complete ground\n", want * (long long)sz);
+    return 0;
+  }
+  *p = q;
+  *cap = (int)want;
+  return 1;
+}
+#define GROW(p, cap, n, sz) grow_buf((void **)&(p), &(cap), (long long)(n), (sz))
 
 // Decode the first new course's independent ground images before taking the
 // hand-over lock. SDL textures are still created only on the render thread.
@@ -217,33 +241,38 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
   NewTex *ready = port_course_textures_fast() && nb > 0 ? prepare_course_textures(nb, b, &nready) : NULL;
   EnterCriticalSection(&g_tlock);
   Scene *s = &g_pending;
-  GROW(s->verts, s->cap_verts, nverts * 8, sizeof(float));
+  // Every buffer first: a failure leaves the pending scene whole.
+  if (!GROW(s->verts, s->cap_verts, nverts * 8, sizeof(float)) || !GROW(s->world, s->cap_world, nverts * 3, sizeof(float)) ||
+      !GROW(s->normals, s->cap_normals, nverts * 3, sizeof(float)) || !GROW(s->materials, s->cap_materials, nb, 1) ||
+      !GROW(s->batches, s->cap_batches, nb * 5, sizeof(int32_t))) {
+    LeaveCriticalSection(&g_tlock);
+    if (ready) {
+      for (int i = 0; i < nready; i++) free(ready[i].rgba);
+      free(ready);
+      hdt_resend();   // their serials were marked sent
+    }
+    return 1;
+  }
   memcpy(s->verts, terrain_hd_vertices(), (size_t)nverts * 8 * sizeof(float));
   s->nverts = nverts;
-  GROW(s->world, s->cap_world, nverts * 3, sizeof(float));
   memcpy(s->world, terrain_hd_world(), (size_t)nverts * 3 * sizeof(float));
-  GROW(s->normals, s->cap_normals, nverts * 3, sizeof(float));
   memcpy(s->normals, terrain_hd_normals(), (size_t)nverts * 3 * sizeof(float));
   terrain_hd_light_model(&s->light_model);
   terrain_hd_view(s->view);
   s->height_pixels=terrain_hd_height_pixels();
-  GROW(s->materials,s->cap_materials,nb,1);
   for(int i=0;i<nb;i++)s->materials[i]=(b[i*5+4]&kTextured)?(uint8_t)course_relief_material(terrain_hd_texture_src(b[i*5+2])):0;
   int mw = 0, mh = 0;
   if (terrain_grid_size(&mw, &mh) && mw * mh > 0) {   // the map's water tiles, sent on when they changed
     static uint8_t *code;
     static float *height;
     static int cap;
-    if (cap < mw * mh) {
-      cap = mw * mh;
-      code = realloc(code, (size_t)cap);
-      height = realloc(height, (size_t)cap * sizeof(float));
-    }
-    if (terrain_water_tiles(code, height, cap) == mw * mh &&
+    static int cap_height;
+    int have = GROW(code, cap, mw * mh, 1) && GROW(height, cap_height, mw * mh, sizeof(float));
+    // A failed grow skips this update; the tiles still differ next frame.
+    if (have && terrain_water_tiles(code, height, mw * mh) == mw * mh &&
         (mw != s->map_w || mh != s->map_h || memcmp(code, s->wcode, (size_t)mw * mh) ||
-         memcmp(height, s->wheight, (size_t)mw * mh * sizeof(float)))) {
-      GROW(s->wcode, s->cap_map, mw * mh, 1);
-      s->wheight = realloc(s->wheight, (size_t)s->cap_map * sizeof(float));
+         memcmp(height, s->wheight, (size_t)mw * mh * sizeof(float))) &&
+        GROW(s->wcode, s->cap_map, mw * mh, 1) && GROW(s->wheight, s->cap_wheight, mw * mh, sizeof(float))) {
       memcpy(s->wcode, code, (size_t)mw * mh);
       memcpy(s->wheight, height, (size_t)mw * mh * sizeof(float));
       s->map_w = mw;
@@ -251,23 +280,29 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
       s->map_serial++;
     }
   }
-  GROW(s->batches, s->cap_batches, nb * 5, sizeof(int32_t));
   memcpy(s->batches, b, (size_t)nb * 5 * sizeof(int32_t));
   s->nbatches = nb;
   s->tw = t[0];
   s->th = t[1];
+  int resend = 0;
   if (ready) {
-    if (nready) {
-      GROW(s->tex, s->cap_tex, s->ntex + nready, sizeof(NewTex));
+    if (nready && GROW(s->tex, s->cap_tex, s->ntex + nready, sizeof(NewTex))) {
       memcpy(s->tex + s->ntex, ready, (size_t)nready * sizeof(NewTex));
       s->ntex += nready;
+    } else if (nready) {
+      for (int i = 0; i < nready; i++) free(ready[i].rgba);
+      resend = 1;
     }
     free(ready);
   } else for (int i = 0; i < nb; i++) {
+    int marked = g_nsent;
     if (!(b[i * 5 + 4] & kTextured) || sent((uint32_t)b[i * 5 + 3])) continue;
     int32_t size[2];
     const uint8_t *rgba = terrain_hd_texture(b[i * 5 + 2], size);
-    GROW(s->tex, s->cap_tex, s->ntex + 1, sizeof(NewTex));
+    if (!GROW(s->tex, s->cap_tex, s->ntex + 1, sizeof(NewTex))) {
+      g_nsent = marked;   // not handed over: send it with a later frame
+      break;
+    }
     NewTex *n = &s->tex[s->ntex++];
     n->serial = (uint32_t)b[i * 5 + 3];
     n->water = (b[i * 5 + 4] & kWater) != 0;
@@ -283,11 +318,17 @@ int hdt_capture(const uint16_t *screen, uint8_t *mask, long frame) {
     n->w = size[0];
     n->h = size[1];
     n->rgba = malloc((size_t)size[0] * size[1] * 4);
+    if (!n->rgba) {
+      s->ntex--;
+      g_nsent = marked;
+      break;
+    }
     memcpy(n->rgba, rgba, (size_t)size[0] * size[1] * 4);
   }
   s->frame = frame;
   s->serial++;
   LeaveCriticalSection(&g_tlock);
+  if (resend) hdt_resend();   // the fast path marked those serials sent
   port_course_textures_done();
   return 1;
 }
@@ -324,7 +365,7 @@ static struct {
   LONG serial;
   uint8_t *wcode;
   float *wheight;
-  int map_w, map_h, cap_map;
+  int map_w, map_h, cap_map, cap_wheight;
   LONG map_serial;
   TerrainTarget targets[2];
   SDL_Vertex *sv;
@@ -351,28 +392,31 @@ static void take(SDL_Renderer *r, long shown) {
     LeaveCriticalSection(&g_tlock);
     return;
   }
-  GROW(R.verts, R.cap_verts, s->nverts * 8, sizeof(float));
+  // Every buffer first: on failure the scene stays pending and the last
+  // complete ground keeps drawing until memory allows the hand-over.
+  int map = s->map_serial != R.map_serial && s->map_w > 0;
+  if (!GROW(R.verts, R.cap_verts, s->nverts * 8, sizeof(float)) || !GROW(R.world, R.cap_world, s->nverts * 3, sizeof(float)) ||
+      !GROW(R.normals, R.cap_normals, s->nverts * 3, sizeof(float)) || !GROW(R.materials, R.cap_materials, s->nbatches, 1) ||
+      !GROW(R.batches, R.cap_batches, s->nbatches * 5, sizeof(int32_t)) ||
+      (map && (!GROW(R.wcode, R.cap_map, s->map_w * s->map_h, 1) || !GROW(R.wheight, R.cap_wheight, s->map_w * s->map_h, sizeof(float))))) {
+    LeaveCriticalSection(&g_tlock);
+    return;
+  }
   memcpy(R.verts, s->verts, (size_t)s->nverts * 8 * sizeof(float));
   R.nverts = s->nverts;
-  GROW(R.world, R.cap_world, s->nverts * 3, sizeof(float));
   memcpy(R.world, s->world, (size_t)s->nverts * 3 * sizeof(float));
-  GROW(R.normals, R.cap_normals, s->nverts * 3, sizeof(float));
   memcpy(R.normals, s->normals, (size_t)s->nverts * 3 * sizeof(float));
   R.light_model = s->light_model;
   R.height_pixels=s->height_pixels;
-  GROW(R.materials,R.cap_materials,s->nbatches,1);
   memcpy(R.materials,s->materials,(size_t)s->nbatches);
   memcpy(R.view, s->view, sizeof R.view);
-  if (s->map_serial != R.map_serial && s->map_w > 0) {
-    GROW(R.wcode, R.cap_map, s->map_w * s->map_h, 1);
-    R.wheight = realloc(R.wheight, (size_t)R.cap_map * sizeof(float));
+  if (map) {
     memcpy(R.wcode, s->wcode, (size_t)s->map_w * s->map_h);
     memcpy(R.wheight, s->wheight, (size_t)s->map_w * s->map_h * sizeof(float));
     R.map_w = s->map_w;
     R.map_h = s->map_h;
     R.map_serial = s->map_serial;
   }
-  GROW(R.batches, R.cap_batches, s->nbatches * 5, sizeof(int32_t));
   memcpy(R.batches, s->batches, (size_t)s->nbatches * 5 * sizeof(int32_t));
   R.nbatches = s->nbatches;
   R.tw = s->tw;
@@ -386,22 +430,29 @@ static void take(SDL_Renderer *r, long shown) {
         t = NULL;
       }
     }
-    if (t) {
-      SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
+    // A failed upload keeps the working texture it would replace. With none,
+    // it keeps its pixels and no texture: render_at retries it, as after a
+    // device reset. Dropping it would lose that ground for good.
+    int keep_old = 0;
+    if (n->rgba) {
+      if (t) SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);
       int found = -1;
       if (mods_get_int("fixes.terrain_cache", 1))
         for (int j = R.ntex - 1; j >= 0; j--) if (R.tex[j].serial == n->serial) { found = j; break; }
-      if (found >= 0) {
-        SDL_DestroyTexture(R.tex[found].tex);
+      if (found >= 0 && !t && R.tex[found].tex) {
+        keep_old = 1;
+      } else if (found >= 0) {
+        if (R.tex[found].tex) SDL_DestroyTexture(R.tex[found].tex);
         free(R.tex[found].rgba);
         R.tex[found] = (TexEntry){n->serial,t,n->w,n->h,n->water,n->rgba};
       } else {
-        GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry));
-        R.tex[R.ntex++] = (TexEntry){n->serial,t,n->w,n->h,n->water,n->rgba};
+        if (GROW(R.tex, R.cap_tex, R.ntex + 1, sizeof(TexEntry))) R.tex[R.ntex++] = (TexEntry){n->serial,t,n->w,n->h,n->water,n->rgba};
+        else keep_old = 2;   // no room to record it: dropped, as before this cache existed
       }
     }
     if (n->water) water_take_texture(n->serial, n->w, n->h, n->rgba);   // task-78: the water pass keeps its own copy
-    if(!t)free(n->rgba);
+    if (keep_old == 2 && t) SDL_DestroyTexture(t);
+    if (keep_old) free(n->rgba);
   }
   s->ntex = 0;
   R.serial = s->serial;
@@ -457,7 +508,7 @@ static SDL_Texture *render_at(SDL_Renderer *r, int w, int h, long shown, float o
     int first = b[0], count = b[1], flags = b[4];
     SDL_Texture *tex = flags & kTextured ? find_tex((uint32_t)b[3]) : NULL;
     if ((flags & kTextured) && !tex) continue;
-    GROW(R.sv, R.cap_sv, count, sizeof(SDL_Vertex));
+    if (!GROW(R.sv, R.cap_sv, count, sizeof(SDL_Vertex))) continue;
     for (int i = 0; i < count; i++) {
       const float *v = draw_vertices + (size_t)(first + i) * 8;
       SDL_Vertex *o = &R.sv[i];

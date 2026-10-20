@@ -70,6 +70,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include "port/release_data.h"
 #include <windows.h>
+#include "platform/exe_path.h"
 
 #include <SDL.h>
 #include <limits.h>
@@ -322,7 +323,7 @@ static const char *const k_store_keys[] = {"hd", "display", "filter", "vsync", "
 
 static void read_settings(void) {
   char ini[MAX_PATH + 16], line[MAX_PATH + 32];
-  GetModuleFileNameA(NULL, ini, MAX_PATH);
+  exe_path_ansi(ini, MAX_PATH);
   char *slash = strrchr(ini, '\\');
   if (slash) strcpy(slash + 1, "golf.ini");
   FILE *f = fopen(ini, "r");
@@ -441,6 +442,7 @@ typedef struct {
   HANDLE timer;
   int profile;
   double profile_terrain,profile_shadow,profile_fx;
+  double prof[10];   // SIMGOLF_RENDER_PROFILE: upload, art_prepare, fill_art, hdt_render, relief, water, reflections, art, environment, lamps
   // smooth scrolling (canvas pixels): course[cur] is drawn at off * (1 - a),
   // a going 0 -> 1 over off_dur ms from off_t0; course[!cur] at that + prev_d.
   HdUiCamera cam;
@@ -823,8 +825,9 @@ static int snapshot_course(Rt *t, double now) {
     SDL_SetTextureBlendMode(t->zsnap, SDL_BLENDMODE_NONE);
     SDL_SetTextureScaleMode(t->zsnap, SDL_ScaleModeLinear);
   }
-  SDL_Texture *terrain = g_cfg.terrain ? hdt_render(t->r, d.w, d.h, g_cfg.edge_fix ? t->shown_serial : LONG_MAX) : NULL;
+  // Before hdt_render, which leaves its terrain texture as the target.
   SDL_Texture *was = SDL_GetRenderTarget(t->r);
+  SDL_Texture *terrain = g_cfg.terrain ? hdt_render(t->r, d.w, d.h, g_cfg.edge_fix ? t->shown_serial : LONG_MAX) : NULL;
   SDL_SetRenderTarget(t->r, t->zsnap);
   SDL_RenderSetClipRect(t->r, NULL);
   SDL_SetRenderDrawColor(t->r, 0, 0, 0, 255);
@@ -1088,6 +1091,7 @@ static int weather_receiver(Rt *t) {
   return 1;
 }
 
+#define PROF(i, ...) do { double prof_s_ = t->profile ? host_now_ms() : 0; __VA_ARGS__; if (t->profile) t->prof[i] += host_now_ms() - prof_s_; } while (0)
 static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh, double now) {
   t->profile_terrain=t->profile_shadow=t->profile_fx=0;
   EnvironmentSample sun = environment_sample(&t->environment, environment_light_seconds(&t->environment,environment_time(t, now)));
@@ -1122,11 +1126,12 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
   source_size(t->course_view, sw, sh);
   Rect d = fit(cw, ch, *sw, *sh, g_cfg.filter);
   double terrain_started=t->profile?host_now_ms():0;
-  SDL_Texture *terrain = t->course_view && g_cfg.terrain ? hdt_render(t->r, d.w, d.h, g_cfg.edge_fix ? t->shown_serial : LONG_MAX) : NULL;
+  SDL_Texture *terrain = NULL;
+  PROF(3, terrain = t->course_view && g_cfg.terrain ? hdt_render(t->r, d.w, d.h, g_cfg.edge_fix ? t->shown_serial : LONG_MAX) : NULL);
   HdtScene relief_scene;
   int geometry=t->environment.enabled&&terrain&&hdt_scene(&relief_scene);
   if(geometry&&(t->environment.relief_shadows||t->environment.material_wetness>0||t->environment.valley_mist>0)){
-    if(!course_relief_build(&t->relief,&relief_scene,FRAME_W,FRAME_H))course_relief_destroy(&t->relief);
+    PROF(4, if(!course_relief_build(&t->relief,&relief_scene,FRAME_W,FRAME_H))course_relief_destroy(&t->relief));
   }
   hd_art_relief(geometry?&t->relief:NULL,t->environment.relief_shadows);
   if(getenv("SIMGOLF_DEPTH_LOG")&&geometry){static double last;
@@ -1207,12 +1212,12 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
   if (terrain) {
     SDL_Rect dst = {cd.x, cd.y, cd.w, cd.h};
     SDL_RenderCopy(t->r, terrain, NULL, &dst);
-    water_draw(t->r, dst.x, dst.y, dst.w, dst.h, now);   // task-78: the water over the ground, under golf's sprites
+    PROF(5, water_draw(t->r, dst.x, dst.y, dst.w, dst.h, now));   // task-78: the water over the ground, under golf's sprites
   }
   SDL_Rect shadow_clip = {d.x, d.y, d.w, d.h};
   draw_cast_shadows(t, shadow_clip, cd.x, cd.y, k, terrain != NULL, now, 0);
-  draw_reflections(t,shadow_clip,cd.x,cd.y,k,now);
-  if (art >= 0) hd_art_draw(art, t->r, cd.x, cd.y, k);   // hi-res sprites (hd_art.c), in golf's order
+  PROF(6, draw_reflections(t,shadow_clip,cd.x,cd.y,k,now));
+  if (art >= 0) PROF(7, hd_art_draw(art, t->r, cd.x, cd.y, k));   // hi-res sprites (hd_art.c), in golf's order
   if (terrain || art >= 0) draw_layer(t, &t->overlay, dest, cd, *sw, *sh, t->premul);
   if (sliding) SDL_RenderSetClipRect(t->r, NULL);
   if (t->course_view) {   // task-41: the round ball, over the course and under golf's UI
@@ -1244,8 +1249,8 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     if (fx_ready || t->environment.black_background) {
       grade.overlay_suppressed = 1;
     }
-    environment_draw(&t->environment_renderer, t->r, course, &grade,
-                     seconds, view.x, view.y, view.scale);
+    PROF(8, environment_draw(&t->environment_renderer, t->r, course, &grade,
+                     seconds, view.x, view.y, view.scale));
     if (fx_ready) {
       WeatherState weather = sample_weather(&t->environment, 1, seconds, sun.hour);
       weather.readability=t->environment.readability*sun.daylight;
@@ -1327,7 +1332,7 @@ static Rect compose(Rt *t, SDL_Texture *target, int cw, int ch, int *sw, int *sh
     double lamp_x=glide?d.x+t->zx*k:cd.x, lamp_y=glide?d.y+t->zy*k:cd.y;
     double night=t->environment.enabled?fmax(0,fmin(1,(.65-sun.daylight)/.65)):0;
     night=night*night*(3-2*night);
-    lamps_render(t->r,&t->lamps,(SDL_Rect){d.x,d.y,d.w,d.h},t->weather_receiver,FRAME_W,FRAME_H,lamp_x,lamp_y,lamp_scale,night);
+    PROF(9, lamps_render(t->r,&t->lamps,(SDL_Rect){d.x,d.y,d.w,d.h},t->weather_receiver,FRAME_W,FRAME_H,lamp_x,lamp_y,lamp_scale,night));
   }
   if (!layered || g_show_golf_ui) {
     float tx=(float)(glide?d.x+t->zx*k:d.x+ox*k);
@@ -1576,7 +1581,7 @@ static DWORD WINAPI render_main(void *arg) {
                                          SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
   t->timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
   FILE *fpslog = g_cfg.fpslog[0] ? fopen(g_cfg.fpslog, "w") : NULL;
-  if (fpslog) fprintf(fpslog, "t_ms,frame_ms,game_frames,course_dx,course_dy,cam_x,cam_y,cam_ox,cam_oy,zoom_on,zoom_view,zoom_s,zoom_x,zoom_y,live_zoom,t_draw%s\n",t->profile?",prepare_ms,compose_ms,submit_ms,present_ms,cpu_ms,terrain_ms,shadow_ms,fx_ms":"");
+  if (fpslog) fprintf(fpslog, "t_ms,frame_ms,game_frames,course_dx,course_dy,cam_x,cam_y,cam_ox,cam_oy,zoom_on,zoom_view,zoom_s,zoom_x,zoom_y,live_zoom,t_draw%s\n",t->profile?",prepare_ms,compose_ms,submit_ms,present_ms,cpu_ms,terrain_ms,shadow_ms,fx_ms,upload_ms,artprep_ms,fill_ms,hdt_ms,relief_ms,water_ms,refl_ms,art_ms,env_ms,lamps_ms":"");
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
   g_start_ok = 1;
   SetEvent(g_ready);
@@ -1608,10 +1613,12 @@ static DWORD WINAPI render_main(void *arg) {
       continue;
     }
     zoom_poll(t, host_now_ms());   // before the next frame replaces the picture a zoom glide starts from
-    upload(t, host_now_ms());
+    PROF(0, upload(t, host_now_ms()));
     zoom_settle(t, host_now_ms());
-    if (hd_art_prepare(t->r, 0) && t->shown_serial >= 0)   // textures the loader finished for the frame shown
-      fill_art(t, t->shown_serial);
+    int art_ready = 0;
+    PROF(1, art_ready = hd_art_prepare(t->r, 0));
+    if (art_ready && t->shown_serial >= 0)   // textures the loader finished for the frame shown
+      PROF(2, fill_art(t, t->shown_serial));
     int ow = 0, oh = 0, ww = 0, wh = 0;
     SDL_GetRendererOutputSize(t->r, &ow, &oh);
     SDL_GetWindowSize(g_window, &ww, &wh);
@@ -1689,6 +1696,7 @@ static DWORD WINAPI render_main(void *arg) {
               slide_y, t->cam.x, t->cam.y, t->cam.ox, t->cam.oy, t->zon, zv, t->zon ? t->zs : 1.0, t->zon ? t->zx : 0.0,
               t->zon ? t->zy : 0.0, t->cam.zoom, t_draw);   // t_draw: the time the picture's positions are for (task-68)
       if(t->profile)fprintf(fpslog,",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",t_draw-frame_started,composed-t_draw,submit_finished-composed,now-submitted,cpu_used,t->profile_terrain,t->profile_shadow,t->profile_fx);
+      if(t->profile){for(int i=0;i<10;i++)fprintf(fpslog,",%.3f",t->prof[i]);memset(t->prof,0,sizeof t->prof);}
       fputc('\n',fpslog);
       // The native process can exit without a render-thread CRT shutdown.
       // Keep complete profiling rows durable beyond the bounded one-second tail.

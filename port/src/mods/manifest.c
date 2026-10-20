@@ -528,6 +528,25 @@ int loadorder_read(ModLoadOrder *lo, const char *path) {
   return ok;
 }
 
+// A TOML basic string: names typed by hand may hold quotes, backslashes or spaces.
+static void toml_str(FILE *f, const char *s) {
+  fputc('"', f);
+  for (const unsigned char *c = (const unsigned char *)s; *c; c++) {
+    if (*c == '"' || *c == '\\') fprintf(f, "\\%c", *c);
+    else if (*c < 0x20 || *c == 0x7f) fprintf(f, "\\u%04X", *c);
+    else fputc(*c, f);
+  }
+  fputc('"', f);
+}
+
+// Bare keys stay bare so ordinary files read the same as before.
+static void toml_key(FILE *f, const char *s) {
+  int bare = *s != 0;
+  for (const char *c = s; *c && bare; c++) bare = isalnum((unsigned char)*c) || *c == '_' || *c == '-';
+  if (bare) fputs(s, f);
+  else toml_str(f, s);
+}
+
 int loadorder_write(const ModLoadOrder *lo, const char *path) {
   char tmp[700];
   if (!path || snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return 0;
@@ -536,11 +555,18 @@ int loadorder_write(const ModLoadOrder *lo, const char *path) {
   fprintf(f, "# Which mods load, in which order (docs/modding/CORE.md).\n"
              "# Written by tools/modctl; editing by hand is fine.\n"
              "# The profile \"vanilla\" is always there and always empty: the original game.\n\n");
-  fprintf(f, "active = \"%s\"\n", lo->active ? lo->active : "vanilla");
+  fputs("active = ", f);
+  toml_str(f, lo->active ? lo->active : "vanilla");
+  fputc('\n', f);
   for (int i = 0; i < lo->n; i++) {
     if (!strcmp(lo->p[i].name, "vanilla")) continue;
-    fprintf(f, "\n[profiles.%s]\nmods = [", lo->p[i].name);
-    for (int j = 0; j < lo->p[i].nmods; j++) fprintf(f, "%s\"%s\"", j ? ", " : "", lo->p[i].mods[j]);
+    fputs("\n[profiles.", f);
+    toml_key(f, lo->p[i].name);
+    fputs("]\nmods = [", f);
+    for (int j = 0; j < lo->p[i].nmods; j++) {
+      if (j) fputs(", ", f);
+      toml_str(f, lo->p[i].mods[j]);
+    }
     fprintf(f, "]\n");
   }
   // A failed write/replacement must never destroy the previous profile.
