@@ -32,6 +32,9 @@ typedef struct UiText {
   } f[UIT_FILES];
   SDL_Texture *atlas;
   Uint32 atlas_retry_at;  // next attempt if creating GPU glyph atlas failed
+  Uint32 font_retry_at, pixels_retry_at;
+  int upload_errors;
+  char font_dir[1024];
   uint8_t *alpha;
   int aw, ah, shelf_x, shelf_y, shelf_h;
   int dirty, dx0, dy0, dx1, dy1;

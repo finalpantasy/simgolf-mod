@@ -18,6 +18,8 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
+Version **0.1.25** repairs the reported sound-allocation crash, disappearing golfer-card text, and HD water covering raised landmark foundations. Clubhouse pairing now includes a per-round **Start a story** switch. See the [changelog](CHANGELOG.md) for the complete repair list.
+
 ## New features and improvements over vanilla
 
 ### Mod settings in the game

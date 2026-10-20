@@ -2155,8 +2155,8 @@ int hd_present(const uint16_t *screen) {
   InterlockedIncrement(&g_frame_serial);
   LeaveCriticalSection(&g_lock);
   const char *temperature_units=mods_get("environment.temperature_units");
-  hudf_publish_weather(course&&environment.enabled&&mods_get_int("environment.report_icon",1),
-    weather_condition(&report_state),report_state.night>.5,g_air.initialized,g_air.c,g_air.rh,
+  hudf_publish_weather(course&&mods_get_int("environment.report_icon",1),
+    environment.enabled ? weather_condition(&report_state) : -1,report_state.night>.5,environment.enabled&&g_air.initialized,g_air.c,g_air.rh,
     !temperature_units||strcmp(temperature_units,"celsius"));
   weather_audio_publish(&weather_state, environment.weather_volume,
     g_environment_running && environment.sound);

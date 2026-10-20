@@ -538,7 +538,9 @@ void gc_begin(int slot) {
   if (!bb || w < CARD_W || h < CARD_H) return;
   size_t need = (size_t)CARD_W * CARD_H;
   if (need > g_save_cap) {
-    g_save = realloc(g_save, need * 2);
+    uint16_t *next = realloc(g_save, need * 2);
+    if (!next) return;
+    g_save = next;
     g_save_cap = need;
   }
   if (!g_save) return;

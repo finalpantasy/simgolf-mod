@@ -17,6 +17,18 @@
       [
         "gw_popover_text(0,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);",
         "shot_readout_text(3,(char *)&DAT_0051a068,0x196,0x248 + HD_UI_DY,0x80000018);"
+      ],
+      [
+        "ppuStack_1230 = &PTR_s_Power_Hitter_004c2c3c;",
+        "shot_skills_reset();\n        ppuStack_1230 = &PTR_s_Power_Hitter_004c2c3c;"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040f5c0": [
+      [
+        "ppuStack_1230 = &PTR_s_Power_Hitter_004c2c3c;",
+        1
       ]
     ]
   }

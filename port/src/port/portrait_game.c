@@ -10,6 +10,7 @@
 #include "mods/mods.h"
 #include "port/roster.h"
 #include <stdint.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -294,6 +295,54 @@ static int identity(int profile, int slot, int *male, int *head, int *expr, int 
   *body = (r[0x23] >> 4) & 3; *child = !!(r[0x2c] & 8);
   return 1;
 }
+
+// The paired match skill cards use the original page, not the profile panel.
+// Reuse the same selected face and fitting as the profile before the original
+// head is drawn; body, skill bars, clicks and missing-art fallback stay original.
+uint16_t *gdi_dib_at(uintptr_t, int *, int *, int *, int *);
+int portrait_skill_head(int slot, int x, int y) {
+  if (!enabled() || slot < 0 || slot >= 156) return 0;
+  settings();
+  int profile = *(int16_t *)(uintptr_t)(0x57956e + slot * 256);
+  int male, head, expr, body, child;
+  if (!identity(profile, slot, &male, &head, &expr, &body, &child)) return 0;
+  uint32_t wrap = R32(0x4c1570);
+  if (!portrait_memory_readable(wrap, 8)) return 0;
+  uint32_t surface = R32(wrap + 4);
+  if (!portrait_memory_readable(surface, 0x4c4)) return 0;
+  int width, height, pitch, is565;
+  uint16_t *pixels = gdi_dib_at(R32(surface + 0x4c0), &width, &height, &pitch, &is565);
+  if (!pixels) return 0;
+  Sheet *hs = sheet(male ? "Heads/sim_MALE_all_expressionsflat.pcx" : "Heads/sim_FEMALE_all_expressionsflat.pcx");
+  if (!hs) return 0;
+  uint32_t *face = calloc(360 * 480, sizeof *face);
+  if (!face) return 0;
+  int replaced = replacement(face,360,480,hs,(head/2)*100,(head&1)*372+4+expr*124,
+                             90,120,0,0,male,head,expr,child,profile);
+  if (replaced) for (int dy = 0; dy < 120; dy++) for (int dx = 0; dx < 90; dx++) {
+    int ox = x + dx, oy = y - 20 + dy;
+    if (ox < 0 || oy < 0 || ox >= width || oy >= height) continue;
+    unsigned a=0,r=0,g=0,b=0;
+    for (int sy=0;sy<4;sy++) for (int sx=0;sx<4;sx++) {
+      uint32_t v=face[(dy*4+sy)*360+dx*4+sx]; unsigned alpha=v>>24;
+      a+=alpha; r+=((v>>16)&255)*alpha; g+=((v>>8)&255)*alpha; b+=(v&255)*alpha;
+    }
+    if (!a) continue;
+    r/=a; g/=a; b/=a; a=(a+8)/16;
+    uint16_t *dst=pixels+(ptrdiff_t)oy*pitch+ox, old=*dst;
+    unsigned dr=((old>>(is565?11:10))&31)*255/31;
+    unsigned dg=((old>>5)&(is565?63:31))*255/(is565?63:31);
+    unsigned db=(old&31)*255/31;
+    r=(r*a+dr*(255-a)+127)/255; g=(g*a+dg*(255-a)+127)/255; b=(b*a+db*(255-a)+127)/255;
+    *dst=(uint16_t)((r>>3)<<(is565?11:10) | (g>>(is565?2:3))<<5 | b>>3);
+  }
+  free(face);
+  if (replaced && getenv("SIMGOLF_PORTRAITS_LOG")) fprintf(stderr,
+    "portrait: skill card slot %d profile %d head %d expression %d character %d\n",
+    slot,profile,head,expr,roster_character(profile));
+  return replaced;
+}
+
 int portrait_profile(int profile, int art) {
   if (!enabled()) { profile_key = 0; return 0; }
   settings();

@@ -1,3 +1,4 @@
+#include "port/ui/ui_signed_rating.h"
 // Frosted Mint course HUD screen, see ui_hud.h. Layout: docs/ui/DESIGN_SYSTEM.md
 // section 4 (D5); what each control does in the game: docs/ui/HUD_DISPATCH.md.
 #include "port/ui/ui_hud.h"
@@ -69,19 +70,19 @@ static void weather_icon(UiCtx *c,const HudSnap *s,UiRect r) {
   static const char *const names[]={"Sunny","Partly cloudy","Overcast","Light rain","Rain","Thunderstorm"};
   int kind=s->weather_kind>=0&&s->weather_kind<=5?s->weather_kind:0;
   UiIcon icon=kind==0&&s->weather_night?UI_ICON_WEATHER_MOON:icons[kind];
-  const char *label=kind==0&&s->weather_night?"Clear night":names[kind];
+  const char *label=s->weather_kind < 0 ? "Enhanced weather off" : kind==0&&s->weather_night?"Clear night":names[kind];
   char values[48],tip[128];weather_values(s,values,sizeof values);
   if(s->weather_air_valid)snprintf(tip,sizeof tip,"%s, %s humidity",label,values);
   else snprintf(tip,sizeof tip,"%s",label);
   uint32_t id=ui_id("hud.weather");
   ui_hit(c,r,0,id,UI_HIT_BLOCK|UI_HIT_INTERACT);
-  ui_icon(c,icon,ui_rect(r.x,r.y,ui_s(c,30),r.h),ui_s(c,22),ui_tokens(c)->accent_soft_text);
+  ui_icon(c,icon,ui_rect(r.x,r.y,ui_s(c,30),r.h),ui_s(c,22),s->weather_kind < 0 ? ui_tokens(c)->text_tertiary : ui_tokens(c)->accent_soft_text);
   if(s->weather_air_valid)ui_text_in(c,ui_rect(r.x+ui_s(c,34),r.y,r.w-ui_s(c,34),r.h),
     UI_TYPE_CAPTION,ui_tokens(c)->text_primary,values,0);
   ui_tooltip(c,id,r,tip);
   if(getenv("SIMGOLF_WEATHER_HUD_LOG")) {
     static int last=-1,hover=-1,last_unit=-1;static float last_x,last_y;
-    int state=kind+s->weather_night*8;
+    int state=s->weather_kind<0?-2:kind+s->weather_night*8;
     if(last!=state||last_x!=r.x||last_y!=r.y||last_unit!=s->weather_fahrenheit) {
       UiRect screen=ui_screen(c);
       fprintf(stderr,"weather: badge kind %d night %d rect %.2f %.2f %.2f %.2f screen %.0f %.0f label %s\n",
@@ -137,7 +138,7 @@ static void capsule(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *
   else ui_hud_money(money, sizeof money, s->money);
   if (s->cheat && !s->sandbox) strncat(money, "*", sizeof money - strlen(money) - 1);
   snprintf(fun, sizeof fun, "%d", s->fun);
-  snprintf(skill, sizeof skill, "%d.%02d", s->skill_x100 / 100, (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100);
+  ui_signed_rating(skill, sizeof skill, s->skill_x100);
   snprintf(golfers, sizeof golfers, "%d", s->golfers);
   snprintf(tip, sizeof tip, "%s, %s", s->course, s->date);
   if (dens == 1) ui_push_scale(c, 0.7f);
@@ -783,8 +784,9 @@ static UiRect hub(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *ar
     UiRect mr = ui_rect(cx - R + ui_s(c, 14), y, 2 * R - ui_s(c, 28), nf.line);
     ui_hit(c, mr, 0, mid, UI_HIT_BLOCK | UI_HIT_INTERACT);
     char tip[160];
-    snprintf(tip, sizeof tip, "%s. Fun %d, skill %d.%02d, %d golfers", s->course, s->fun, s->skill_x100 / 100,
-             (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100, s->golfers);
+    char rating[24];
+  ui_signed_rating(rating, sizeof rating, s->skill_x100);
+  snprintf(tip, sizeof tip, "%s. Fun %d, skill %s, %d golfers", s->course, s->fun, rating, s->golfers);
     ui_tooltip(c, mid, mr, tip);
     float sw = ui_stat_width(c, UI_ICON_COINS, money, NULL);
     ui_stat(c, cx - sw / 2, y + nf.line / 2, UI_ICON_COINS, money, NULL);
@@ -814,8 +816,9 @@ static void stats_box(UiCtx *c, const HudSnap *s, UiRect box, Acts *a, int row) 
   float segw = ui_segmented_width(c, none, seg_icons, 2), segh = ui_s(c, 32);
   uint32_t mid = ui_id("hud.stats");
   char tip[160];
-  snprintf(tip, sizeof tip, "%s. Fun %d, skill %d.%02d, %d golfers", s->course, s->fun, s->skill_x100 / 100,
-           (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100, s->golfers);
+  char rating[24];
+  ui_signed_rating(rating, sizeof rating, s->skill_x100);
+  snprintf(tip, sizeof tip, "%s. Fun %d, skill %s, %d golfers", s->course, s->fun, rating, s->golfers);
   int sel = s->paused ? 1 : 0, want = sel;
   if (row) {   // money and date at the left, play/pause at the right
     UiRect tr = ui_rect(box.x, box.y, box.w - segw - ui_s(c, 6), box.h);
@@ -1042,7 +1045,7 @@ static void stat_texts(const HudSnap *s, char *money, char *fun, char *skill, ch
   if (s->sandbox) snprintf(money, 32, "Unlimited");
   else ui_hud_money(money, 32, s->money);
   snprintf(fun, 16, "%d", s->fun);
-  snprintf(skill, 16, "%d.%02d", s->skill_x100 / 100, (s->skill_x100 < 0 ? -s->skill_x100 : s->skill_x100) % 100);
+  ui_signed_rating(skill, 16, s->skill_x100);
   snprintf(golfers, 16, "%d", s->golfers);
 }
 
@@ -1241,6 +1244,28 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
     float x = stats_row(c, s, cl.x + bellw + weather_w + pad, cy, 0, 0) + pad;
     x = ui_text(c, x, floorf(cy + ui_font(c, UI_TYPE_CAPTION).px * 0.36f + 0.5f), UI_TYPE_CAPTION, ui_tokens(c)->text_secondary, s->date);
     speed(c, s, x + ui_s(c, 12), cy, a);
+    {
+      static const UiIcon award_icons[5] = {UI_ICON_GOLF_BALL, UI_ICON_STAR, UI_ICON_TROPHY, UI_ICON_HEART, UI_ICON_HOUSE};
+      static const char *const award_tips[5] = {"Hole awards", "Course rating stars", "Competition points", "Completed stories", "Home sites available"};
+      char values[5][24]; float widths[5], total = ui_s(c, 24);
+      for (int i = 0; i < 5; i++) {
+        int value = i < 4 ? s->ranking[i] : s->waiting;
+        snprintf(values[i], sizeof values[i], "%d", value > 0 ? value : 0);
+        widths[i] = ui_stat_width(c, award_icons[i], values[i], NULL);
+        total += widths[i] + (i ? ui_s(c, 16) : 0);
+      }
+      UiRect awards = ui_rect(cl.x + cl.w - total, cl.y + cl.h + ui_s(c, 6), total, ui_s(c, 32));
+      ui_panel(c, awards, ui_s(c, 12), UI_PANEL_READABLE);
+      float ax = awards.x + ui_s(c, 12), ay = awards.y + awards.h / 2;
+      for (int i = 0; i < 5; i++) {
+        uint32_t id = ui_idi(ui_id("hud.award"), i);
+        UiRect hit = ui_rect(ax, awards.y, widths[i], awards.h);
+        ui_hit(c, hit, 0, id, UI_HIT_BLOCK | UI_HIT_INTERACT);
+        ui_tooltip(c, id, hit, award_tips[i]);
+        ui_stat(c, ax, ay, award_icons[i], values[i], NULL);
+        ax += widths[i] + ui_s(c, 16);
+      }
+    }
     if (hud->original_bottom) return; // native wheel and trays own this region
     // build toolbar at the bottom left: one small button; it opens the category row, a click on the
     // course or Esc folds it away again (hud_frosted.c), the first button folds it too
@@ -1478,7 +1503,8 @@ static void course_tray(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const
       Tile *tl = &tiles[n];
       memset(tl, 0, sizeof *tl);
       tl->name = k_amenities[i].name;
-      tl->price = "";
+      snprintf(prices[n], sizeof prices[n], "%d available", s->waiting > 0 ? s->waiting : 0);
+      tl->price = k_amenities[i].tool == 5 ? prices[n] : "";
       tl->art = art ? art[HUD_ART_AMENITY + i] : NULL;
       tl->icon = k_amenities[i].icon;
       tl->selected = s->build_tool == k_amenities[i].tool && s->amenities_on;
@@ -2257,7 +2283,9 @@ static void shot_readout(UiCtx *c, const HudSnap *s, int original_bottom) {
   const UiTokens *t = ui_tokens(c);
   UiRect scr = ui_screen(c);
   float pad = ui_s(c, 16), row = ui_s(c, 26), head = ui_s(c, 30);
-  float w = fminf(ui_s(c, 380), scr.w - 2 * pad), h = 2 * pad + head + SHOT_READOUT_LINES * row;
+  int skill_rows = 0;
+  for (int i = 0; i < SHOT_SKILL_COUNT; i++) if (s->shot_skills.active & (1u << i)) skill_rows++;
+  float w = fminf(ui_s(c, 380), scr.w - 2 * pad), h = 2 * pad + head + (SHOT_READOUT_LINES + skill_rows) * row;
   float clearance = original_bottom && s->canvas_h > 0 ? 225 * scr.h / s->canvas_h : ui_s(c, 80);
   UiRect r = ui_rect_round(ui_rect(scr.x + scr.w - pad - w, scr.y + scr.h - clearance - h, w, h));
   ui_panel(c, r, ui_s(c, 20), UI_PANEL_STRONG);
@@ -2271,6 +2299,11 @@ static void shot_readout(UiCtx *c, const HudSnap *s, int original_bottom) {
     else snprintf(line, sizeof line, "%s", s->shot_text[i]);
     ui_text_fit(c, ui_rect(r.x + pad, r.y + pad + head + i * row, w - 2 * pad, row), UI_TYPE_BODY,
                 t->text_primary, line, 0);
+  }
+  int skill_row = 0;
+  for (int i = 0; i < SHOT_SKILL_COUNT; i++) if (s->shot_skills.active & (1u << i)) {
+    ui_text_fit(c, ui_rect(r.x + pad, r.y + pad + head + (SHOT_READOUT_LINES + skill_row++) * row,
+      w - 2 * pad, row), UI_TYPE_BODY, t->accent_soft_text, s->shot_skills.text[i], 0);
   }
   if (getenv("SIMGOLF_FRONTEND_LOG")) {
     static char last[SHOT_READOUT_LINES][SHOT_READOUT_TEXT];

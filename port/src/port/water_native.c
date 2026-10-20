@@ -72,6 +72,7 @@ static int cur_look(void) {
 
 static volatile LONG g_mode = -1;     // 1: display.water=hd (game thread writes, render thread reads)
 static volatile LONG g_works;         // 1 once the pass has drawn, -1 when it can't run
+static volatile LONG g_occlusion = 1;
 static volatile float g_wind_dir = -1000, g_wind_speed = -1;   // task-79 override (-1000: the look's own)
 
 // water.clip: record the next frames to a video (look tests; game paused by the caller)
@@ -86,6 +87,7 @@ void water_poll(void) {
   unsigned s = mods_serial();
   if (s == g_seen_serial && g_mode >= 0) return;
   g_seen_serial = s;
+  g_occlusion = mods_get_int("fixes.water_occlusion", 1) != 0;
   const char *env = getenv("SIMGOLF_WATER");
   const char *v = env && *env ? env : mods_get("display.water");
   // Realistic is the default with the HD presentation; scripted runs that keep the plain build's
@@ -235,6 +237,12 @@ static struct {
   ID3D11InputLayout *il;
   ID3D11Buffer *cb, *vb;
   int vb_cap;
+  ID3D11Buffer *depth_vb;
+  ID3D11Texture2D *depth;
+  ID3D11DepthStencilView *depth_view;
+  ID3D11DepthStencilState *depth_write, *depth_read;
+  int depth_w, depth_h, depth_count;
+  long depth_serial;
   ID3D11SamplerState *s_wrap, *s_clamp, *s_point;
   ID3D11BlendState *b_water, *b_add;
   ID3D11RasterizerState *rs;
@@ -838,6 +846,53 @@ static void build_geometry(const HdtScene *sc) {
   }
 }
 
+// Opaque ground and water in one depth pass, using the same projected/world
+// vertices as the visible terrain. Blended path overlays do not add surfaces.
+// Retain GPU buffers between frames; a failed rebuild keeps Original water.
+static int prepare_depth(const HdtScene *sc, int w, int h) {
+  if (!W.depth_view || W.depth_w != w || W.depth_h != h) {
+    REL(W.depth_view); REL(W.depth);
+    D3D11_TEXTURE2D_DESC d = {0};
+    d.Width=w; d.Height=h; d.MipLevels=d.ArraySize=1;
+    d.Format=DXGI_FORMAT_D16_UNORM; d.SampleDesc.Count=1;
+    d.Usage=D3D11_USAGE_DEFAULT; d.BindFlags=D3D11_BIND_DEPTH_STENCIL;
+    if (FAILED(ID3D11Device_CreateTexture2D(W.dev,&d,NULL,&W.depth)) ||
+        FAILED(ID3D11Device_CreateDepthStencilView(W.dev,(ID3D11Resource *)W.depth,NULL,&W.depth_view))) return 0;
+    W.depth_w=w; W.depth_h=h;
+  }
+  if (W.depth_vb && W.depth_serial == sc->serial) return 1;
+  int n=0;
+  for(int k=0;k<sc->nbatches;k++) if(!(sc->batches[k*5+4]&1)) {
+    int first=sc->batches[k*5],count=sc->batches[k*5+1];
+    if(first<0 || count<0 || count%3 || count>750000-n || first>750000-count) return 0;
+    n+=count;
+  }
+  if(!n) return 0;
+  float *vertices=calloc((size_t)n*kFloats,sizeof(float));
+  if(!vertices) return 0;
+  int at=0;
+  for(int k=0;k<sc->nbatches;k++) {
+    const int32_t *b=sc->batches+k*5;
+    if(b[4]&1) continue;
+    for(int i=0;i<b[1];i++,at++) {
+      const float *s=sc->verts+(size_t)(b[0]+i)*8;
+      float *v=vertices+(size_t)at*kFloats;
+      v[0]=s[0];v[1]=s[1];
+      memcpy(v+8,sc->world+(size_t)(b[0]+i)*3,3*sizeof(float));
+    }
+  }
+  D3D11_BUFFER_DESC d={0};
+  d.ByteWidth=(UINT)((size_t)n*kFloats*sizeof(float));
+  d.Usage=D3D11_USAGE_IMMUTABLE; d.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+  D3D11_SUBRESOURCE_DATA data={0};data.pSysMem=vertices;
+  ID3D11Buffer *next=NULL;
+  HRESULT hr=ID3D11Device_CreateBuffer(W.dev,&d,&data,&next);
+  free(vertices);
+  if(FAILED(hr)) return 0;
+  REL(W.depth_vb);W.depth_vb=next;W.depth_count=n;W.depth_serial=sc->serial;
+  return 1;
+}
+
 // ------------------------------------------------------------------ the wind sea
 
 // 32 waves sampled from the Pierson-Moskowitz spectrum for a wind of u m/s
@@ -959,6 +1014,11 @@ static int init(SDL_Renderer *r) {
   bd.RenderTarget[0].SrcBlend = bd.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
   bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
   ok = ok && SUCCEEDED(ID3D11Device_CreateBlendState(W.dev, &bd, &W.b_add));
+  D3D11_DEPTH_STENCIL_DESC dd={0};
+  dd.DepthEnable=TRUE;dd.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;dd.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
+  ok = ok && SUCCEEDED(ID3D11Device_CreateDepthStencilState(W.dev,&dd,&W.depth_write));
+  dd.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;
+  ok = ok && SUCCEEDED(ID3D11Device_CreateDepthStencilState(W.dev,&dd,&W.depth_read));
   D3D11_RASTERIZER_DESC rd = {0};
   rd.FillMode = D3D11_FILL_SOLID;
   rd.CullMode = D3D11_CULL_NONE;
@@ -1123,6 +1183,12 @@ void water_draw(SDL_Renderer *r, int x, int y, int w, int h, double now_ms) {
     W.scene_serial = sc.serial;
     build_geometry(&sc);
   }
+  int occlusion=g_occlusion;
+  if(occlusion && W.nvtx && !prepare_depth(&sc,(int)td.Width,(int)td.Height)) {
+    ID3D11DeviceContext1_SwapDeviceContextState(W.ctx1,prev,NULL);
+    REL(prev);REL(rtv);
+    return;  // complete Original terrain is already present; no timing query began
+  }
   int slot = W.qn & 3;
   ID3D11DeviceContext_Begin(W.ctx, (ID3D11Asynchronous *)W.qd[slot]);
   ID3D11DeviceContext_End(W.ctx, (ID3D11Asynchronous *)W.q0[slot]);
@@ -1235,9 +1301,22 @@ void water_draw(SDL_Renderer *r, int x, int y, int w, int h, double now_ms) {
       scr.right = (LONG)ceilf((clip.x + clip.w) * sx), scr.bottom = (LONG)ceilf((clip.y + clip.h) * sy);
     }
     ID3D11DeviceContext_RSSetScissorRects(W.ctx, 1, &scr);
-    ID3D11DeviceContext_OMSetRenderTargets(W.ctx, 1, &rtv, NULL);
-    ID3D11DeviceContext_OMSetBlendState(W.ctx, W.b_water, NULL, 0xffffffff);
     UINT stride = kFloats * sizeof(float), off = 0;
+    if(occlusion) {
+      ID3D11DeviceContext_ClearDepthStencilView(W.ctx,W.depth_view,D3D11_CLEAR_DEPTH,1,0);
+      ID3D11DeviceContext_OMSetRenderTargets(W.ctx,0,NULL,W.depth_view);
+      ID3D11DeviceContext_OMSetDepthStencilState(W.ctx,W.depth_write,0);
+      ID3D11DeviceContext_IASetVertexBuffers(W.ctx,0,1,&W.depth_vb,&stride,&off);
+      ID3D11DeviceContext_IASetInputLayout(W.ctx,W.il);
+      ID3D11DeviceContext_IASetPrimitiveTopology(W.ctx,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+      ID3D11DeviceContext_VSSetShader(W.ctx,W.vs_water,NULL,0);
+      ID3D11DeviceContext_VSSetConstantBuffers(W.ctx,0,1,&W.cb);
+      ID3D11DeviceContext_PSSetShader(W.ctx,NULL,NULL,0);
+      ID3D11DeviceContext_Draw(W.ctx,W.depth_count,0);
+    }
+    ID3D11DeviceContext_OMSetRenderTargets(W.ctx, 1, &rtv, occlusion?W.depth_view:NULL);
+    ID3D11DeviceContext_OMSetDepthStencilState(W.ctx,occlusion?W.depth_read:NULL,0);
+    ID3D11DeviceContext_OMSetBlendState(W.ctx, W.b_water, NULL, 0xffffffff);
     ID3D11DeviceContext_IASetVertexBuffers(W.ctx, 0, 1, &W.vb, &stride, &off);
     ID3D11DeviceContext_IASetInputLayout(W.ctx, W.il);
     ID3D11DeviceContext_IASetPrimitiveTopology(W.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1321,6 +1400,8 @@ void water_device_reset(void) {
   REL(W.vs_water);REL(W.vs_quad);REL(W.vs_imp);
   REL(W.ps_water);REL(W.ps_sim);REL(W.ps_imp);REL(W.ps_fall);
   REL(W.il);REL(W.cb);REL(W.vb);W.vb_cap=0;
+  REL(W.depth_vb);REL(W.depth_view);REL(W.depth);REL(W.depth_write);REL(W.depth_read);
+  W.depth_w=W.depth_h=W.depth_count=0;W.depth_serial=-1;
   REL(W.s_wrap);REL(W.s_clamp);REL(W.s_point);
   REL(W.b_water);REL(W.b_add);REL(W.rs);REL(W.noise_srv);
   REL(W.info_srv);REL(W.info);

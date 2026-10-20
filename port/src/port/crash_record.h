@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <tlhelp32.h>
 
 // Independent of stdout/stderr: a GUI launch can lack usable CRT streams.
@@ -22,6 +23,10 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
     e->NumberParameters, e->NumberParameters > 0 ? (DWORD)e->ExceptionInformation[0] : 0,
     e->NumberParameters > 1 ? (DWORD)e->ExceptionInformation[1] : 0);
   DWORD written; int ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n;
+  for (DWORD i = 2; i < e->NumberParameters && i < EXCEPTION_MAXIMUM_PARAMETERS; i++) {
+    n = snprintf(line, sizeof line, "parameter %lu %08lx\r\n", i, (DWORD)e->ExceptionInformation[i]);
+    ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
+  }
 #if defined(_M_IX86) || defined(__i386__)
   n = snprintf(line, sizeof line,
     "EIP %08lx ESP %08lx EBP %08lx EAX %08lx EBX %08lx ECX %08lx EDX %08lx ESI %08lx EDI %08lx\r\n",
@@ -43,7 +48,16 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
   // Driver/Windows faults are outside the fixed game image. Record the
   // loaded image ranges so an ASLR address and stack can identify the DLL.
   // Use only basenames: installation and user directory names are irrelevant.
-  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+  HANDLE snapshot = INVALID_HANDLE_VALUE;
+  DWORD snapshot_error = 0;
+  // Windows can return ERROR_BAD_LENGTH while another thread loads a DLL.
+  // Retry that documented transient failure, with a bounded crash-time cost.
+  for (int attempt = 0; attempt < 8; attempt++) {
+    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+    if (snapshot != INVALID_HANDLE_VALUE) break;
+    snapshot_error = GetLastError();
+    if (snapshot_error != ERROR_BAD_LENGTH) break;
+  }
   if (snapshot != INVALID_HANDLE_VALUE) {
     MODULEENTRY32 module = {0};
     module.dwSize = sizeof module;
@@ -56,6 +70,21 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
       ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
     } while (Module32Next(snapshot, &module));
     CloseHandle(snapshot);
+  } else {
+    n = snprintf(line, sizeof line, "module snapshot failed error %lu\r\n", snapshot_error);
+    ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
+    // At least identify the fault image even when snapshot allocation fails.
+    MEMORY_BASIC_INFORMATION memory;
+    if (VirtualQuery(e->ExceptionAddress, &memory, sizeof memory) && memory.Type == MEM_IMAGE) {
+      char module_path[MAX_PATH];
+      DWORD length = GetModuleFileNameA((HMODULE)memory.AllocationBase, module_path, sizeof module_path);
+      if (length && length < sizeof module_path) {
+        const char *name = strrchr(module_path, '\\');
+        n = snprintf(line, sizeof line, "fault module %08lx %s\r\n",
+          (DWORD)(uintptr_t)memory.AllocationBase, name ? name + 1 : module_path);
+        ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
+      }
+    }
   }
   FlushFileBuffers(f); CloseHandle(f); return ok;
 }

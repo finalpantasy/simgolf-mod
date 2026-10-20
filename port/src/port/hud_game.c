@@ -361,6 +361,8 @@ static int g_prev_ss, g_prev_timer;
 static char g_prev_text[HUD_NEWS_TEXT];
 static int g_last_news_subject, g_last_news_seq;
 static char g_last_news_text[HUD_NEWS_TEXT];
+static int g_departure_seq;
+static double g_departure_until;
 
 static int news_history_on(void) {
   static unsigned seen = ~0u;
@@ -468,6 +470,28 @@ void hud_news_posted(void) {
   memcpy((void *)(uintptr_t)TEXT_BUF, keep, sizeof keep);
   memcpy((void *)(uintptr_t)0x58a528, numeric, sizeof numeric);
   G16(0x5a6d3c) = year;
+}
+
+// A departure is committed even when the original one-slot news strip refuses
+// its message. Preserve that event in modern history without changing the
+// original acceptance result, membership rules or random-number sequence.
+int FUN_0040cb00(unsigned color, int priority, int subject);
+void hud_departure_notice(int subject) {
+  if (FUN_0040cb00(0x80000000u, 0, subject) || !hud_on() || !news_history_on()) return;
+  HudMsg *m;
+  if (g_hist_n == HUD_MSG_MAX) {
+    memmove(g_hist, g_hist + 1, sizeof g_hist[0] * (HUD_MSG_MAX - 1));
+    m = &g_hist[HUD_MSG_MAX - 1];
+  } else m = &g_hist[g_hist_n++];
+  memset(m, 0, sizeof *m);
+  copy_str(m->text, sizeof m->text, (const char *)(uintptr_t)TEXT_BUF);
+  for (char *p = m->text; *p; p++) if (*p == '\n' || *p == '\r' || *p == '|') *p = ' ';
+  copy_str(m->date, sizeof m->date, g_snap.date);
+  m->t_ms = host_now_ms();
+  m->seq = g_departure_seq = ++g_hist_seq;
+  // Departure slots can be reused. Keep this historical notice unlinked.
+  g_departure_until = m->t_ms + 10000;
+  fprintf(stderr, "hud: retained departure %d: %s\n", m->seq, m->text);
 }
 
 // ------------------------------------------------------------------ weeds (task-112)
@@ -895,6 +919,10 @@ static void read_state(HudSnap *s) {
   s->fun = G32(0x59ae78);
   s->skill_x100 = G32(0x541cd8);
   s->waiting = G32(0x56d1b0);
+  s->ranking[0] = G32(0x5a9cac);
+  s->ranking[1] = G32(0x5a9cb0);
+  s->ranking[2] = G32(0x5787cc);
+  s->ranking[3] = G32(0x561258);
   int golfers = 0;
   for (int i = 0; i < 152; i++) {
     signed char hole = (signed char)G8(0x5794d9 + i * 0x100);
@@ -963,11 +991,16 @@ static void read_state(HudSnap *s) {
     g_news_seq = g_weed_seq;
   }
   s->news_seq = g_news_seq;
+  if (g_departure_seq && g_departure_until > host_now_ms() && !s->news_on) {
+    s->news_on = 1;
+    s->news_seq = g_departure_seq;
+  }
   s->msg_n = g_hist_n;
   memcpy(s->msgs, g_hist, sizeof g_hist[0] * (size_t)g_hist_n);
   read_pro(s, flags);
   if (!s->pro_out) shot_readout_reset();
   s->shot_readout = s->pro_shots && shot_readout_copy(s->shot_text);
+  shot_skills_copy(&s->shot_skills);
   read_design(s, flags);
   read_people(s);
 }

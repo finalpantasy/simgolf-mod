@@ -15,6 +15,7 @@
        "rp_pair_state(local_290,local_294,local_288,local_28c,local_280);\n  rp_frame();\n  FUN_00483d30();"],
       ["FUN_0045c030();",
        "local_294 = rp_pair_cursor_override(local_294);\n    rp_pair_state(local_290,local_294,local_288,local_28c,local_280);\n    rp_frame();\n    FUN_0045c030();"],
+      ["iVar7 = FUN_0045de80(local_278,uVar13);", "iVar7 = FUN_0045de80(local_278,uVar13);\n              rp_pair_story_apply(local_278,uVar13);"],
       ["return uVar4;", "rp_done();\n                pro_pairing_note(0);\n                return uVar4;"],
       ["return iVar7;", "rp_done();\n            pro_pairing_note(0);\n            return iVar7;"]
     ]
@@ -30,6 +31,7 @@
       ["FUN_00480c80(&DAT_00519a60);", 1],
       ["FUN_00483d30();", 1],
       ["FUN_0045c030();", 1],
+      ["iVar7 = FUN_0045de80(local_278,uVar13);", 1],
       ["return uVar4;", 1],
       ["return iVar7;", 1]
     ]

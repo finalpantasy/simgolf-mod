@@ -51,18 +51,19 @@ static void atlas_reset(UiText *t) {
   t->dy1 = t->ah;
 }
 
-int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
-  memset(t, 0, sizeof *t);
-  t->r = r;
+static int load_fonts(UiText *t) {
   int loaded = 0;
   for (int i = 0; i < UIT_FILES; i++) {
+    if (t->f[i].ok) { loaded++; continue; }
     char path[1024];
-    snprintf(path, sizeof path, "%s/PlusJakartaSans-%s.ttf", font_dir, k_cuts[i]);
+    snprintf(path, sizeof path, "%s/PlusJakartaSans-%s.ttf", t->font_dir, k_cuts[i]);
     t->f[i].weight = k_weights[i];
     t->f[i].info = calloc(1, sizeof(stbtt_fontinfo));
     t->f[i].data = read_file(path);
     if (!t->f[i].info || !t->f[i].data || !stbtt_InitFont(INFO(t, i), t->f[i].data, stbtt_GetFontOffsetForIndex(t->f[i].data, 0))) {
       fprintf(stderr, "ui: font %s not loaded\n", path);
+      free(t->f[i].info); free(t->f[i].data);
+      t->f[i].info = NULL; t->f[i].data = NULL;
       continue;
     }
     t->f[i].ok = 1;
@@ -83,12 +84,26 @@ int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
     }
     if (!ok) memset(t->f[i].tn, 0, sizeof t->f[i].tn);
   }
+  t->font_retry_at = loaded < UIT_FILES ? SDL_GetTicks() + 1000 : 0;
+  return loaded;
+}
+
+static void retry_fonts(UiText *t) {
+  if (t->font_retry_at && SDL_TICKS_PASSED(SDL_GetTicks(), t->font_retry_at)) load_fonts(t);
+}
+
+int uit_init(UiText *t, SDL_Renderer *r, const char *font_dir, float gamma) {
+  memset(t, 0, sizeof *t);
+  t->r = r;
+  snprintf(t->font_dir, sizeof t->font_dir, "%s", font_dir ? font_dir : "");
+  int loaded = load_fonts(t);
   t->gamma = gamma > 0 ? gamma : 1;
   for (int i = 0; i < 256; i++) t->curve[i] = (uint8_t)(powf(i / 255.0f, 1.0f / t->gamma) * 255.0f + 0.5f);
   t->aw = t->ah = 2048;
   t->alpha = malloc((size_t)t->aw * t->ah);
   if (!t->alpha) {
-    fprintf(stderr, "ui: cannot allocate glyph atlas pixels; text rendering disabled\n");
+    fprintf(stderr, "ui: cannot allocate glyph atlas pixels; will retry\n");
+    t->pixels_retry_at = SDL_GetTicks() + 1000;
     return loaded;  // callers may still show the UI using icons/art
   }
   if (r) {
@@ -115,6 +130,7 @@ void uit_free(UiText *t) {
 }
 
 static int pick(UiText *t, int weight) {
+  retry_fonts(t);
   int best = -1, bd = 1 << 30;
   for (int i = 0; i < UIT_FILES; i++) {
     if (!t->f[i].ok) continue;
@@ -223,28 +239,48 @@ static UitGlyph *glyph(UiText *t, int file, int px, int g) {
   return NULL;
 }
 
-static void upload(UiText *t) {
-  if (!t->dirty || !t->atlas) return;
+static int upload(UiText *t) {
+  if (!t->atlas) return 0;
+  if (!t->dirty) return 1;
   int w = t->dx1 - t->dx0, h = t->dy1 - t->dy0;
   if (w > 0 && h > 0) {
-    uint32_t *px = malloc((size_t)w * h * 4);
+    // A full 2048-square upload used a 16 MiB temporary allocation, exactly
+    // when a new card or device recovery is already under memory pressure.
+    int band = h < 32 ? h : 32;
+    uint32_t *px = malloc((size_t)w * band * 4);
     if (px) {
-      for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
-          px[(size_t)y * w + x] = (uint32_t)t->alpha[(size_t)(t->dy0 + y) * t->aw + t->dx0 + x] << 24 | 0xFFFFFFu;
-      SDL_Rect r = {t->dx0, t->dy0, w, h};
-      int uploaded = SDL_UpdateTexture(t->atlas, &r, px, w * 4) == 0;
+      int uploaded = 1;
+      for (int first = 0; first < h && uploaded; first += band) {
+        int rows = h - first < band ? h - first : band;
+        for (int y = 0; y < rows; y++)
+          for (int x = 0; x < w; x++)
+            px[(size_t)y * w + x] = (uint32_t)t->alpha[(size_t)(t->dy0 + first + y) * t->aw + t->dx0 + x] << 24 | 0xFFFFFFu;
+        SDL_Rect r = {t->dx0, t->dy0 + first, w, rows};
+        uploaded = SDL_UpdateTexture(t->atlas, &r, px, w * 4) == 0;
+      }
       free(px);
-      if (!uploaded) return;  // keep the dirty rectangle for retry
-    } else return;  // CPU allocation failed: do not mark glyphs uploaded
+      if (!uploaded) {
+        // A single transient upload can succeed on the very next draw. Only
+        // repeated failure retires the atlas and throttles its recreation.
+        if (++t->upload_errors >= 2) {
+          uit_device_reset(t);
+          t->atlas_retry_at = SDL_GetTicks() + 1000;
+        }
+        return 0;
+      }
+    } else return 0;  // CPU allocation failed: do not mark glyphs uploaded
   }
   t->dirty = 0;
+  t->upload_errors = 0;
+  return 1;
 }
 
 static void flush_text(UiText *t) {
   if (t->ni) {
-    upload(t);
-    SDL_RenderGeometry(t->r, t->atlas, t->v, t->nv, t->idx, t->ni);
+    if (upload(t) && SDL_RenderGeometry(t->r, t->atlas, t->v, t->nv, t->idx, t->ni) < 0) {
+      uit_device_reset(t);
+      t->atlas_retry_at = SDL_GetTicks() + 1000;
+    }
   }
   t->nv = t->ni = 0;
 }
@@ -284,6 +320,14 @@ void uit_metrics(UiText *t, int weight, float px, float *ascent, float *descent)
 float uit_draw(UiText *t, float x, float y, int weight, float px, const char *s, float tracking, UiColor c) {
   int f = pick(t, weight);
   if (f < 0 || !s || !*s) return x;
+  if (!t->alpha) {
+    Uint32 now = SDL_GetTicks();
+    if (t->pixels_retry_at && !SDL_TICKS_PASSED(now, t->pixels_retry_at)) return x;
+    t->alpha = malloc((size_t)t->aw * t->ah);
+    if (!t->alpha) { t->pixels_retry_at = now + 1000; return x; }
+    t->pixels_retry_at = 0;
+    atlas_reset(t);
+  }
   if (!t->atlas) {
     if (!t->r || !t->alpha) return x;
     Uint32 now = SDL_GetTicks();
@@ -390,6 +434,6 @@ int uit_prefix(UiText *t, int weight, float px, const char *s, float tracking, f
 
 void uit_device_reset(UiText *t) {
   if(t->atlas)SDL_DestroyTexture(t->atlas);
-  t->atlas=NULL;t->atlas_retry_at=0;t->nv=t->ni=0;
+  t->atlas=NULL;t->atlas_retry_at=0;t->upload_errors=0;t->nv=t->ni=0;
   t->dirty=1;t->dx0=t->dy0=0;t->dx1=t->aw;t->dy1=t->ah;
 }

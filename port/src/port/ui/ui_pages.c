@@ -1104,7 +1104,8 @@ static int draw_pairing(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
 
   char status[96];
   if (cancelling) snprintf(status, sizeof status, "Clearing selections and returning to the course.");
-  else if (picked >= 2) snprintf(status, sizeof status, "Two golfers selected. Start the round when ready.");
+  else if (picked >= 2) snprintf(status, sizeof status, "Chemistry: %s. Start the round when ready.",
+    s->ext[4] == 0 ? "Good" : s->ext[4] == 2 ? "Poor" : "Neutral");
   else snprintf(status, sizeof status, "Select %s more golfer%s to start the round.", picked == 1 ? "one" : "two", picked == 1 ? "" : "s");
   float header_y = in.y + ui_s(c, 48);
   ui_text_fit(c, ui_rect(in.x, header_y, in.w, hf.line), UI_TYPE_HEADING, t->text_secondary, status, 0);
@@ -1159,6 +1160,15 @@ static int draw_pairing(UiCtx *c, const RpSnap *s, RpAction *acts, int max) {
 
   float bw = ui_s(c, 210), bh = ui_s(c, 48);
   UiRect br = ui_rect(in.x + in.w - bw, footer_y, bw, bh);
+  if (s->ext[7]) {
+    UiRect sr = ui_rect(in.x,footer_y,ui_s(c,340),bh);
+    pf_ctl("stories",sr);
+    int on = s->ext[7] == 1;
+    if (ui_button(c,ui_id("pair.stories"),sr,on ? "Start a story: On" : "Start a story: Off",
+        on ? UI_ICON_CHECK : UI_ICON_NONE,UI_BTN_PILL,cancelling ? UI_DISABLED : 0) && !cancelling && na < max)
+      acts[na++] = (RpAction){RP_A_PAIR_STORY,!on};
+    ui_tooltip(c,ui_id("pair.stories"),sr,"On allows the original story selection. Off starts this round without a story.");
+  }
   pf_ctl("start", br);
   int can_start = picked == 2;
   if (ui_button(c, ui_id("pair.start"), br, "Start Round", UI_ICON_CHEV, UI_BTN_PRIMARY, can_start && !cancelling ? 0 : UI_DISABLED) && can_start && !cancelling && na < max)

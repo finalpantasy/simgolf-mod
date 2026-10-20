@@ -20,6 +20,7 @@
 #include "port/hd_native.h"
 #include "port/dialogs_frosted.h"
 #include "port/reports_frosted.h"
+#include "mods/mods.h"
 #include "port/portrait_game.h"
 #include "port/reports_handoff_policy.h"
 #include "port/grid.h"
@@ -69,6 +70,7 @@ static int g_pair_last_count = -1;
 static int g_pair_last_cursor = -999;
 static int g_pair_cursor_stable;
 static int g_pair_inj_row = -1;
+static int g_pair_stories = 1;
 
 // ------------------------------------------------------------------ the picture from before the report
 
@@ -341,13 +343,14 @@ void rp_begin(int kind) {
   g_iqn = 0;
   g_pair_cancel_state = 0;
   g_col = 0;
+  g_pair_stories = 1;
   g_dirty = 1;
   memset(&g_snap, 0, offsetof(RpSnap, it));
   g_snap.map.valid = 0;
   g_snap.magic = RP_MAGIC;
   g_snap.kind = kind;
   if (kind == RP_PHOTO) g_snap.ext[5] = g_serial + 1;   // a new board resets the renderer's history selection
-  if (kind == RP_END_YEAR || kind == RP_PAIRING) g_snap.ext[5] = g_serial + 1;
+  if (kind == RP_END_YEAR || kind == RP_PAIRING || kind == RP_TRACTS) g_snap.ext[5] = g_serial + 1;
   g_npic = 0;
   if (kind == RP_PROFILE) portrait_profile_reset();
   g_ph_n = 0;
@@ -759,6 +762,20 @@ void rp_pair_state(unsigned selected, int cursor, int count, int picked, int sty
   g_snap.ext[3] = picked;
   g_snap.ext[4] = style;
   g_snap.ext[6] = g_pair_cancel_state != 0;
+  g_snap.ext[7] = mods_get_int("ui.pair_story_choice", 1) ? (g_pair_stories ? 1 : 2) : 0;
+}
+
+// Manual-pair choice, applied after teeOffPair (0045de80) has performed its
+// normal draws and setup. Reuse its no-story state without changing RNG.
+void rp_pair_story_apply(int first, int second) {
+  if (!g_on || g_kind != RP_PAIRING || g_pair_stories || !mods_get_int("ui.pair_story_choice", 1)) return;
+  if (first < 0 || first >= 152 || second < 0 || second >= 152 || first == second) return;
+  int pair[2] = {first, second};
+  for (int i=0;i<2;i++) {
+    *(volatile int16_t *)(uintptr_t)(0x579568 + pair[i]*256) = -1;
+    *(volatile int16_t *)(uintptr_t)(0x579566 + pair[i]*256) = 0;
+  }
+  if (g_log_on()) fprintf(stderr,"reports: paired round without story slots %d,%d\n",first,second);
 }
 
 int rp_pair_cursor_override(int cursor) {
@@ -1157,6 +1174,14 @@ static void rp_frame_body(int present) {
   rpf_publish(&g_snap);
   RpAction a;
   while (rpf_take_action(&a)) {
+    if (a.kind == RP_A_PAIR_STORY) {
+      if (g_kind == RP_PAIRING && !g_pair_cancel_state && mods_get_int("ui.pair_story_choice", 1)) {
+        g_pair_stories = a.arg != 0;
+        g_snap.ext[7] = g_pair_stories ? 1 : 2;
+        if (g_log_on()) fprintf(stderr,"reports: pairing stories %s\n",g_pair_stories ? "on" : "off");
+      }
+      continue;
+    }
     if (a.kind == RP_A_CLOSE || a.kind == RP_A_TAB) {
       int action = a.kind == RP_A_CLOSE ? RP_HANDOFF_ACTION_CLOSE : RP_HANDOFF_ACTION_TAB;
       g_pending = rp_handoff_next_pending(g_pending, g_kind, action, a.arg);

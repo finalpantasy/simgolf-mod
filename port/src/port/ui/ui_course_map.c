@@ -156,7 +156,11 @@ static SDL_Texture *map_texture(UiCtx *c,const UiCourseMap *m,int width,int heig
   SDL_bool clipped=SDL_RenderIsClipEnabled(r);
   Uint8 red,green,blue,alpha; SDL_GetRenderDrawColor(r,&red,&green,&blue,&alpha);
   SDL_BlendMode blend;SDL_GetRenderDrawBlendMode(r,&blend);
-  SDL_SetRenderTarget(r,target);SDL_RenderSetViewport(r,NULL);SDL_RenderSetClipRect(r,NULL);
+  if (SDL_SetRenderTarget(r,target) != 0) {
+    SDL_DestroyTexture(target);
+    return NULL;
+  }
+  SDL_RenderSetViewport(r,NULL);SDL_RenderSetClipRect(r,NULL);
   SDL_SetRenderDrawColor(r,0,0,0,0);SDL_RenderClear(r);SDL_SetRenderDrawBlendMode(r,SDL_BLENDMODE_BLEND);
   UiRect area={4,4,(float)width-8,(float)height-8};
   Mesh mesh={0};
@@ -212,7 +216,7 @@ void ui_course_map_draw(UiCtx *c,const UiCourseMap *m,UiRect bounds) {
   }
   // Draw every route before every badge, so another hole's line cannot cross
   // out a number that has already been painted.
-  for(int i=0;i<18;i++) {
+  for(int i=0;m->mode != -1 && i<18;i++) {
     if(!m->hole[i].active || m->hole[i].n<2)continue;
     int n=m->hole[i].n;
     for(int j=1;j<n;j++) {
@@ -225,7 +229,7 @@ void ui_course_map_draw(UiCtx *c,const UiCourseMap *m,UiRect bounds) {
   }
   UiRect label[18];int labels=0;
   float radius=ui_s(c,11);
-  for(int i=0;i<18;i++) {
+  for(int i=0;m->mode != -1 && i<18;i++) {
     if(!m->hole[i].active || m->hole[i].n<2)continue;
     int n=m->hole[i].n;
     float x,y;point(m,area,m->hole[i].x[n-1],m->hole[i].y[n-1],&x,&y);
@@ -248,4 +252,36 @@ void ui_course_map_draw(UiCtx *c,const UiCourseMap *m,UiRect bounds) {
   UiRect north=ui_rect(bounds.x+ui_s(c,6),bounds.y+bounds.h-ui_s(c,38),ui_s(c,22),ui_s(c,22));
   ui_icon(c,UI_ICON_UP,north,ui_s(c,18),t->text_secondary);
   ui_text_in(c,ui_rect(north.x-ui_s(c,2),north.y-ui_s(c,18),north.w+ui_s(c,4),ui_s(c,18)),UI_TYPE_MICRO,t->text_secondary,"N",.5f);
+}
+
+// Match FUN_004587a0's purchase cells: a one-tile outer border and
+// three integer-sized bands, indexed x-band * 3 + y-band.
+void ui_course_map_tracts(UiCtx *c, const UiCourseMap *m, UiRect bounds, int selected) {
+  if (!m->valid || m->width < 5 || m->height < 5) return;
+  UiRect fit = ui_inset_all(bounds, ui_s(c,18));
+  float w = fminf(fit.w, fit.h * 2);
+  UiRect area = ui_center(fit, w, w / 2);
+  const UiTokens *t = ui_tokens(c);
+  UiDraw *d = ui_drawer(c);
+  for (int n = 0; n < 9; n++) {
+    float x0 = 1 + ((n / 3) * (m->width - 2)) / 3 - .5f;
+    float y0 = 1 + ((n % 3) * (m->height - 2)) / 3 - .5f;
+    float x1 = x0 + (m->width - 2) / 3;
+    float y1 = y0 + (m->height - 2) / 3;
+    float x[4], y[4];
+    point(m,area,x0,y0,&x[0],&y[0]); point(m,area,x1,y0,&x[1],&y[1]);
+    point(m,area,x1,y1,&x[2],&y[2]); point(m,area,x0,y1,&x[3],&y[3]);
+    for (int j = 0; j < 4; j++) {
+      int next = (j + 1) % 4;
+      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,5),t->surface_inset);
+      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,n == selected ? 3 : 1),
+               n == selected ? t->accent : t->text_secondary);
+    }
+    float cx, cy; point(m,area,(x0+x1)/2,(y0+y1)/2,&cx,&cy);
+    float radius = ui_s(c,16);
+    UiRect badge = ui_rect(cx-radius,cy-radius,2*radius,2*radius);
+    uid_rrect(d,badge,radius,n == selected ? t->accent_soft : t->surface_inset);
+    char label[4]; snprintf(label,sizeof label,"%d",n+1);
+    ui_text_in(c,badge,UI_TYPE_LABEL,t->text_primary,label,.5f);
+  }
 }

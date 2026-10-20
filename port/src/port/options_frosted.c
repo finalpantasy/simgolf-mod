@@ -163,7 +163,7 @@ static const Row k_gameplay[] = {
     {.type = OT_TOGGLE, .label = "No black waterfall triangles", .key = "fixes.water_push", .def = "1",
      .desc = "Water on a slope is drawn right after a load. Off: the original, with black triangles."},
     {.type = OT_TOGGLE, .label = "Cut content", .key = "mods.cut_content", .def = "0", .restart = 1,
-     .desc = "Adds what the game's files had but never offered: oriental house, dinosaur tarpit, lovers' bench."},
+     .desc = "Course > Extras: Landmarks adds Oriental House and Dinosaur Tarpit; Bench adds Lovers' Bench. Career landmark unlocks still apply."},
     {.type = OT_HEAD, .label = "Your pro golfer"},
     {.type = OT_SEG, .label = "Skill limit", .key = "skills.cap", .def = "15", .course = 1,
      .desc = "How high your pro's skills can grow. Past 100% needs an 18 hole course (or the switch below).",
@@ -378,6 +378,42 @@ static int val_eq(const char *a, const char *b) {
   char *ea, *eb;
   double x = strtod(a, &ea), y = strtod(b, &eb);
   return ea != a && eb != b && !*ea && !*eb && x == y;
+}
+
+// Measure and draw the same wrapped help text so scrolling includes every line.
+static const char *option_description(const Row *r) {
+  char cur[48]; row_value(r, cur, sizeof cur);
+  if (r->type == OT_SEG) for (int k = 0; k < r->n; k++)
+    if (r->vdesc[k] && val_eq(cur, r->vals[k])) return r->vdesc[k];
+  return r->desc;
+}
+static int option_help(UiCtx *c, const char *text, float width, float x, float y, int draw) {
+  int lines = 0;
+  const char *p = text ? text : "";
+  while (*p) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    char line[256]; int n = 0, last_space = -1;
+    while (p[n] && n < (int)sizeof line - 1) {
+      line[n] = p[n]; line[n + 1] = 0;
+      if (n && ui_text_width(c, UI_TYPE_CAPTION, line) > width) break;
+      if (p[n] == ' ') last_space = n;
+      n++;
+    }
+    if (p[n] && last_space > 0) n = last_space;
+    if (!n) n = 1;
+    memcpy(line, p, n); line[n] = 0;
+    if (draw) ui_text_in(c, ui_rect(x, y + lines * ui_font(c, UI_TYPE_CAPTION).line,
+      width, ui_font(c, UI_TYPE_CAPTION).line), UI_TYPE_CAPTION, ui_tokens(c)->text_secondary, line, 0);
+    p += n; lines++;
+  }
+  return lines;
+}
+static float option_row_height(UiCtx *c, const Row *r, float width) {
+  float cw = ui_s(c, r->type == OT_TOGGLE || r->type == OT_BIT ? 60 : 470);
+  float lw = width - cw - ui_s(c, 62);
+  int lines = option_help(c, option_description(r), lw, 0, 0, 0);
+  return fmaxf(ui_s(c, 76), ui_s(c, 52) + lines * ui_font(c, UI_TYPE_CAPTION).line);
 }
 
 static int is_on(const char *v) { return v && (atoi(v) != 0 || !strcasecmp(v, "on") || !strcasecmp(v, "true")); }
@@ -648,7 +684,7 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
   UiRect body = ui_rect(in.x, ty + ui_s(c, 44) + ui_s(c, 18), in.w, foot.y - ui_s(c, 14) - (ty + ui_s(c, 44) + ui_s(c, 18)));
   float row_h = ui_s(c, 76), head_h = ui_s(c, 46), gap = ui_s(c, 8);
   float content = 0;
-  for (int i = 0; i < pg->n; i++) content += (pg->rows[i].type == OT_HEAD ? head_h : row_h) + gap;
+  for (int i = 0; i < pg->n; i++) content += (pg->rows[i].type == OT_HEAD ? head_h : option_row_height(c, &pg->rows[i], body.w - ui_s(c, 6))) + gap;
   float key_h = ui_s(c, 64);
   if (pg->keys) {
     const char *grp = "";
@@ -677,6 +713,7 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
       y += head_h + gap;
       continue;
     }
+    row_h = option_row_height(c, r, rw);
     UiRect rr = ui_rect(body.x, y, rw, row_h);
     uid_rrect(ui_drawer(c), rr, ui_s(c, t->radius_tile), t->surface_inset);
     uid_rrect_stroke(ui_drawer(c), rr, ui_s(c, t->radius_tile), fmaxf(1.0f, ui_s(c, 1)), t->surface_inset_border);
@@ -713,7 +750,7 @@ static void draw_page(UiCtx *c, int w, int h, double now) {
       uid_rrect(ui_drawer(c), tg, tg.h / 2, uid_alpha(t->text_primary, 0.07f));
       ui_text_in(c, tg, UI_TYPE_MICRO, t->text_secondary, tag, 0.5f);
     }
-    if (desc) ui_text_fit(c, ui_rect(lx, rr.y + ui_s(c, 40), lw, ui_s(c, 22)), UI_TYPE_CAPTION, t->text_secondary, desc, 0);
+    option_help(c, desc, lw, lx, rr.y + ui_s(c, 40), 1);
     const char *nv = NULL;
     if (r->course && !g_in_course) {   // a setting of the running game: nothing to change on the start menu
       UiRect nr = ui_rect(cr.x - ui_s(c, 140), cr.y, cr.w + ui_s(c, 140), cr.h);

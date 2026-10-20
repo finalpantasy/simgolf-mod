@@ -59,7 +59,10 @@ PSIn vs_water(VSIn i) {
   PSIn o;
   float px = g_dst.x + i.pos.x * g_src.x * g_dst.z;
   float py = g_dst.y + (g_src.z - i.pos.y) * g_src.y * g_dst.w;
-  o.sv = float4(px * g_rt.x - 1, 1 - py * g_rt.y, 0, 1);
+  // Match the ground depth pass. Water behind raised ground must not paint
+  // across its platform or cliff face. World bounds are under 16,000 units.
+  o.sv = float4(px * g_rt.x - 1, 1 - py * g_rt.y,
+               0.5 - dot(i.world, g_view.xyz) / 65536.0, 1);
   o.uv = i.uv;
   o.col = i.col.rgb;
   o.tile = float2(i.world.x * 0.01 + g_map.x * 0.5, i.world.z * 0.01 + g_map.y * 0.5);

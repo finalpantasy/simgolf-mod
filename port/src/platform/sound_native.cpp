@@ -6,7 +6,7 @@
 // - The device is 44.1 kHz stereo float, like sound.dll's mixer.
 // - Each registered index keeps the original WAV's file path. The file loads
 //   on its first play (8/16-bit PCM RIFF, the first `smpl` loop) and stays
-//   decoded until shutdown.
+//   decoded while it fits the bounded cache. Inactive sounds can reload.
 // - A voice plays at rate * 2^(cents/1200) with linear interpolation, gain
 //   (volume + 1) / 128, sound.dll's linear pan law, an optional start delay, a
 //   loop between the smpl points, and a linear fade for snd_fade_out.
@@ -27,6 +27,8 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+#include <new>
 
 #include "port/weather_audio.h"
 
@@ -36,6 +38,8 @@ constexpr int kRate = 44100;
 constexpr int kMaxVoices = 16;
 constexpr unsigned kStreamBytes = 128 * 1024;
 constexpr int kMaxSounds = 300;
+// This is a 32-bit process sharing its address space with graphics.
+constexpr size_t kCacheBytes = 64u * 1024u * 1024u;
 
 struct Sound {
   std::string path;
@@ -114,14 +118,15 @@ uint32_t rd32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32
 uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
 
 bool load(Sound &s) {
-  FILE *f = fopen(s.path.c_str(), "rb");
+  std::unique_ptr<FILE, decltype(&fclose)> file(fopen(s.path.c_str(), "rb"), fclose);
+  FILE *f = file.get();
   if (!f) return false;
-  fseek(f, 0, SEEK_END);
+  if (fseek(f, 0, SEEK_END)) return false;
   long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  std::vector<uint8_t> b(n > 0 ? (size_t)n : 0);
+  if (n < 12 || (size_t)n > kCacheBytes || fseek(f, 0, SEEK_SET)) return false;
+  std::vector<uint8_t> b((size_t)n);
   size_t got = fread(b.data(), 1, b.size(), f);
-  fclose(f);
+  file.reset();
   if (got < 12 || memcmp(b.data(), "RIFF", 4) || memcmp(b.data() + 8, "WAVE", 4)) return false;
   int tag = 0, bits = 0;
   size_t dataOff = 0, dataLen = 0;
@@ -153,6 +158,7 @@ bool load(Sound &s) {
   if (!haveFmt || !dataOff || tag != 1 || (bits != 8 && bits != 16) || s.channels < 1 || s.channels > 2) return false;
   int bytes = bits / 8;
   s.frames = dataLen / (size_t)(bytes * s.channels);
+  if (!s.frames || s.frames > kCacheBytes / sizeof(float) / s.channels) return false;
   s.data.resize(s.frames * s.channels);
   const uint8_t *src = &b[dataOff];
   for (size_t i = 0; i < s.frames * s.channels; i++)
@@ -224,6 +230,22 @@ int voices_of(int index) {
   return n;
 }
 
+// Called with the audio device locked. Never discard a playing sound.
+bool cache_room(size_t bytes) {
+  size_t used = 0;
+  for (const Sound &s : g_sounds) used += s.data.capacity() * sizeof(float);
+  for (int i = 0; used + bytes > kCacheBytes && i < kMaxSounds; ++i) {
+    Sound &s = g_sounds[i];
+    if (!s.loaded || voices_of(i)) continue;
+    used -= s.data.capacity() * sizeof(float);
+    std::vector<float>().swap(s.data);
+    s.loaded = false;
+    s.frames = 0;
+    s.loop = false;
+  }
+  return used + bytes <= kCacheBytes;
+}
+
 }  // namespace
 
 extern "C" {
@@ -266,13 +288,14 @@ void snd_js_init(void) {
   g_trace = getenv("SIMGOLF_SOUND_LOG") != nullptr;
   const char *rain_dir = getenv("SIMGOLF_WEATHER_AUDIO_DIR");
   char *base_dir = SDL_GetBasePath();
-  std::string default_rain_dir = std::string(base_dir ? base_dir : "") + "audio/weather";
-  int rain_layers = weather_audio_load_rain(rain_dir && *rain_dir ? rain_dir : default_rain_dir.c_str());
+  char default_rain_dir[1024];
+  snprintf(default_rain_dir, sizeof default_rain_dir, "%saudio/weather", base_dir ? base_dir : "");
+  int rain_layers = weather_audio_load_rain(rain_dir && *rain_dir ? rain_dir : default_rain_dir);
   SDL_free(base_dir);
   fprintf(stderr, "weather: recorded rain layers %d/3%s\n", rain_layers,
           rain_layers==3 ? " loaded" : "; using procedural fallback");
   fprintf(stderr, "weather: recorded thunder variants %d/4; pack %s\n",
-          weather_audio_recorded_thunder_count(), rain_dir && *rain_dir ? rain_dir : default_rain_dir.c_str());
+          weather_audio_recorded_thunder_count(), rain_dir && *rain_dir ? rain_dir : default_rain_dir);
   const char *wav = getenv("SIMGOLF_MIXWAV");
   if (wav && *wav && (g_wav = fopen(wav, "wb"))) {
     wav_header(g_wav, 0);
@@ -316,10 +339,17 @@ void snd_js_register(int index, const char *path, int single) {
   if (index < 0 || index >= kMaxSounds) return;
   SDL_LockAudioDevice(g_dev);
   Sound &s = g_sounds[index];
+  // Re-registering an index must also retire voices using its old buffer.
+  for (size_t i = 0; i < g_voices.size();)
+    if (g_voices[i].index == index) g_voices.erase(g_voices.begin() + i); else ++i;
   s = Sound();
-  s.registered = true;
-  s.failed = !path;
-  if (path) s.path = path;
+  try {
+    if (path) s.path = path;
+    s.registered = true;
+    s.failed = !path;
+  } catch (const std::bad_alloc &) {
+    s.failed = true;
+  }
   s.single = single != 0;
   SDL_UnlockAudioDevice(g_dev);
 }
@@ -336,9 +366,18 @@ void snd_js_play(int index, int volume, int pan, int cents, int delayMs) {
   if (!s.registered || s.failed) return;
   if (!s.loaded) {
     // Decode outside the lock; the audio thread never touches unloaded sounds.
-    Sound tmp = s;
     const Uint32 t0 = SDL_GetTicks();
-    if (!load(tmp)) {
+    Sound tmp;
+    bool decoded = false;
+    try {
+      tmp.path = s.path;
+      tmp.registered = s.registered;
+      tmp.single = s.single;
+      decoded = load(tmp);
+    } catch (const std::bad_alloc &) {
+      fprintf(stderr, "sound: #%d allocation failed; skipping sound, game continues\n", index);
+    }
+    if (!decoded) {
       fprintf(stderr, "sound: #%d %s: cannot decode\n", index, s.path.c_str());
       s.failed = true;
       return;
@@ -348,8 +387,13 @@ void snd_js_play(int index, int volume, int pan, int cents, int delayMs) {
       fprintf(stderr, "snd: #%d decoded on the game thread in %u ms (%zu frames) %s\n", index, (unsigned)(SDL_GetTicks() - t0),
               tmp.frames, tmp.path.c_str());
     SDL_LockAudioDevice(g_dev);
-    s = std::move(tmp);
+    bool room = cache_room(tmp.data.capacity() * sizeof(float));
+    if (room) s = std::move(tmp);
     SDL_UnlockAudioDevice(g_dev);
+    if (!room) {
+      fprintf(stderr, "sound: #%d cache full with active sounds; skipping play\n", index);
+      return;
+    }
   }
   if (volume < 0) volume = 0;
   if (volume > 127) volume = 127;
@@ -365,7 +409,10 @@ void snd_js_play(int index, int volume, int pan, int cents, int delayMs) {
   v.delay = delayMs > 0 ? (long)delayMs * kRate / 1000 : 0;
   SDL_LockAudioDevice(g_dev);
   bool start = voices_of(index) < (s.single ? 1 : kMaxVoices);
-  if (start) g_voices.push_back(v);
+  if (start) {
+    try { g_voices.push_back(v); }
+    catch (const std::bad_alloc &) { start = false; }
+  }
   SDL_UnlockAudioDevice(g_dev);
   if (start) g_started++;
   else g_ignored++;

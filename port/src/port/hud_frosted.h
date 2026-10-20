@@ -73,6 +73,7 @@ typedef struct HudSnap {
   int money;              // dollars
   int sandbox, cheat;
   int fun, skill_x100, golfers, waiting;
+  int ranking[4];         // original balls, stars, trophies and completed stories
   char course[64], date[48];
   int dock_mode, amenities_on, elevation_on, employee_overlay;
   int terrain_tool, build_tool, elevation_tool;
@@ -106,6 +107,7 @@ typedef struct HudSnap {
   char pro_name[32];
   int shot_readout;
   char shot_text[SHOT_READOUT_LINES][SHOT_READOUT_TEXT];
+  ShotSkills shot_skills;
   // task-96 / task-97: the design chooser for amenities and the clubhouse cue
   int design;             // 0x56a514: the design the armed tool will place (-1: none picked yet, landmarks)
   int design_n;           // designs the armed amenity offers (0: the tool has no choice); mod tables can widen it

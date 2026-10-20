@@ -459,6 +459,7 @@ void rp_pair_row(int index);    // task-020: text recorded next belongs to this 
 void rp_pair_state(unsigned selected, int cursor, int count, int picked, int style);
 int rp_pair_cursor_override(int cursor);
 int rp_pair_y_limit(int original_limit, int count);
+void rp_pair_story_apply(int first, int second);
 void rp_pace(void);             // a task-73 page's wait between turns (golf's 50 ms, none while the native page is up)
 
 // task-32 (src/port/golf/frontend_hooks.c, frontend_game.c): the Frosted Mint

@@ -51,6 +51,16 @@ static int report_row(const int *rows,int n,int y) {
   for(int i=0;i<n;i++)if(abs(rows[i]-y)<=3)return i;return -1;
 }
 
+// showCourseReport (0044fb30) places this legend below the last hole, so
+// its source Y changes with the hole count. It is never a table row.
+static int report_course_legend(const RpSnap *s,const RpItem *it) {
+  if(s->kind!=RP_COURSE && s->kind!=RP_YEAR)return 0;
+  return it->type==RP_IT_TEXT &&
+    ((it->x==178 && !strcmp(it->s,"Top 100 Hole")) ||
+     (it->x==335 && !strcmp(it->s,"Top 18 Hole")) ||
+     (it->x==487 && !strcmp(it->s,"Scenic Hole")));
+}
+
 static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *art,RpAction *acts,int max) {
   const UiTokens *t=ui_tokens(c);UiDraw *d=ui_drawer(c);int na=0;
   float sx[32]={0},weight[32]={0};int nc=0,header=-1;
@@ -58,6 +68,7 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
   for(int i=0;i<s->n;i++) {
     const RpItem *it=&s->it[i];
     if(it->type!=RP_IT_TEXT || !it->s[0] || same_text(it->s,s->title))continue;
+    if(report_course_legend(s,it))continue;
     if(s->kind==RP_ROSTER && it->y>=530)continue;
     if((s->kind==RP_COURSE || s->kind==RP_YEAR) && it->y>=440)continue;
     if(report_row(rows,nr,it->y)<0 && nr<ROWS)rows[nr++]=it->y;
@@ -149,7 +160,7 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
       char text[RP_TEXT*2]="";uint16_t color=0;int first=-1;
       for(int i=0;i<s->n;i++) {
         const RpItem *it=&s->it[i];
-        if(it->type!=RP_IT_TEXT || !it->s[0] || same_text(it->s,s->title) || abs(it->y-rows[r])>3 || report_nearest(sx,nc,it->x)!=col)continue;
+        if(it->type!=RP_IT_TEXT || !it->s[0] || report_course_legend(s,it) || same_text(it->s,s->title) || abs(it->y-rows[r])>3 || report_nearest(sx,nc,it->x)!=col)continue;
         size_t n=strlen(text);snprintf(text+n,sizeof text-n,"%s%s",n?"  ":"",it->s);color=it->col;if(first<0)first=i;
       }
       UiRect cell=ui_rect(x[col]+ui_s(c,8),rr.y,w[col]-ui_s(c,16),rh);
@@ -204,7 +215,7 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
         acts[na++]=(RpAction){RP_A_CLICK,780|((i?508:98)<<16)};
     }
   } else if(s->kind==RP_COURSE || s->kind==RP_YEAR) {
-    int n=0;for(int i=0;i<s->n;i++)if(s->it[i].type==RP_IT_TEXT && s->it[i].y>=440 && s->it[i].s[0]) {
+    int n=0;for(int i=0;i<s->n;i++)if(s->it[i].type==RP_IT_TEXT && (s->it[i].y>=440 || report_course_legend(s,&s->it[i])) && s->it[i].s[0]) {
       report_string(c,ui_rect(body.x+(n%3)*body.w/3,body.y+body.h-ui_s(c,32),body.w/3,ui_s(c,28)),s->it[i].s,UI_TYPE_CAPTION,t->text_secondary,0,ui_idi(ui_id("report.legend"),i));n++;
     }
   }

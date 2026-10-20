@@ -1,0 +1,16 @@
+{
+  "comment": "The original paired match skill cards use the selected painted face through the same profile fitting. Missing art and original portrait mode retain the original draw.",
+  "patches": {
+    "FUN_0045c200": [
+      [
+        "  puVar5 = PTR_DAT_004c1570;\n  if (0x13 < iVar4) {",
+        "  puVar5 = PTR_DAT_004c1570;\n  if (portrait_skill_head(param_1,param_2,param_3)) return 0;\n  if (0x13 < iVar4) {"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0045c200": [
+      ["  puVar5 = PTR_DAT_004c1570;\n  if (0x13 < iVar4) {", 1]
+    ]
+  }
+}

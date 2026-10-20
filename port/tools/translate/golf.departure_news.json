@@ -1,0 +1,16 @@
+{
+  "comment": "Retain committed resignation/departure notices when the original single news slot refuses them; leave acceptance, gameplay and random calls unchanged.",
+  "patches": {
+    "FUN_004289e0": [
+      [
+        "FUN_0040cb00(0x80000000,0,local_6c);\n            FUN_004481b0(0x29,100,0,0,0);",
+        "hud_departure_notice(local_6c);\n            FUN_004481b0(0x29,100,0,0,0);"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_004289e0": [
+      ["FUN_0040cb00(0x80000000,0,local_6c);\n            FUN_004481b0(0x29,100,0,0,0);", 1]
+    ]
+  }
+}

@@ -6,6 +6,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+int portrait_skill_head(int slot, int x, int y) { return 0; }
 void rp_route_enter(void) {}
 void rp_route_reset(void) {}
 int rp_profile_preview(void) { return 0; }
@@ -85,5 +86,6 @@ void rp_pair_state(unsigned selected, int cursor, int count, int picked, int sty
 }
 int rp_pair_cursor_override(int cursor) { return cursor; }
 int rp_pair_y_limit(int original_limit, int count) { (void)count; return original_limit; }
+void rp_pair_story_apply(int first,int second) { (void)first; (void)second; }
 
 #endif

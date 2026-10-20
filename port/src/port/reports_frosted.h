@@ -54,7 +54,7 @@ typedef struct {
   UiCourseMap map;
 } RpSnap;
 
-enum { RP_A_NONE, RP_A_CLOSE, RP_A_TAB, RP_A_CLICK, RP_A_RCLICK, RP_A_KEY };
+enum { RP_A_NONE, RP_A_CLOSE, RP_A_TAB, RP_A_CLICK, RP_A_RCLICK, RP_A_KEY, RP_A_PAIR_STORY };
 typedef struct {
   int kind;   // RP_A_*
   int arg;    // RP_A_TAB: the report; RP_A_CLICK / RP_A_RCLICK: x | y << 16 in golf's page; RP_A_KEY: an SDL key code

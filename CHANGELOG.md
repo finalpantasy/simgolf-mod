@@ -1,5 +1,18 @@
 # SimGolf Remastered for Windows
 
+## 0.1.25 - 2026-10-20
+
+Crash recovery, readable golfer cards, and water that respects raised land.
+
+- Fixes the sound-allocation crash identified in the #69 follow-up. Decoded sounds now have a bounded cache, and allocation failures no longer escape into the game.
+- Golfer-card and menu text retry failed font loading, texture uploads and drawing. Smaller uploads reduce memory pressure, and graphics resets rebuild missing text.
+- HD water and waterfalls no longer paint across raised landmark foundations and cliffs, which could make landmarks look like they were floating. Original water remains available.
+- Adds a per-round **Start a story: On/Off** choice when pairing golfers in the Clubhouse. On keeps the original story selection; Off starts the pair without a story.
+- Repairs negative skill ratings, selected match portraits, shot skill previews, pair compatibility, ranking and Home Site counters, and departure notices in message history.
+- Improves Options text wrapping, numbered land-tract selection with a separate Buy confirmation, cut-content help, and the indication when weather is disabled.
+- Fixes the clipped award legend on short-course reports and handles map-render allocation failure safely.
+- Retains all 0.1.24 features, saves, settings, assets and remastered defaults. Controlled native tests cover the fixes; confirmation on the affected players' PCs remains pending.
+
 ## 0.1.24 - 2026-10-19
 
 Faster play on large, busy courses with HD art.

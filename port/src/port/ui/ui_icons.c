@@ -11,6 +11,8 @@
 // "E cx cy rx ry" ellipse, "R x y w h rx" rounded rectangle.
 static const struct { const char *name, *src; } k_icons[UI_ICON_COUNT] = {
     [UI_ICON_NONE] = {"none", ""},
+    [UI_ICON_GOLF_BALL] = {"golf-ball", "O12 10 7;M9 8h.1M14 7h.1M11 12h.1M15 11h.1M12 17v4M8 21h8"},
+    [UI_ICON_HEART] = {"heart", "M12 21L3 12a5 5 0 0 1 9-5a5 5 0 0 1 9 5z"},
     [UI_ICON_PLAY] = {"play", "M7 5l12 7-12 7z"},
     [UI_ICON_PAUSE] = {"pause", "M8 5v14M16 5v14"},
     [UI_ICON_FAST] = {"fast", "M4 6l8 6-8 6zM12 6l8 6-8 6z"},

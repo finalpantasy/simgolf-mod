@@ -103,7 +103,7 @@ void hudf_publish(const HudSnap *s) {
 void hudf_publish_weather(int show,int kind,int night,int air_valid,double c,double rh,int fahrenheit) {
   lock();
   g_snap.weather_report=g_weather_show=show!=0;
-  g_snap.weather_kind=g_weather_kind=kind>=0&&kind<=5?kind:0;
+  g_snap.weather_kind=g_weather_kind=kind>=-1&&kind<=5?kind:0;
   g_snap.weather_night=g_weather_night=night!=0;
   g_snap.weather_air_valid=g_weather_air_valid=air_valid!=0;
   g_snap.weather_fahrenheit=g_weather_fahrenheit=fahrenheit!=0;
