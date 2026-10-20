@@ -1,4 +1,4 @@
-// Build without game assets or SDL:
+// Run with port/tests/hud_skill_format.sh, or build without game assets or SDL:
 //   cl /nologo /W4 /WX /I port/src port/tests/hud_skill_format_test.c /Fe:hud_skill_format_test.exe
 //   hud_skill_format_test.exe
 #include <limits.h>
