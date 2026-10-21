@@ -1,5 +1,12 @@
 # SimGolf Remastered for Windows
 
+## 0.1.27 - 2026-10-21
+
+Restores speed when zoomed out on large courses.
+
+- Fixes a slowdown when zoomed out on large, busy courses that 0.1.26 introduced. Checking the game's lighting data for every shaded sprite made each frame several times slower; the check is cheap again, and a draw that reads released memory is still skipped without HD art instead of crashing.
+- Retains all 0.1.26 features, saves, settings, assets and remastered defaults, including the zoom-out crash fix. Controlled zoom tests pass; confirmation on the affected player's PC remains pending.
+
 ## 0.1.26 - 2026-10-21
 
 Fixes a crash when zooming out on large courses.

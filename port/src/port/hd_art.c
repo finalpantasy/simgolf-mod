@@ -481,11 +481,9 @@ static void mem_ok_forget(void) {
   g_okc_tick = GetTickCount();
 }
 
-// fresh: ask the system even when the cache would answer, for memory the game
-// may free between the check and the read (issue 78: zooming out on a large map).
-static int mem_ok_n(uint32_t p, uint32_t n, int fresh) {
+static int mem_ok(uint32_t p, uint32_t n) {
   if (p < 0x10000 || p + n < p) return 0;
-  int cache = !fresh && g_okc_thread == GetCurrentThreadId();
+  int cache = g_okc_thread == GetCurrentThreadId();
   if (cache && GetTickCount() - g_okc_tick > 100) mem_ok_forget();
   MEMORY_BASIC_INFORMATION mi;
   for (uint64_t a = p, end = (uint64_t)p + n; a < end;) {
@@ -506,8 +504,6 @@ static int mem_ok_n(uint32_t p, uint32_t n, int fresh) {
   }
   return 1;
 }
-
-static int mem_ok(uint32_t p, uint32_t n) { return mem_ok_n(p, n, 0); }
 
 // jgld palette -> its index -> RGB555 table (vtable +0x18), NULL if none.
 static const uint16_t *pal16(uint32_t pal) {
@@ -1436,7 +1432,7 @@ static uint32_t shadow_levels(uint32_t lut, uint16_t *pal, int planes) {
   if (planes > 7) planes = 7;
   for (int p = 0; p < planes; p++) {
     int a = 128;   // golf halves the colour when there is no table
-    if (lut && mem_ok_n(lut + ((uint32_t)p << 16), 0x10000, 1)) {
+    if (lut && mem_ok(lut + ((uint32_t)p << 16), 0x10000)) {
       uint16_t c = *(const uint16_t *)(uintptr_t)(lut + ((uint32_t)p << 16) + 0x7fff * 2);
       int g = (c >> 5) & 31;
       a = 255 - (g * 255 + 15) / 31;
@@ -1453,7 +1449,7 @@ static int lut_has_additive_plane(uint32_t lut, int planes) {
   if (planes > 7) planes = 7;
   for (int p = 0; p < planes; p++) {
     uint32_t base = lut + ((uint32_t)p << 16);
-    if (!mem_ok_n(base, 0x10000, 1)) continue;
+    if (!mem_ok(base, 0x10000)) continue;
     const uint16_t *plane = (const uint16_t *)(uintptr_t)base;
     if (hd_art_lut_plane_is_additive(plane[0], plane[0x3def], plane[0x7fff])) return 1;
   }
@@ -1677,9 +1673,11 @@ static int dst_arg(int slot) {
 }
 
 // Recording only reads the game's memory to describe a draw that already
-// happened. Memory the game frees mid-frame can still pass the readable check
-// (issue 78: a LUT read in shadow_levels faulted while zooming out on a large
-// map), so a fault here drops that sprite's HD art, not the whole game.
+// happened. Memory the game frees mid-frame can still pass the cached readable
+// check (issue 78: a LUT read in shadow_levels faulted while zooming out on a
+// large map), so a fault here drops that sprite's HD art, not the whole game.
+// Asking the system afresh for every LUT read instead cost one VirtualQuery per
+// shadowed draw, over half the game thread when zoomed out.
 static void record_sprite_guarded(int slot, uint32_t sprite, uint32_t mask, uint32_t dst, int x, int y,
                                   uint32_t pal_over, const uint8_t *remap, uint32_t lut, Snap *s) {
   static int logged;
