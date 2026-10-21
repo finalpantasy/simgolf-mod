@@ -481,9 +481,11 @@ static void mem_ok_forget(void) {
   g_okc_tick = GetTickCount();
 }
 
-static int mem_ok(uint32_t p, uint32_t n) {
+// fresh: ask the system even when the cache would answer, for memory the game
+// may free between the check and the read (issue 78: zooming out on a large map).
+static int mem_ok_n(uint32_t p, uint32_t n, int fresh) {
   if (p < 0x10000 || p + n < p) return 0;
-  int cache = g_okc_thread == GetCurrentThreadId();
+  int cache = !fresh && g_okc_thread == GetCurrentThreadId();
   if (cache && GetTickCount() - g_okc_tick > 100) mem_ok_forget();
   MEMORY_BASIC_INFORMATION mi;
   for (uint64_t a = p, end = (uint64_t)p + n; a < end;) {
@@ -504,6 +506,8 @@ static int mem_ok(uint32_t p, uint32_t n) {
   }
   return 1;
 }
+
+static int mem_ok(uint32_t p, uint32_t n) { return mem_ok_n(p, n, 0); }
 
 // jgld palette -> its index -> RGB555 table (vtable +0x18), NULL if none.
 static const uint16_t *pal16(uint32_t pal) {
@@ -1432,7 +1436,7 @@ static uint32_t shadow_levels(uint32_t lut, uint16_t *pal, int planes) {
   if (planes > 7) planes = 7;
   for (int p = 0; p < planes; p++) {
     int a = 128;   // golf halves the colour when there is no table
-    if (lut && mem_ok(lut + ((uint32_t)p << 16), 0x10000)) {
+    if (lut && mem_ok_n(lut + ((uint32_t)p << 16), 0x10000, 1)) {
       uint16_t c = *(const uint16_t *)(uintptr_t)(lut + ((uint32_t)p << 16) + 0x7fff * 2);
       int g = (c >> 5) & 31;
       a = 255 - (g * 255 + 15) / 31;
@@ -1449,7 +1453,7 @@ static int lut_has_additive_plane(uint32_t lut, int planes) {
   if (planes > 7) planes = 7;
   for (int p = 0; p < planes; p++) {
     uint32_t base = lut + ((uint32_t)p << 16);
-    if (!mem_ok(base, 0x10000)) continue;
+    if (!mem_ok_n(base, 0x10000, 1)) continue;
     const uint16_t *plane = (const uint16_t *)(uintptr_t)base;
     if (hd_art_lut_plane_is_additive(plane[0], plane[0x3def], plane[0x7fff])) return 1;
   }
@@ -1521,6 +1525,21 @@ static void snap_end(Snap *s, Entry *e, const uint16_t *pal, const uint16_t *lev
   if (e->file >= 0 && g_files[e->file].cat >= 0) g_stat.bycat[g_files[e->file].cat]++;
   want(e, 0, pal);
   if (e->shadow_file >= 0) want(e, 1, lev);
+}
+
+// A fault while describing game memory (see record_sprite_guarded) skips the
+// snapshot: the draw stays as the game made it, without HD art.
+#define ART_FAULT (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+
+static int snap_begin_guarded(Snap *s, uint32_t dst, int x, int y, double fw, double fh) {
+  __try {
+    return snap_begin(s, dst, x, y, fw, fh);
+  } __except (ART_FAULT) {
+    free(s->before);
+    memset(s, 0, sizeof *s);
+    mem_ok_forget();
+    return 0;
+  }
 }
 
 static int look_of(int file) {
@@ -1657,6 +1676,26 @@ static int dst_arg(int slot) {
   }
 }
 
+// Recording only reads the game's memory to describe a draw that already
+// happened. Memory the game frees mid-frame can still pass the readable check
+// (issue 78: a LUT read in shadow_levels faulted while zooming out on a large
+// map), so a fault here drops that sprite's HD art, not the whole game.
+static void record_sprite_guarded(int slot, uint32_t sprite, uint32_t mask, uint32_t dst, int x, int y,
+                                  uint32_t pal_over, const uint8_t *remap, uint32_t lut, Snap *s) {
+  static int logged;
+  __try {
+    record_sprite(slot, sprite, mask, dst, x, y, pal_over, remap, lut, s);
+  } __except (ART_FAULT) {
+    mem_ok_forget();
+    preview_reject();
+    if (logged++ < 8) {
+      fprintf(stderr, "art: slot %d sprite %08x read freed memory while recording; drawn without HD art (%d)\n", slot,
+              (unsigned)sprite, logged);
+      fflush(stderr);
+    }
+  }
+}
+
 static uint32_t hooked(int slot, uint32_t *a) {
   // a[0] = this (thiscall), then the method's arguments
   g_stat.calls[slot]++;
@@ -1668,7 +1707,7 @@ static uint32_t hooked(int slot, uint32_t *a) {
   int x = follow ? (int)a[2 + da] : 0, y = follow ? (int)a[3 + da] : 0;
   if (follow) {
     int sx = SCALE_X, sy = SCALE_Y, den = SCALE_DEN ? SCALE_DEN : 1;
-    follow = snap_begin(&s, dst, x, y, I32(sprite + 0x30) * fabs((double)sx / den), I32(sprite + 0x34) * fabs((double)sy / den));
+    follow = snap_begin_guarded(&s, dst, x, y, I32(sprite + 0x30) * fabs((double)sx / den), I32(sprite + 0x34) * fabs((double)sy / den));
     if (follow) g_stat.back[slot]++;
   }
   uint32_t r = g_orig[slot](a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]);
@@ -1684,7 +1723,7 @@ static uint32_t hooked(int slot, uint32_t *a) {
       case 20: mask = a[1]; pal_over = a[6]; break;
     }
     if (remap && !mem_ok((uint32_t)(uintptr_t)remap, 256)) remap = NULL;
-    record_sprite(slot, sprite, mask, dst, x, y, pal_over, remap, lut, &s);
+    record_sprite_guarded(slot, sprite, mask, dst, x, y, pal_over, remap, lut, &s);
     free(s.before);
   }
   return r;
@@ -1693,8 +1732,12 @@ static uint32_t hooked(int slot, uint32_t *a) {
 // Whole-surface draws (graphsy surface vtable 0x1011d0b0, `this` = source):
 // a PCX page or picture golf loaded with FUN_00475840 drawn on the back buffer.
 static int surf_file_of(uint32_t jsurf) {
-  for (int i = g_nsurf - 1; i >= 0; i--)
-    if (g_surf[i].file >= 0 && mem_ok(g_surf[i].surf, 8) && U32(g_surf[i].surf + 4) == jsurf) return g_surf[i].file;
+  __try {
+    for (int i = g_nsurf - 1; i >= 0; i--)
+      if (g_surf[i].file >= 0 && mem_ok(g_surf[i].surf, 8) && U32(g_surf[i].surf + 4) == jsurf) return g_surf[i].file;
+  } __except (ART_FAULT) {
+    mem_ok_forget();
+  }
   return -1;
 }
 
@@ -1719,7 +1762,7 @@ static uint32_t shooked(int slot, uint32_t *a) {
     }
   }
   Snap s;
-  if (follow) follow = snap_begin(&s, dst, x, y, w * fx, h * fy);
+  if (follow) follow = snap_begin_guarded(&s, dst, x, y, w * fx, h * fy);
   uint32_t r = g_sorig[slot](a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]);
   if (follow) {
     Entry e = {0};

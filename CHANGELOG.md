@@ -1,5 +1,12 @@
 # SimGolf Remastered for Windows
 
+## 0.1.26 - 2026-10-21
+
+Fixes a crash when zooming out on large courses.
+
+- Fixes a crash when zooming out on large courses with HD art. The game could read lighting data it had already released; it now checks that memory each time and skips HD art for a draw instead of crashing.
+- Retains all 0.1.25 features, saves, settings, assets and remastered defaults. A controlled zoom test that crashed 0.1.25 now passes; confirmation on the affected player's PC remains pending.
+
 ## 0.1.25 - 2026-10-20
 
 Crash recovery, readable golfer cards, and water that respects raised land.
