@@ -19,6 +19,10 @@ extern "C" {
 // Returns 1 when the camera took the event (the game must not see it). May
 // adjust the event in place (pointer kept off the window edge).
 int camera_input_event(SDL_Event *e);
+// Modal entry and events consumed before camera_input_event must retire real
+// pointer ownership without injecting a click. Safe to call repeatedly.
+void camera_input_cancel_gesture(void);
+void camera_input_consumed_event(const SDL_Event *e);
 void camera_input_tick(void);
 // Copied into a finished course frame so the presenter can distinguish a
 // fast manual drag from a game-directed camera jump, even after release.

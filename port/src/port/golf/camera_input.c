@@ -266,6 +266,19 @@ uint32_t camera_input_drag_serial(void) { return g_drag_serial; }
 static double g_click_up_at;   // a handed-back right click releases then
 static int g_click_x, g_click_y;
 
+void camera_input_cancel_gesture(void) {
+  // A modal takes ownership of the pointer. Do not turn an interrupted right
+  // drag into a click, or cancel the release of a click already handed back.
+  g_drag.button = 0;
+  g_drag.panning = 0;
+}
+
+void camera_input_consumed_event(const SDL_Event *e) {
+  if (e && e->type == SDL_MOUSEBUTTONUP && e->button.windowID &&
+      e->button.which != INJECTED && e->button.button == g_drag.button)
+    camera_input_cancel_gesture();
+}
+
 // task-56: while a zoom glide shows a view golf has already left, the game
 // gets the point of its own view that lies under the pointer on screen (not on
 // golf's UI), so a click or hover picks the tile the player sees. The glide's
@@ -566,7 +579,7 @@ int camera_input_event(SDL_Event *e) {
     case SDL_WINDOWEVENT:
       if (e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
         // keys and buttons released elsewhere never come back to us
-        g_drag.button = 0;
+        camera_input_cancel_gesture();
         memset(g_held, 0, sizeof g_held);
       }
       return 0;

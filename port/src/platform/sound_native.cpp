@@ -31,6 +31,7 @@
 #include <new>
 
 #include "port/weather_audio.h"
+#include "platform/sound_category.h"
 
 namespace {
 
@@ -43,7 +44,7 @@ constexpr size_t kCacheBytes = 64u * 1024u * 1024u;
 
 struct Sound {
   std::string path;
-  bool registered = false, single = false, loaded = false, failed = false;
+  bool registered = false, single = false, music = false, loaded = false, failed = false;
   int rate = kRate, channels = 1;
   std::vector<float> data;          // interleaved
   size_t frames = 0;
@@ -60,7 +61,7 @@ struct Voice {
   long fadeLeft = -1, fadeLen = 0; // fade out: frames left / total
 };
 
-// Options > Audio (card task-24): master, music (the dedicated-buffer sounds) and effects gains, 0..1.
+// Options > Audio: master, music and effects gains, 0..1.
 volatile float g_vol_master = 1.0f, g_vol_music = 1.0f, g_vol_effects = 1.0f;
 
 Sound g_sounds[kMaxSounds];
@@ -181,7 +182,7 @@ void SDLCALL mix(void *, Uint8 *stream, int len) {
   for (size_t v = 0; v < g_voices.size();) {
     Voice &vo = g_voices[v];
     Sound &s = g_sounds[vo.index];
-    const float cat = master * (s.single ? music : effects);
+    const float cat = master * (s.music ? music : effects);
     bool done = false;
     for (int i = 0; i < frames; i++) {
       if (vo.delay > 0) { vo.delay--; continue; }
@@ -351,6 +352,7 @@ void snd_js_register(int index, const char *path, int single) {
     s.failed = true;
   }
   s.single = single != 0;
+  s.music = snd_is_music(index) != 0;
   SDL_UnlockAudioDevice(g_dev);
 }
 
@@ -373,6 +375,7 @@ void snd_js_play(int index, int volume, int pan, int cents, int delayMs) {
       tmp.path = s.path;
       tmp.registered = s.registered;
       tmp.single = s.single;
+      tmp.music = s.music;
       decoded = load(tmp);
     } catch (const std::bad_alloc &) {
       fprintf(stderr, "sound: #%d allocation failed; skipping sound, game continues\n", index);
