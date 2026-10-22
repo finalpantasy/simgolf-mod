@@ -45,6 +45,7 @@
 
 #include <SDL.h>
 #include <math.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2132,19 +2133,39 @@ void hd_art_discard_pending(void) {
 }
 
 static void publish_one(int which, int ok) {
-  g_pub_ok[which] = ok && g_closed_ok[which] && g_closed[which].n;
-  if (!g_pub_ok[which]) return;
+  // A failed frame falls back to golf's pixels. Publish validity only after
+  // both buffers contain the same complete frame, under g_pub_lock.
+  g_pub_ok[which] = 0;
+  if (!ok || !g_closed_ok[which] || !g_closed[which].n) return;
   List *c = &g_closed[which], *p = &g_pub[which];
-  if (p->w != c->w || p->h != c->h || !p->owner) {
-    free(p->owner);
-    p->owner = malloc((size_t)c->w * c->h * 2);
-    p->w = c->w;
-    p->h = c->h;
+  if (!c->owner || !c->e || c->w <= 0 || c->h <= 0 || c->n <= 0 || c->n > INT_MAX - 256 ||
+      (size_t)c->w > SIZE_MAX / sizeof *c->owner / (size_t)c->h ||
+      (size_t)(c->n + 256) > SIZE_MAX / sizeof *c->e) return;
+  size_t owner_bytes = (size_t)c->w * c->h * sizeof *c->owner;
+  int replace_owner = p->w != c->w || p->h != c->h || !p->owner;
+  uint16_t *owner = p->owner;
+  if (replace_owner && !(owner = malloc(owner_bytes))) return;
+  Entry *entries = p->e;
+  int cap = p->cap;
+  if (cap < c->n || !entries) {
+    cap = c->n + 256;
+    entries = realloc(p->e, (size_t)cap * sizeof *entries);
+    if (!entries) {
+      if (replace_owner) free(owner);
+      return;
+    }
   }
-  memcpy(p->owner, c->owner, (size_t)c->w * c->h * 2);
-  if (p->cap < c->n) p->e = realloc(p->e, (p->cap = c->n + 256) * sizeof(Entry));
-  memcpy(p->e, c->e, (size_t)c->n * sizeof(Entry));
+  // No fallible operations remain. Preserve old contents until reservations succeed.
+  memcpy(owner, c->owner, owner_bytes);
+  memcpy(entries, c->e, (size_t)c->n * sizeof *entries);
+  if (replace_owner) free(p->owner);
+  p->owner = owner;
+  p->e = entries;
+  p->cap = cap;
+  p->w = c->w;
+  p->h = c->h;
   p->n = c->n;
+  g_pub_ok[which] = 1;
 }
 
 int hd_art_pick(int x, int y, HdArtPick *o) {

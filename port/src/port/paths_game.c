@@ -10,6 +10,7 @@
 #pragma clang diagnostic error "-Wimplicit-function-declaration"
 
 #include <stddef.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,10 +44,10 @@ static uint32_t g_serial;
 // the corner lattice of this frame: screen position of the tile corner (a, b), stamped with the frame
 typedef struct { int16_t x, y; uint32_t stamp; } Corner;
 static Corner *g_corner;
-static int g_corner_w;
+static int g_corner_w, g_corner_h;
 
 static int corner(int a, int b, int16_t *x, int16_t *y) {
-  Corner *c = &g_corner[a * g_corner_w + b];
+  Corner *c = &g_corner[(size_t)a * g_corner_w + b];
   if (c->stamp != g_serial) {
     int sx = 0, sy = 0;
     FUN_0042fb90(a * 1024, b * 1024, &sx, &sy, 4000);
@@ -103,15 +104,15 @@ void pv_course_done(void) {
   if (log_on < 0) log_on = getenv("SIMGOLF_PATHS_LOG") != NULL;
   if (!pvf_enabled()) return;
   int w = g_map_w, h = g_map_h;
-  if (w <= 0 || h <= 0 || !g_grid[9]) return;
-  if (g_corner_w != w + 1) {
+  if (w <= 0 || h <= 0 || w == INT_MAX || h == INT_MAX || !g_grid[9]) return;
+  if (g_corner_w != w + 1 || g_corner_h != h + 1 || !g_corner) {
+    if ((size_t)(w + 1) > SIZE_MAX / sizeof *g_corner / (size_t)(h + 1)) return;
+    Corner *next = calloc((size_t)(w + 1) * (size_t)(h + 1), sizeof *g_corner);
+    if (!next) return;  // retain the old cache, but never index it with the new dimensions
     free(g_corner);
-    g_corner = calloc((size_t)(w + 1) * (size_t)(h + 1), sizeof *g_corner);
+    g_corner = next;
     g_corner_w = w + 1;
-    if (!g_corner) {
-      g_corner_w = 0;
-      return;
-    }
+    g_corner_h = h + 1;
   }
   const uint16_t *fl = (const uint16_t *)g_grid[9];
   PvNote *n = &g_note;
