@@ -15,6 +15,7 @@
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
+#include "port/ui/art_publication.h"
 
 #define QMAX 16
 #define STALE_MS 4000   // safety net only: rp_done ends the panel (some reports wait 2 s before their first frame)
@@ -58,18 +59,18 @@ void rpf_publish(const RpSnap *s) {
   unlock();
 }
 
-void rpf_publish_art(int k, const uint32_t *argb, int w, int h) {
-  if (k < 0 || k >= RP_ART) return;
+int rpf_publish_art(int k, const uint32_t *argb, int w, int h) {
+  if (k < 0 || k >= RP_ART) return 0;
+  uint32_t *next;
+  if (!ui_art_copy(argb, w, h, &next)) return 0;
   lock();
   free(g_art[k].px);
-  g_art[k].px = NULL;
-  g_art[k].w = g_art[k].h = 0;
-  if (argb && w > 0 && h > 0 && (g_art[k].px = malloc((size_t)w * h * 4))) {
-    memcpy(g_art[k].px, argb, (size_t)w * h * 4);
-    g_art[k].w = w, g_art[k].h = h;
-  }
+  g_art[k].px = next;
+  g_art[k].w = w;
+  g_art[k].h = h;
   g_art[k].serial = ++g_art_pub;
   unlock();
+  return 1;
 }
 
 static void update_art(SDL_Renderer *r) {

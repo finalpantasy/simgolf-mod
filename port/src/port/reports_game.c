@@ -522,7 +522,6 @@ int rp_chip(void *sprite, int target, int x, int y, int clip) {
 static void capture_art(void) {
   for (int k = 0; k < g_nart; k++) {
     if (g_art[k].done) continue;
-    g_art[k].done = 1;
     int sw, sh, ox, oy, w, h, pitch, is565;
     if (!sprite_size(g_art[k].spr, &sw, &sh, &ox, &oy) || g_art[k].page < 0) continue;
     uint16_t *bb = gdi_screen_dib(g_art[k].page, &w, &h, &pitch, &is565);
@@ -565,7 +564,7 @@ static void capture_art(void) {
       for (int i = 0; i < g_snap.n; i++)
         if (g_snap.it[i].type == RP_IT_CHIP && g_snap.it[i].art == k + 1) g_snap.it[i].big = 1, g_snap.it[i].col = c0;
     }
-    rpf_publish_art(k, px, sw, sh);
+    g_art[k].done = rpf_publish_art(k, px, sw, sh);
     if (g_log) fprintf(stderr, "reports: art %d %dx%d\n", k, sw, sh);
     free(shot), free(px);
   }
@@ -688,8 +687,7 @@ static void capture_pics(void) {
         if ((g_kind == RP_ROUTING || g_kind == RP_TRACTS) && r > 245 && g < 8 && b > 245) px[y * pw + x] = 0;
       }
     if (hash != g_pic[k].hash) {
-      g_pic[k].hash = hash;
-      rpf_publish_art(g_pic[k].art, px, pw, ph);
+      if (rpf_publish_art(g_pic[k].art, px, pw, ph)) g_pic[k].hash = hash;
       if (g_log) fprintf(stderr, "reports: picture %d %dx%d from page %d\n", k, pw, ph, g_pic[k].page);
       if (g_log && getenv("SIMGOLF_REPORTS_DUMP")) {
         SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormatFrom(px, pw, ph, 32, pw * 4, SDL_PIXELFORMAT_ARGB8888);
@@ -853,8 +851,7 @@ void rp_profile_outfit(unsigned group) {
     }
   }
   if (hash != g_pic[1].hash) {
-    rpf_publish_art(g_pic[1].art, px, 48, 48);
-    g_pic[1].hash = hash;
+    if (rpf_publish_art(g_pic[1].art, px, 48, 48)) g_pic[1].hash = hash;
     if (g_log) {
       int visible = 0, transparent = 0;
       for (int i = 0; i < 48 * 48; i++) { visible += (px[i] >> 24) > 0; transparent += (px[i] >> 24) == 0; }

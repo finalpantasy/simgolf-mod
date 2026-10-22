@@ -31,7 +31,7 @@ int fef_enabled(void);                                  // ui.frontend=frosted_m
 void fef_publish(const FeSnap *s);                      // the screen the original is showing now
 void fef_loading_progress(float pct);                  // fine progress, no art work or game calls
 int fef_take_action(FeAction *a);                       // next click on the native screen, 1 if any
-void fef_publish_art(int key, const uint32_t *argb, int w, int h);   // FE_ART_* key; NULL clears
+int fef_publish_art(int key, const uint32_t *argb, int w, int h);   // 1 committed; (NULL,0,0) clears; 0 preserves prior art
 void fef_set_injecting(int on);                         // the game thread is feeding the original a click
 int fef_cover_screen(void);                             // test aid: the FE_* screen the layer covered the last frame with, -1 when it drew nothing
 void fef_note_press(void);                              // ... and has just pressed the button (the original may leave its screen)

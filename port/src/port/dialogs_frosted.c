@@ -16,6 +16,7 @@
 #include "port/hd_native.h"
 #include "port/host.h"
 #include "port/runtime.h"
+#include "port/ui/art_publication.h"
 
 #define QMAX 16
 #define STALE_MS 250   // the original published nothing this long: its loop has ended
@@ -60,24 +61,38 @@ void dlgf_publish(const DlgSnap *s) {
 }
 
 // Caller owns the publication lock, so face text and images change together.
-static void set_art(int key,const uint32_t *argb,int w,int h) {
-  free(g_art[key].px);g_art[key].px=NULL;g_art[key].w=g_art[key].h=0;
-  if(argb && w>0 && h>0) {
-    g_art[key].px=malloc((size_t)w*h*4);
-    if(g_art[key].px){memcpy(g_art[key].px,argb,(size_t)w*h*4);g_art[key].w=w;g_art[key].h=h;}
-  }
+static int set_art(int key,const uint32_t *argb,int w,int h) {
+  uint32_t *next;
+  if(!ui_art_copy(argb,w,h,&next))return 0;
+  free(g_art[key].px);g_art[key].px=next;g_art[key].w=w;g_art[key].h=h;
   g_art[key].serial=++g_art_pub;
+  return 1;
 }
-void dlgf_publish_art(int key,const uint32_t *argb,int w,int h) {
-  if(key<0 || key>=DLG_ART_MAX)return;
-  lock();set_art(key,argb,w,h);unlock();
+int dlgf_publish_art(int key,const uint32_t *argb,int w,int h) {
+  if(key<0 || key>=DLG_ART_MAX)return 0;
+  lock();int ok=set_art(key,argb,w,h);unlock();return ok;
 }
-void dlgf_publish_faces(const DlgSnap *s,const DlgPixels *tiles,const DlgPixels *preview) {
+int dlgf_publish_faces(const DlgSnap *s,const DlgPixels *tiles,const DlgPixels *preview) {
+  uint32_t *next[DLG_ART_MAX]={0};
+  // Reserve the whole batch first. A failed tile must not pair old pixels
+  // with a new face label or commit only part of a page.
+  for(int i=0;i<DLG_ART_MAX;i++) {
+    const DlgPixels *p=i==DLG_ART_PORTRAIT?preview:(tiles?&tiles[i-DLG_ART_FACE_FIRST]:NULL);
+    if(p && !ui_art_copy(p->px,p->w,p->h,&next[i])) {
+      for(int j=0;j<DLG_ART_MAX;j++)free(next[j]);
+      return 0;
+    }
+  }
   lock();
-  if(tiles)for(int i=0;i<DLG_FACE_TILES;i++)set_art(DLG_ART_FACE_FIRST+i,tiles[i].px,tiles[i].w,tiles[i].h);
-  if(preview)set_art(DLG_ART_PORTRAIT,preview->px,preview->w,preview->h);
+  for(int i=0;i<DLG_ART_MAX;i++) {
+    const DlgPixels *p=i==DLG_ART_PORTRAIT?preview:(tiles?&tiles[i-DLG_ART_FACE_FIRST]:NULL);
+    if(!p)continue;
+    free(g_art[i].px);g_art[i].px=next[i];g_art[i].w=p->w;g_art[i].h=p->h;
+    g_art[i].serial=++g_art_pub;
+  }
   g_snap=*s;g_snap_t=host_now_ms();g_ended=0;
   unlock();
+  return 1;
 }
 
 // draw() holds the publication lock across uploads and the matching snapshot.

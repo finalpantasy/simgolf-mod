@@ -371,7 +371,8 @@ int portrait_profile(int profile, int art) {
   int replaced=replacement(px,w,h,hs,(head/2)*100,(head&1)*372+4+expr*124,
       90,120,-22,-11,male,head,expr,child,profile);
   if(!replaced)piece(px,w,h,hs,(head/2)*100,(head&1)*372+4+expr*124,90,120,-22,-11,NULL);
-  rpf_publish_art(art, px, w, h); free(px);
+  int published = rpf_publish_art(art, px, w, h); free(px);
+  if (!published) { profile_key = 0; return 0; }
   profile_key = key; profile_art = art;
   if (getenv("SIMGOLF_PORTRAITS_LOG")) fprintf(stderr,
       "portrait: profile %d head %d male %d expression %d body %d child %d palette %08x direct %dx%d hd %d head_hd %d body_hd %d replacement %d character %d\n",
@@ -418,7 +419,9 @@ int portrait_preview(int profile, int art) {
   unsigned clear=0,solid=0;
   for(unsigned i=0;i<192u*192u;i++){if(!(px[i]>>24))clear++;else solid++;}
   if (!solid) {free(px);preview_key=0;return 0;}
-  rpf_publish_art(art,px,192,192);free(px);preview_key=key;
+  int published=rpf_publish_art(art,px,192,192);free(px);
+  if(!published){preview_key=0;return 0;}
+  preview_key=key;
   if(getenv("SIMGOLF_PORTRAITS_LOG"))fprintf(stderr,"portrait: preview profile %d source %s child %d direct 192x192 transparent 1 palette %08x painted %d clear %u solid %u\n",profile,source,child,key,painted,clear,solid);
   return 1;
 }
