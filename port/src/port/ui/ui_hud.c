@@ -1289,7 +1289,7 @@ static void bars(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art
       if (s->paths_available) {
         UiRect pr = ui_rect(first.x + (D_N + 1) * (tsq + tg), first.y, tsq, tsq);
         if (ui_dock_item(c, ui_id("hud.paths"), pr, UI_ICON_PATH, NULL, s->paths_on ? UI_SELECTED : 0,
-                         s->paths_on ? "Path view: hide clubhouse connections" : "Path view: show clubhouse connections"))
+                         s->paths_on ? "Path view: return to automatic while building" : "Path view: keep clubhouse connections visible after building"))
           path_view(a);
       }
       g_pan.left = tb.x;

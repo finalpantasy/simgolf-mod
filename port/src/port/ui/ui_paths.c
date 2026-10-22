@@ -137,13 +137,16 @@ void ui_paths_draw_legend(UiCtx *c, const PvNote *n, int forced) {
   char text[160];
   snprintf(text, sizeof text, "%s", n->not_needed ? "Green paths join the clubhouse, orange ones do not (paths are not needed on this difficulty)"
                                                   : "Green paths join the clubhouse, orange ones do not");
-  (void)forced;
-  float pad = ui_s(c, 16), h = ui_s(c, 34), sw = ui_s(c, 12), gap = ui_s(c, 8);
-  float w = pad + sw + gap + ui_text_width(c, UI_TYPE_LABEL, text) + pad + ui_s(c, 6);
+  const char *mode = forced ? "Shown automatically while building"
+                            : "Kept on. Use the path-view control to return to automatic.";
+  float pad = ui_s(c, 16), line = ui_s(c, 34), h = ui_s(c, 54), sw = ui_s(c, 12), gap = ui_s(c, 8);
+  float text_w = fmaxf(ui_text_width(c, UI_TYPE_LABEL, text), ui_text_width(c, UI_TYPE_CAPTION, mode));
+  float w = pad + sw + gap + text_w + pad + ui_s(c, 6);
   UiRect scr = ui_screen(c);
   UiRect r = ui_rect_round(ui_rect((scr.w - w) / 2, ui_s(c, 74), w, h));
   ui_panel(c, r, h / 2, UI_PANEL_STRONG | UI_PANEL_NOBLOCK);
-  UiRect s = ui_rect_round(ui_rect(r.x + pad, r.y + (h - sw) / 2, sw, sw));
+  UiRect s = ui_rect_round(ui_rect(r.x + pad, r.y + (line - sw) / 2, sw, sw));
   uid_rrect(d, s, ui_s(c, 3), t->accent);
-  ui_text_in(c, ui_rect(s.x + sw + gap, r.y, r.w - pad - sw - gap, h), UI_TYPE_LABEL, t->text_primary, text, 0);
+  ui_text_in(c, ui_rect(s.x + sw + gap, r.y, r.w - pad - sw - gap, line), UI_TYPE_LABEL, t->text_primary, text, 0);
+  ui_text_in(c, ui_rect(s.x + sw + gap, r.y + line, r.w - pad - sw - gap, h - line), UI_TYPE_CAPTION, t->text_secondary, mode, 0);
 }
