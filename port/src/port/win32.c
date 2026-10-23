@@ -362,9 +362,13 @@ static void pump_sdl(void) {
       // The native UI saw the course press. Finish its button ownership even
       // when placement consumes the release, so the next UI click is fresh.
       if (e.type == SDL_MOUSEBUTTONUP) (void)hd_ui_event(&e);
+      camera_input_consumed_event(&e);
       continue;
     }
-    if (hd_ui_event(&e)) continue;          // native UI layers first (hd_native.c, task-3)
+    if (hd_ui_event(&e)) {                 // native UI layers first (hd_native.c, task-3)
+      camera_input_consumed_event(&e);
+      continue;
+    }
 #endif
 #ifndef __EMSCRIPTEN__
     if (keymap_event(&e)) continue;         // rebound keys become what the game reads (card task-24)

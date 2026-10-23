@@ -26,6 +26,7 @@
 #include "port/grid.h"
 #include "port/host.h"
 #include "port/staff.h"
+#include "port/golf/camera_input.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define SCREEN_STATE 0x569498
@@ -334,6 +335,7 @@ static void pic_add(int x, int y, int w, int h) {
 }
 
 void rp_begin(int kind) {
+  if (kind != RP_LEADERBOARD) camera_input_cancel_gesture();
   if (g_log < 0) g_log = getenv("SIMGOLF_REPORTS_LOG") != NULL;
   g_on = rpf_enabled_kind(kind);
   g_kind = kind;
