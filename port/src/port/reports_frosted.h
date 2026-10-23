@@ -86,7 +86,7 @@ int rpf_enabled_kind(int kind);               // rpf_enabled, and for the task-7
 void rpf_publish(const RpSnap *s);            // game thread, once per frame of the report
 void rpf_end(void);                           // the report closed
 int rpf_take_action(RpAction *a);             // game thread: next native action, 1 if any
-void rpf_publish_art(int slot, const uint32_t *argb, int w, int h);   // game thread: a sprite as ARGB
+int rpf_publish_art(int slot, const uint32_t *argb, int w, int h);   // 1 committed; (NULL,0,0) clears; 0 preserves prior art
 void rp_route_selected(int hole, int staff_count, int staff_offset); // original overview state before presenting
 
 #endif

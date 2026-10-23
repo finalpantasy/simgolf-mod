@@ -22,6 +22,7 @@
 #include "port/runtime.h"
 #include "port/update_check.h"
 #include "port/ui/loading_progress.h"
+#include "port/ui/art_publication.h"
 
 #ifndef SIMGOLF_VERSION
 #define SIMGOLF_VERSION "dev"
@@ -124,22 +125,18 @@ int fef_take_action(FeAction *a) {
   return ok;
 }
 
-void fef_publish_art(int key, const uint32_t *argb, int w, int h) {
-  if (key < 0 || key >= FE_ART_MAX) return;
+int fef_publish_art(int key, const uint32_t *argb, int w, int h) {
+  if (key < 0 || key >= FE_ART_MAX) return 0;
+  uint32_t *next;
+  if (!ui_art_copy(argb, w, h, &next)) return 0;
   lock();
   free(g_art[key].px);
-  g_art[key].px = NULL;
-  g_art[key].w = g_art[key].h = 0;
-  if (argb && w > 0 && h > 0) {
-    g_art[key].px = malloc((size_t)w * h * 4);
-    if (g_art[key].px) {
-      memcpy(g_art[key].px, argb, (size_t)w * h * 4);
-      g_art[key].w = w;
-      g_art[key].h = h;
-    }
-  }
+  g_art[key].px = next;
+  g_art[key].w = w;
+  g_art[key].h = h;
   g_art[key].serial = ++g_art_pub;
   unlock();
+  return 1;
 }
 
 void fef_set_injecting(int on) { g_injecting = on; }

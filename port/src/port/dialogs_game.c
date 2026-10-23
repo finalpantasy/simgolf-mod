@@ -440,6 +440,7 @@ int dlg_face_picker(int profile,int male) {
     DlgPixels tiles[DLG_FACE_TILES]={{0}},preview={0};
     int refresh_page=page!=loaded_page || filter!=loaded_filter;
     int refresh_preview=selected!=loaded_preview;
+    int page_ready=1;
     if(refresh_page) {
       snap.face_rows=count-page*DLG_FACE_TILES;
       if(snap.face_rows>DLG_FACE_TILES)snap.face_rows=DLG_FACE_TILES;
@@ -449,18 +450,21 @@ int dlg_face_picker(int profile,int male) {
         int code=entries[page*DLG_FACE_TILES+i];snap.face_code[i]=code;
         picker_label(snap.face_name[i],sizeof snap.face_name[i],code);
         tiles[i]=picker_image(male,code);snap.face_ready[i]=tiles[i].px!=NULL;
+        if(!tiles[i].px)page_ready=0;
       }
-      loaded_page=page;loaded_filter=filter;
       fprintf(stderr,"faces: page %d filter %d count %d rows %d\n",page,filter,count,snap.face_rows);
     }
     if(refresh_preview) {
       preview=picker_image(male,selected);preview_ready=preview.px!=NULL;
-      picker_label(snap.face_preview,sizeof snap.face_preview,selected);loaded_preview=selected;
+      picker_label(snap.face_preview,sizeof snap.face_preview,selected);
       fprintf(stderr,"faces: preview code %d ready %d [%s]\n",selected,preview_ready,snap.face_preview);
     }
     snap.serial=++g_serial;snap.face_filter=filter;snap.face_page=page;
     snap.face_total=count;snap.face_selected=selected;snap.has_art=preview_ready;
-    dlgf_publish_faces(&snap,refresh_page?tiles:NULL,refresh_preview?&preview:NULL);
+    if(dlgf_publish_faces(&snap,refresh_page?tiles:NULL,refresh_preview?&preview:NULL)) {
+      if(refresh_page && page_ready){loaded_page=page;loaded_filter=filter;}
+      if(refresh_preview && preview_ready)loaded_preview=selected;
+    }
     for(int i=0;i<DLG_FACE_TILES;i++)free(tiles[i].px);free(preview.px);
     keep_restore();hd_art_hide_dialog();FUN_00480c80((void *)0x519a60);
     FUN_0045bf80(1,0);FUN_0045c030();
@@ -557,6 +561,9 @@ int dlg_wait(void) {
     g_on = 1;
     g_inj = 0;
     hd_ui_show_golf_ui(0);
+    g_snap.has_art = 0;
+  }
+  if (!g_snap.has_art) {
     int sp = G32(SPEAKER), w = 0, h = 0;
     uint32_t *px = capture(160, 140, draw_speaker, (void *)(intptr_t)sp, &w, &h);
     if (g_log && px) {
@@ -565,8 +572,7 @@ int dlg_wait(void) {
       fprintf(stderr, "dialogs: portrait opaque pixels %d of %d, first %08x mid %08x", nz, w * h, px[0], px[(h / 2) * w + w / 2]);
       fputc(10, stderr);
     }
-    dlgf_publish_art(DLG_ART_PORTRAIT, px, w, h);
-    g_snap.has_art = px != NULL;
+    g_snap.has_art = px && dlgf_publish_art(DLG_ART_PORTRAIT, px, w, h);
     free(px);
     if (g_log) fprintf(stderr, "dialogs: open hint speaker %d portrait %dx%d\n", sp, w, h);
   }
@@ -666,18 +672,25 @@ int dlg_face_native(int group) {
     DlgSnap snap = {0};
     snap.magic = DLG_MAGIC; snap.serial = ++g_serial; snap.kind = DLG_FACE;
     snap.face_page = page; snap.face_count = visible_count;
+    int published = 0;
     if (page != loaded_page) {
+      DlgPixels tiles[DLG_FACE_TILES] = {{0}};
+      int ready = 1;
       for (int i = 0; i < 10; i++) {
         int entry = page * 10 + i, head = entry + (entry >= 19), w = 0, h = 0;
         uint32_t *px = entry < visible_count ? capture(160, 160, draw_face_thumbnail, (void *)(intptr_t)(group * 72 + head), &w, &h) : NULL;
-        dlgf_publish_art(DLG_ART_FACE_FIRST + i, px, w, h);
-        free(px);
+        tiles[i] = (DlgPixels){px,w,h};
+        if (entry < visible_count && !px) ready = 0;
       }
-      loaded_page = page;
-      G32(0x5aa55c) = page * 10;
+      published = dlgf_publish_faces(&snap, tiles, NULL);
+      for (int i = 0; i < DLG_FACE_TILES; i++) free(tiles[i].px);
+      if (published && ready) {
+        loaded_page = page;
+        G32(0x5aa55c) = page * 10;
+      }
       if (g_log) fprintf(stderr, "faces: native page %d\n", page);
     }
-    dlgf_publish(&snap);
+    if (page == loaded_page && !published) dlgf_publish(&snap);
     keep_restore();
     hd_art_hide_dialog();
     FUN_00480c80((void *)0x519a60);
