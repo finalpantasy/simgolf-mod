@@ -90,7 +90,7 @@ struct Match {
   int exactN = 0, nearN = 0;
 };
 
-void collect(void *ctx, const char *name, int, unsigned) {
+void collect(void *ctx, const char *name, int, unsigned, uint64_t) {
   Match *m = (Match *)ctx;
   std::string n = squash(name);
   if (n == m->want) { m->exact = name; m->exactN++; }

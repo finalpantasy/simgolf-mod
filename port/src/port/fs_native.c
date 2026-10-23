@@ -131,7 +131,8 @@ int fs_list(const char *dospattern, fs_list_fn fn, void *ctx) {
   int n = 0;
   do {
     if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
-    fn(ctx, fd.cFileName, (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0, fd.nFileSizeLow);
+    uint64_t modified = ((uint64_t)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+    fn(ctx, fd.cFileName, (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0, fd.nFileSizeLow, modified);
     n++;
   } while (FindNextFileA(h, &fd));
   FindClose(h);
