@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 // game thread
+int fe_game_page_active(void);                         // original full-screen loop, independent of the UI skin
 int fef_loading_enabled(void);                          // fef_enabled() and ui.loading is not original (task-69)
 void fef_early(void);                                   // task-106: register the layer when the presenter starts
 void fef_release_cover(void);                           // task-106: the card goes once golf has presented a few new frames (the closing credits)

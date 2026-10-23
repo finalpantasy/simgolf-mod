@@ -264,6 +264,8 @@ uint16_t *hd_ui_back_bits(int *pitch, int *w, int *h) {
 }
 
 void hd_ui_course_done(void) {
+  void fe_course_done(void);
+  fe_course_done();   // a real course redraw ends the front-end page, even with layers=0
   hd_os_l = hd_os_r = hd_os_t = hd_os_b = 0;   // task-68: golf's own culling from here on
   if (!hd_ui_course_hook) return;
   uint8_t *s = back_surface();

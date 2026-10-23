@@ -13,7 +13,8 @@
 //
 // The native versions of the hooks are in port/frontend_game.c; the browser
 // build gets the no-op versions below, which keep the original behaviour.
-// With ui.frontend=original they are no-ops on native too.
+// With ui.frontend=original the native hooks only track page identity, so
+// stale course pixels cannot keep course weather running over a menu.
 
 #include "golf_protos.h"
 #include "port/runtime.h"
@@ -21,6 +22,7 @@
 #ifdef __EMSCRIPTEN__
 
 void fe_frame(int screen) { (void)screen; }
+void fe_course_done(void) {}
 void fe_base(int screen) { (void)screen; }
 void fe_context(int n) { (void)n; }
 int fe_text(int fn, int tag, const char *text, int x, int y, unsigned colour) {
