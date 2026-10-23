@@ -1527,8 +1527,11 @@ static double render_cpu_ms(void){
   u.LowPart=user.dwLowDateTime;u.HighPart=user.dwHighDateTime;
   return (double)(k.QuadPart+u.QuadPart)/10000.0;
 }
+DWORD g_hd_render_thread_id;   // the freeze watchdog samples this thread too (host_win32.c)
+
 static DWORD WINAPI render_main(void *arg) {
   (void)arg;
+  g_hd_render_thread_id = GetCurrentThreadId();
   g_window = SDL_CreateWindow("SimGolf", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               g_start_w, g_start_h, g_start_flags);
   if (!g_window) {

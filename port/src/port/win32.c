@@ -137,11 +137,21 @@ static void js_wait_frame(int ms) { bridge_wait(ms); }   // a real sleep unless 
 #endif
 
 static unsigned g_yields;
+// The freeze watchdog (host_win32.c) reads this from another thread: the game
+// thread yields many times a frame, so a count that stops means it is stuck.
+unsigned win_yield_count(void) { return *(volatile unsigned *)&g_yields; }
 
 void win_yield(int ms) {
   // every 10 s: yields per second and the share of time spent in game code
   static double stat_t0, busy;
   double now = port_now_ms();
+#ifndef __EMSCRIPTEN__
+  // SIMGOLF_TEST_STALL_MS: test hook for the freeze watchdog (issue 69). Once,
+  // 15 s after start, the game thread stops this long without yielding.
+  static double stall_ms = -1;
+  if (stall_ms < 0) { const char *e = getenv("SIMGOLF_TEST_STALL_MS"); stall_ms = e ? atof(e) : 0; }
+  if (stall_ms > 0 && now > 15000) { int ms = (int)stall_ms; stall_ms = 0; host_sleep_ms(ms); }
+#endif
   ++g_yields;
   if (g_last_yield > 0) busy += now - g_last_yield;
   if (stat_t0 == 0) stat_t0 = now;
