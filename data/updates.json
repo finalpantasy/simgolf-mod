@@ -2,6 +2,16 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.29",
+      "date": "2026-10-23",
+      "name": "Freeze reports",
+      "summary": "Records where the game is stuck when it stops responding.",
+      "notes": [
+        "When the picture freezes for 20 to 30 seconds while the game is still running, the game now writes golf.log.freeze.txt next to golf.log with exactly where it is stuck, so a freeze can be reported and fixed. The game keeps running. [fixes] freeze_report=0 turns it off.",
+        "Retains all 0.1.28 features, saves, settings, assets and remastered defaults. Controlled stall tests pass; the reported championship freeze itself is not yet diagnosed."
+      ]
+    },
+    {
       "version": "0.1.28",
       "date": "2026-10-22",
       "name": "Safer artwork, input and audio handling",
