@@ -1126,7 +1126,8 @@ bool initialize_d3d(EnvironmentFxState *state, SDL_Renderer *renderer) {
     return false;
   }
   state->device = device;
-  ID3D11Device_AddRef(state->device);
+  // SDL2 returns an owned reference. release_d3d releases it on both failed
+  // initialization and normal teardown; taking another one leaks each reset.
   if(std::getenv("SIMGOLF_RENDER_PROFILE")){
     IDXGIDevice *dxgi=nullptr;IDXGIAdapter *adapter=nullptr;
     if(SUCCEEDED(ID3D11Device_QueryInterface(device,IID_IDXGIDevice,(void **)&dxgi))&&

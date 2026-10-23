@@ -32,10 +32,23 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
     "EIP %08lx ESP %08lx EBP %08lx EAX %08lx EBX %08lx ECX %08lx EDX %08lx ESI %08lx EDI %08lx\r\n",
     c->Eip, c->Esp, c->Ebp, c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi);
   ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n && ok;
-  DWORD words[128]; SIZE_T bytes = 0;
+  DWORD words[128]; SIZE_T bytes = 0, wanted = 0;
+  MEMORY_BASIC_INFORMATION stack_region;
+  uintptr_t stack = (uintptr_t)c->Esp;
+  // Near the top of the stack, a fixed 512-byte request can cross into an
+  // inaccessible region and lose even the readable prefix. Bound the request
+  // to this committed region; never probe a guard page while reporting a fault.
+  if (VirtualQuery((const void *)stack, &stack_region, sizeof stack_region) &&
+      stack_region.State == MEM_COMMIT && !(stack_region.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+    SIZE_T offset = stack - (uintptr_t)stack_region.BaseAddress;
+    if (offset < stack_region.RegionSize) {
+      wanted = stack_region.RegionSize - offset;
+      if (wanted > sizeof words) wanted = sizeof words;
+    }
+  }
   // ReadProcessMemory returns failure for an inaccessible stack instead of
   // causing a second exception while reporting the original one.
-  if (ReadProcessMemory(GetCurrentProcess(), (const void *)(uintptr_t)c->Esp, words, sizeof words, &bytes)) {
+  if (wanted && ReadProcessMemory(GetCurrentProcess(), (const void *)stack, words, wanted, &bytes)) {
     for (unsigned i = 0; i < bytes / sizeof(DWORD); i += 8) {
       n = snprintf(line, sizeof line, "stack %08lx:", c->Esp + i * 4);
       for (unsigned j = i; j < i + 8 && j < bytes / sizeof(DWORD); ++j)
