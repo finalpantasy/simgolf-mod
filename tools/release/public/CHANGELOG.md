@@ -1,5 +1,12 @@
 # SimGolf Remastered for Windows
 
+## 0.1.29 - 2026-10-23
+
+Records where the game is stuck when it stops responding.
+
+- When the picture freezes for 20 to 30 seconds while the game is still running, the game now writes golf.log.freeze.txt next to golf.log with exactly where it is stuck, so a freeze can be reported and fixed. The game keeps running. [fixes] freeze_report=0 turns it off.
+- Retains all 0.1.28 features, saves, settings, assets and remastered defaults. Controlled stall tests pass; the reported championship freeze itself is not yet diagnosed.
+
 ## 0.1.28 - 2026-10-22
 
 Safer artwork, input and audio handling.

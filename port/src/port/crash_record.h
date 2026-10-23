@@ -8,10 +8,12 @@
 
 // Independent of stdout/stderr: a GUI launch can lack usable CRT streams.
 // Keep exception breadcrumbs even if stream redirection failed or was closed.
-static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep) {
-  if (!log_path || !ep || !ep->ExceptionRecord || !ep->ContextRecord) return 0;
+// The freeze watchdog (host_win32.c) writes the same record for a stuck
+// thread it does not run on: suffix ".freeze.txt" and that thread's id.
+static int host_write_thread_record(const char *log_path, const char *suffix, EXCEPTION_POINTERS *ep, DWORD thread) {
+  if (!log_path || !suffix || !ep || !ep->ExceptionRecord || !ep->ContextRecord) return 0;
   char path[MAX_PATH + 32], line[1024];
-  int n = snprintf(path, sizeof path, "%s.crash.txt", log_path);
+  int n = snprintf(path, sizeof path, "%s%s", log_path, suffix);
   if (n < 0 || n >= (int)sizeof path) return 0;
   HANDLE f = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (f == INVALID_HANDLE_VALUE) return 0;
@@ -19,7 +21,7 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
   CONTEXT *c = ep->ContextRecord;
   n = snprintf(line, sizeof line,
     "exception %08lx at %08lx thread %lu\r\nparameters %lu %08lx %08lx\r\n",
-    e->ExceptionCode, (DWORD)(uintptr_t)e->ExceptionAddress, GetCurrentThreadId(),
+    e->ExceptionCode, (DWORD)(uintptr_t)e->ExceptionAddress, thread,
     e->NumberParameters, e->NumberParameters > 0 ? (DWORD)e->ExceptionInformation[0] : 0,
     e->NumberParameters > 1 ? (DWORD)e->ExceptionInformation[1] : 0);
   DWORD written; int ok = WriteFile(f, line, n, &written, NULL) && written == (DWORD)n;
@@ -100,5 +102,9 @@ static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep)
     }
   }
   FlushFileBuffers(f); CloseHandle(f); return ok;
+}
+
+static int host_write_crash_record(const char *log_path, EXCEPTION_POINTERS *ep) {
+  return host_write_thread_record(log_path, ".crash.txt", ep, GetCurrentThreadId());
 }
 #endif

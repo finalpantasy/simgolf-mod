@@ -280,6 +280,124 @@ static DWORD WINAPI game_thread(void *arg) {
   host_exit(g_game_main());
 }
 
+// ------------------------------------------------------------------ freeze watchdog
+
+// Issue 69: a freeze (picture stopped, music still playing) leaves no crash
+// record. The main thread only waits for the game thread, so it checks once a
+// second. No yields for 20 s (the game thread is stuck) or no frame for 30 s
+// while it still yields (a loop that never draws) writes <log>.freeze.txt:
+// the game thread's registers, stack and modules as in a crash record, then
+// where the game and render threads are, sampled 16 times. Diagnostic only:
+// the game keeps running. [fixes] freeze_report=0 turns it off.
+extern unsigned g_presents;          // gdi.c
+extern DWORD g_hd_render_thread_id;  // hd_native.c
+unsigned win_yield_count(void);      // win32.c
+int bridge_paused(void);             // bridge.c
+
+typedef struct { DWORD eip, frames[12]; int n; } FreezeSample;
+
+// Only system calls while the thread is suspended: it may hold the heap,
+// CRT or loader lock, so nothing here allocates, prints or loads.
+static int freeze_sample(HANDLE th, CONTEXT *out, FreezeSample *s) {
+  if (SuspendThread(th) == (DWORD)-1) return 0;
+  CONTEXT c;
+  memset(&c, 0, sizeof c);
+  c.ContextFlags = CONTEXT_FULL;
+  int ok = GetThreadContext(th, &c);
+  if (ok) {
+    s->eip = c.Eip;
+    s->n = 0;
+    DWORD ebp = c.Ebp;
+    while (s->n < 12 && ebp) {   // the EBP chain; a bad frame fails the read, not the game
+      DWORD pair[2];
+      SIZE_T got = 0;
+      if (!ReadProcessMemory(GetCurrentProcess(), (const void *)(uintptr_t)ebp, pair, sizeof pair, &got) ||
+          got != sizeof pair)
+        break;
+      s->frames[s->n++] = pair[1];
+      if (pair[0] <= ebp) break;
+      ebp = pair[0];
+    }
+    if (out) *out = c;
+  }
+  ResumeThread(th);
+  return ok;
+}
+
+static void freeze_samples(HANDLE f, const char *name, const FreezeSample *s, int n) {
+  char line[256];
+  DWORD written;
+  for (int i = 0; i < n; i++) {
+    int k = snprintf(line, sizeof line, "%s %2d: %08lx", name, i, s[i].eip);
+    for (int j = 0; j < s[i].n; j++) k += snprintf(line + k, sizeof line - k, " %08lx", s[i].frames[j]);
+    k += snprintf(line + k, sizeof line - k, "\r\n");
+    WriteFile(f, line, k, &written, NULL);
+  }
+}
+
+static void freeze_report(const char *why, HANDLE game, unsigned yields, unsigned presents) {
+  static int reports;
+  if (reports >= 3) return;   // a long freeze is one report, not one a minute
+  reports++;
+  HANDLE render = g_hd_render_thread_id
+    ? OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, g_hd_render_thread_id)
+    : NULL;
+  FreezeSample gs[16], rs[16];
+  int gn = 0, rn = 0;
+  CONTEXT first;
+  for (int i = 0; i < 16; i++) {
+    if (freeze_sample(game, gn ? NULL : &first, &gs[gn])) gn++;
+    if (render && freeze_sample(render, NULL, &rs[rn])) rn++;
+    Sleep(50);
+  }
+  if (render) CloseHandle(render);
+  if (!gn) return;
+  EXCEPTION_RECORD er;
+  memset(&er, 0, sizeof er);
+  er.ExceptionAddress = (void *)(uintptr_t)first.Eip;
+  EXCEPTION_POINTERS ep = {&er, &first};
+  host_write_thread_record(g_log_path, ".freeze.txt", &ep, g_game_thread_id);
+  char path[MAX_PATH + 32], line[256];
+  snprintf(path, sizeof path, "%s.freeze.txt", g_log_path);
+  HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (f != INVALID_HANDLE_VALUE) {
+    DWORD written;
+    int k = snprintf(line, sizeof line, "freeze: %s (%u yields, %u frames)\r\nrender thread %lu\r\n",
+                     why, yields, presents, g_hd_render_thread_id);
+    WriteFile(f, line, k, &written, NULL);
+    freeze_samples(f, "game", gs, gn);
+    freeze_samples(f, "render", rs, rn);
+    FlushFileBuffers(f);
+    CloseHandle(f);
+  }
+  // Last: stderr's lock may belong to the stuck thread. The file is complete.
+  fprintf(stderr, "freeze: %s; details in %s\n", why, path);
+}
+
+static void watch_game(HANDLE game) {
+  int on = mods_get_int("fixes.freeze_report", 1);
+  unsigned yields = win_yield_count(), presents = g_presents;
+  int still = 0, dark = 0, armed = 1;
+  while (WaitForSingleObject(game, 1000) == WAIT_TIMEOUT) {
+    unsigned y = win_yield_count(), p = g_presents;
+    if (!on || win_closing || bridge_paused()) still = dark = 0;
+    else {
+      still = y == yields ? still + 1 : 0;
+      dark = p == presents ? dark + 1 : 0;
+    }
+    if (!still && !dark) armed = 1;   // progress again: a later freeze gets its own report
+    if (armed && still >= 20) {
+      armed = 0;
+      freeze_report("the game thread made no progress for 20 s", game, y, p);
+    } else if (armed && dark >= 30) {
+      armed = 0;
+      freeze_report("the game drew no frame for 30 s while still running", game, y, p);
+    }
+    yields = y;
+    presents = p;
+  }
+}
+
 int host_main(int argc, char **argv, int (*game_main)(void)) {
   QueryPerformanceFrequency(&g_qpc_freq);
   QueryPerformanceCounter(&g_qpc_start);
@@ -347,7 +465,7 @@ int host_main(int argc, char **argv, int (*game_main)(void)) {
   AddVectoredExceptionHandler(1, on_wild_access);
   HANDLE t = CreateThread(NULL, 64u << 20, game_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
   if (!t) host_fatal("cannot start the game thread");
-  WaitForSingleObject(t, INFINITE);
+  watch_game(t);
   return 0;
 }
 

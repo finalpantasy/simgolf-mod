@@ -1426,6 +1426,7 @@ void bridge_tick(void) {
 }
 
 int bridge_enabled(void) { return g_enabled; }
+int bridge_paused(void) { return g_paused; }   // the freeze watchdog ignores a scripted pause
 
 void bridge_init(int argc, char **argv) {
   const char *port_arg = NULL, *portfile = NULL;   // --mods is read by mods_init (task-11)
