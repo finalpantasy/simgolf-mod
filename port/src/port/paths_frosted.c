@@ -214,10 +214,10 @@ static void draw(const HdUiFrame *f, void *user) {
     UiRect br = button_rect(c, f, &pad);
     ui_panel(c, br, ui_s(c, 22), 0);
     char tip[96];
-    snprintf(tip, sizeof tip, "%s%s%s", n->view ? "Hide the cart path view" : "Show which cart paths join the clubhouse", key[0] ? " (" : "", key[0] ? key : "");
+    snprintf(tip, sizeof tip, "%s%s%s", g_user_on ? "Return to automatic cart path view" : "Keep the cart path view on after building", key[0] ? " (" : "", key[0] ? key : "");
     if (key[0]) strncat(tip, ")", sizeof tip - strlen(tip) - 1);
     UiRect ir = ui_rect(br.x + pad, br.y + pad, br.w - 2 * pad, br.h - 2 * pad);
-    if (ui_icon_button(c, ui_id("paths.view"), ir, UI_ICON_PATH, n->view ? UI_COMPACT | UI_SELECTED : UI_COMPACT, tip)) g_user_on = !g_user_on;
+    if (ui_icon_button(c, ui_id("paths.view"), ir, UI_ICON_PATH, g_user_on ? UI_COMPACT | UI_SELECTED : UI_COMPACT, tip)) g_user_on = !g_user_on;
   }
   if (n->view) ui_paths_draw_legend(c, n, n->placing && !g_user_on);
   if (hov >= 0 && !n->not_needed) ui_paths_draw_card(c, n, &m, hov, key);

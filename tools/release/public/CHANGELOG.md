@@ -1,5 +1,17 @@
 # SimGolf Remastered for Windows
 
+## 0.1.28 - 2026-10-22
+
+Safer artwork, input and audio handling.
+
+- Fixes path-overlay storage when switching between rectangular course sizes and safely retries failed allocations.
+- Makes HD art and menu/report artwork publication transactional, preserving the last complete image until a retry succeeds; fixes a D3D11 reference leak during renderer recovery.
+- Cancels stuck camera dragging when a modal report opens or a UI layer consumes the real mouse release.
+- Keeps music and sound-effect volume categories separate from voice limits and WAV size, including credits music and ambience.
+- Clarifies manual Path view controls and the automatic placement overlay. Automatic placement visibility is unchanged.
+- Restores full-screen page precedence over Options course retention while preserving the complete course behind ordinary Options.
+- Retains existing saves, settings, assets and remastered defaults. Controlled tests pass; affected-player and physical device-loss acceptance remain pending.
+
 ## 0.1.27 - 2026-10-21
 
 Restores speed when zoomed out on large courses.
