@@ -18,7 +18,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Version **0.1.29** writes a freeze report when the game stops responding, so freezes can be diagnosed. Version 0.1.28 improved artwork allocation and retry handling, fixed stuck camera dragging and audio volume categories, and clarified Path view controls. See the [changelog](CHANGELOG.md) for the complete repair list.
+Version **0.1.30** stops false freeze reports while a message waits for a click. Version 0.1.29 added freeze reports when the game stops responding, and 0.1.28 improved artwork allocation and retry handling, fixed stuck camera dragging and audio volume categories, and clarified Path view controls. See the [changelog](CHANGELOG.md) for the complete repair list.
 
 ## New features and improvements over vanilla
 
