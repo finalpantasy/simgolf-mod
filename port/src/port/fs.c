@@ -436,8 +436,9 @@ int fs_list(const char *dospattern, fs_list_fn fn, void *ctx) {
       char p[800];
       snprintf(p, sizeof p, "%s/%s", absdir, de->d_name);
       struct stat st;
-      stat(p, &st);
-      fn(ctx, de->d_name, S_ISDIR(st.st_mode), (unsigned)st.st_size);
+      if (stat(p, &st) != 0) continue;
+      uint64_t modified = st.st_mtime >= 0 ? ((uint64_t)st.st_mtime + 11644473600ULL) * 10000000ULL : 0;
+      fn(ctx, de->d_name, S_ISDIR(st.st_mode), (unsigned)st.st_size, modified);
       if (nseen < 256) snprintf(seen[nseen++], 128, "%s", de->d_name);
       n++;
     }
@@ -456,7 +457,7 @@ int fs_list(const char *dospattern, fs_list_fn fn, void *ctx) {
     for (int k = 0; k < nseen; k++)
       if (!strcmp(seen[k], name)) { dup = 1; break; }
     if (dup) continue;
-    fn(ctx, name, 0, g_entries[i].size);
+    fn(ctx, name, 0, g_entries[i].size, 0);
     n++;
   }
   return n;

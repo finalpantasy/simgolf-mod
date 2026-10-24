@@ -1059,13 +1059,13 @@ nu CloseHandle(nu h) {
 }
 
 // FindFirstFileA: the whole listing is gathered up front.
-typedef struct { char name[260]; int dir; unsigned size; } FindEntry;
+typedef struct { char name[260]; int dir; unsigned size; uint64_t modified; } FindEntry;
 typedef struct {
   int n, pos, cap, failed;
   FindEntry *e;
 } FindObj;
 
-static void find_add(void *ctx, const char *name, int is_dir, unsigned size) {
+static void find_add(void *ctx, const char *name, int is_dir, unsigned size, uint64_t modified) {
   FindObj *f = ctx;
   if (f->failed) return;
   if (f->n == f->cap) {
@@ -1089,13 +1089,47 @@ static void find_add(void *ctx, const char *name, int is_dir, unsigned size) {
   snprintf(f->e[f->n].name, 260, "%s", name);
   f->e[f->n].dir = is_dir;
   f->e[f->n].size = size;
+  f->e[f->n].modified = modified;
   f->n++;
+}
+
+static unsigned find_fold(unsigned c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; }
+
+static int find_save_pattern(const char *pattern) {
+  const char *want = "saved games/*.sve";
+  for (; *want; want++, pattern++) {
+    unsigned c = (unsigned char)*pattern;
+    if (c == '\\') c = '/';
+    if (find_fold(c) != (unsigned)*want) return 0;
+  }
+  return !*pattern;
+}
+
+static int find_recent(const void *av, const void *bv) {
+  const FindEntry *a = av, *b = bv;
+  if (a->modified != b->modified) return a->modified > b->modified ? -1 : 1;
+  // Stable across directory enumeration orders, including equal/unknown dates.
+  const unsigned char *p = (const unsigned char *)a->name, *q = (const unsigned char *)b->name;
+  while (*p && find_fold(*p) == find_fold(*q)) p++, q++;
+  if (find_fold(*p) != find_fold(*q)) return find_fold(*p) < find_fold(*q) ? -1 : 1;
+  return strcmp(a->name, b->name);
+}
+
+static int find_save_order_on(void) {
+#ifdef __EMSCRIPTEN__
+  return 1;
+#else
+  int mods_get_int(const char *key, int def);
+  return mods_get_int("fixes.save_order", 1) != 0;
+#endif
 }
 
 static void find_fill(FindObj *f, nu data) {
   memset(P(data), 0, 320);
   U32(data, 0) = f->e[f->pos].dir ? 0x10 : 0x20;
   U32(data, 32) = f->e[f->pos].size;
+  U32(data, 20) = (uint32_t)f->e[f->pos].modified;
+  U32(data, 24) = (uint32_t)(f->e[f->pos].modified >> 32);
   snprintf(S(data) + 44, 260, "%s", f->e[f->pos].name);
   f->pos++;
 }
@@ -1114,6 +1148,11 @@ nu FindFirstFileA(nu pattern, nu data) {
     free(f);
     return 0xffffffffu;
   }
+  // Sort before the browser copies its authoritative filename table. Display,
+  // preview, load and delete therefore all retain the same index-to-file map.
+  // Do not change the ordering of themes, heads, golfers or championship courses.
+  if (find_save_pattern(S(pattern)) && find_save_order_on())
+    qsort(f->e, (size_t)f->n, sizeof *f->e, find_recent);
   find_fill(f, data);
   return obj_new(OBJ_FIND, f);
 }
