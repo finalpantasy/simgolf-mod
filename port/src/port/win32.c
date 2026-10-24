@@ -148,9 +148,15 @@ void win_yield(int ms) {
 #ifndef __EMSCRIPTEN__
   // SIMGOLF_TEST_STALL_MS: test hook for the freeze watchdog (issue 69). Once,
   // 15 s after start, the game thread stops this long without yielding.
+  // SIMGOLF_TEST_STALL_YIELD=1 keeps yielding instead, drawing nothing, as
+  // golf does while a message waits for a click: that is no freeze.
   static double stall_ms = -1;
   if (stall_ms < 0) { const char *e = getenv("SIMGOLF_TEST_STALL_MS"); stall_ms = e ? atof(e) : 0; }
-  if (stall_ms > 0 && now > 15000) { int ms = (int)stall_ms; stall_ms = 0; host_sleep_ms(ms); }
+  if (stall_ms > 0 && now > 15000) {
+    int ms = (int)stall_ms; stall_ms = 0;
+    if (!getenv("SIMGOLF_TEST_STALL_YIELD")) host_sleep_ms(ms);
+    else for (double end = now + ms; port_now_ms() < end; ++g_yields) host_sleep_ms(10);
+  }
 #endif
   ++g_yields;
   if (g_last_yield > 0) busy += now - g_last_yield;

@@ -1528,6 +1528,7 @@ static double render_cpu_ms(void){
   return (double)(k.QuadPart+u.QuadPart)/10000.0;
 }
 DWORD g_hd_render_thread_id;   // the freeze watchdog samples this thread too (host_win32.c)
+volatile LONG g_hd_render_presents;   // and watches this count: the screen still updates
 
 static DWORD WINAPI render_main(void *arg) {
   (void)arg;
@@ -1687,6 +1688,7 @@ static DWORD WINAPI render_main(void *arg) {
     }
     double submitted=t->profile?host_now_ms():0;
     SDL_RenderPresent(t->r);
+    InterlockedIncrement(&g_hd_render_presents);
     double now = host_now_ms();
     double cpu_used=t->profile?render_cpu_ms()-cpu_started:0;
     double ms = now - last;

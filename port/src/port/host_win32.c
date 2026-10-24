@@ -284,12 +284,13 @@ static DWORD WINAPI game_thread(void *arg) {
 
 // Issue 69: a freeze (picture stopped, music still playing) leaves no crash
 // record. The main thread only waits for the game thread, so it checks once a
-// second. No yields for 20 s (the game thread is stuck) or no frame for 30 s
-// while it still yields (a loop that never draws) writes <log>.freeze.txt:
-// the game thread's registers, stack and modules as in a crash record, then
-// where the game and render threads are, sampled 16 times. Diagnostic only:
+// second. No yields for 20 s (the game thread is stuck) or no screen update for
+// 30 s from the render thread writes <log>.freeze.txt. The game's own frame
+// count is no sign: it draws nothing while a message waits for a click.
+// The report has the game thread's registers, stack and modules as in a crash
+// record, then where the game and render threads are, sampled 16 times. Diagnostic only:
 // the game keeps running. [fixes] freeze_report=0 turns it off.
-extern unsigned g_presents;          // gdi.c
+extern volatile LONG g_hd_render_presents;  // hd_native.c
 extern DWORD g_hd_render_thread_id;  // hd_native.c
 unsigned win_yield_count(void);      // win32.c
 int bridge_paused(void);             // bridge.c
@@ -376,14 +377,14 @@ static void freeze_report(const char *why, HANDLE game, unsigned yields, unsigne
 
 static void watch_game(HANDLE game) {
   int on = mods_get_int("fixes.freeze_report", 1);
-  unsigned yields = win_yield_count(), presents = g_presents;
+  unsigned yields = win_yield_count(), presents = g_hd_render_presents;
   int still = 0, dark = 0, armed = 1;
   while (WaitForSingleObject(game, 1000) == WAIT_TIMEOUT) {
-    unsigned y = win_yield_count(), p = g_presents;
+    unsigned y = win_yield_count(), p = g_hd_render_presents;
     if (!on || win_closing || bridge_paused()) still = dark = 0;
     else {
       still = y == yields ? still + 1 : 0;
-      dark = p == presents ? dark + 1 : 0;
+      dark = g_hd_render_thread_id && p == presents ? dark + 1 : 0;
     }
     if (!still && !dark) armed = 1;   // progress again: a later freeze gets its own report
     if (armed && still >= 20) {
@@ -391,7 +392,7 @@ static void watch_game(HANDLE game) {
       freeze_report("the game thread made no progress for 20 s", game, y, p);
     } else if (armed && dark >= 30) {
       armed = 0;
-      freeze_report("the game drew no frame for 30 s while still running", game, y, p);
+      freeze_report("the screen did not update for 30 s", game, y, p);
     }
     yields = y;
     presents = p;

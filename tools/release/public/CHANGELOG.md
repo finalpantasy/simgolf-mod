@@ -1,3 +1,10 @@
+## 0.1.30 - 2026-10-23
+
+Stops false freeze reports while a message waits for a click.
+
+- When a message such as tournament commentary waited for a click, 0.1.29 could wrongly write a freeze report after 30 seconds. The report now watches whether the screen is still updating, so only real freezes are recorded.
+- Retains all 0.1.29 features, saves, settings, assets and remastered defaults.
+
 # SimGolf Remastered for Windows
 
 ## 0.1.29 - 2026-10-23
