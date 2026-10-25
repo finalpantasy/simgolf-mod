@@ -77,3 +77,11 @@ keys. All 8,000-entry cases match. It counted 10,469,422 linked-list walks in
 the random case with the prior single hint versus 491,578 with the bounded
 hints. This is a synthetic traversal count, **not a measured in-game speedup**.
 The rebuilt native game still needs a far-tree visual and frame-time check.
+
+A Frida hook on the installed binary's `FUN_00462a30` (`0x600d1218` in this
+build) observed 5,734,252 calls with zoom 1 during a roughly 40-second sample.
+Successive sort keys decreased 4,892,207 times, were equal 215,778 times,
+and increased 626,266 times. The last-sprite hint is ineligible when the
+new key is no greater than its key, so this real sequence frequently reaches
+the original head-walk path. The hook itself adds runtime overhead and the
+sample does not measure the proposed code's frame time.
