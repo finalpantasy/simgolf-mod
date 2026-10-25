@@ -62,7 +62,8 @@ from sorted queue insertion. It is a strong lead for [issue #85](https://github.
 The HD presenter averaged 26.2 frames/s with distant trees on and 121.5
 frames/s with them off; HD art drawing averaged 7.55 versus 3.50 ms/frame.
 That indicates rendering work is also material at zoom 1. The queue change
-does not address all of that render cost.
+does not address all of that render cost. The upscaled-art cache churn and
+its 32-bit memory tradeoff are tracked separately in [issue #99](https://github.com/finalpantasy/simgolf-mod/issues/99).
 
 `FUN_00462a30` maintains the sprite queue as a sorted linked list. Its current
 hint starts at the last inserted sprite only when that sprite sorts before the
