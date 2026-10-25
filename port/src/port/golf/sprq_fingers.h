@@ -16,4 +16,3 @@ int sprq_pick_hint(int key, int count);
 void sprq_note_insert(int index);
 
 #endif
-
