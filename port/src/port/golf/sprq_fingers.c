@@ -20,6 +20,11 @@ int sprq_pick_hint(int key, int count) {
       best = g_sprq_hint;
       best_key = candidate;
       if (!g_fingers_enabled) return best;
+      // The old hint already identifies the exact insertion point. This is
+      // common for ascending keys and avoids scanning all 64 fingers.
+      int next = (int32_t)g_sprq[9][g_sprq_hint];
+      if (next == -1 || (next >= 0 && next < count &&
+                         (int32_t)g_sprq[0][next] >= key)) return best;
     }
   }
   if (!g_fingers_enabled) return -1;
