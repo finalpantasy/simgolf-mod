@@ -77,6 +77,12 @@ keys. All 8,000-entry cases match. It counted 10,469,422 linked-list walks in
 the random case with the prior single hint versus 491,578 with the bounded
 hints. This is a synthetic traversal count, **not a measured in-game speedup**.
 The rebuilt native game still needs a far-tree visual and frame-time check.
+From `port/`, the standalone check is:
+
+```sh
+gcc -O2 -std=c11 -Wall -Wextra -Werror -Isrc tests/sprq_fingers.c src/port/golf/sprq_fingers.c -o sprq_fingers_check
+./sprq_fingers_check
+```
 
 A Frida hook on the installed binary's `FUN_00462a30` (`0x600d1218` in this
 build) observed 5,734,252 calls with zoom 1 during a roughly 40-second sample.
