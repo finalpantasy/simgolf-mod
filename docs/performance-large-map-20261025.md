@@ -22,6 +22,7 @@ not a measured improvement from the source change in this branch.
 | 800 x 600, speed 1, weather off | about 10.8 | 43% | about 180 |
 | 2560 x 1440, speed 3, weather off | about 10.9 | 100% | about 164 |
 | 2560 x 1440, speed 3, storm/rain/clouds on | about 10.9 | 100% | about 120 |
+| 2560 x 1440, speed 3, storm/rain/clouds on, water reflections off | about 10.9 | 100% | about 128 |
 
 The speed-3 loop is CPU saturated even with weather off. Weather adds render
 work, especially at native monitor resolution, but the original game loop
@@ -33,7 +34,9 @@ compose time after course load rose from 2.65 to 5.69 ms per frame. The
 measured reflection stage rose from 0 to 2.20 ms, cast shadows from 0.01 to
 0.91 ms, and art drawing from 0.13 to 0.95 ms. This profile identifies
 separate weather rendering costs; it does not account for the speed-3 game
-loop saturation.
+loop saturation. Setting `environment.reflections=0` is an optional visual
+tradeoff that recovered about 8 presenter frames/s in this run. It did not
+raise the original game-loop rate.
 
 ## Candidate source path
 
