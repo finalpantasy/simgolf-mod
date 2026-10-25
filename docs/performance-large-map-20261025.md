@@ -73,7 +73,8 @@ keys. `performance.sprite_queue_fingers=0` restores the single-hint behavior.
 
 The standalone C test in `port/tests/sprq_fingers.c` compares the exact queue
 index order across ascending, descending, random, cyclic and duplicate-heavy
-keys. All 8,000-entry cases match. It counted 10,469,422 linked-list walks in
+keys, including negative keys like those observed in the game. All 8,000-entry
+cases match. It counted 10,469,422 linked-list walks in
 the random case with the prior single hint versus 491,578 with the bounded
 hints. This is a synthetic traversal count, **not a measured in-game speedup**.
 The rebuilt native game still needs a far-tree visual and frame-time check.
