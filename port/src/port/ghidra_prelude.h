@@ -333,9 +333,7 @@ int far_trees(void);
 // tools/translate/golf.trees.json point those functions at port storage of
 // SPRQ_N entries per array; g_sprq_cap is SPRQ_N, or 0x400 (the original) when
 // far_trees is off. sprq_begin() runs at the queue reset (once per frame).
-#define SPRQ_N 32768
-extern uint32_t g_sprq[10][SPRQ_N];
-extern int g_sprq_cap, g_sprq_hint;
+#include "port/golf/sprq_fingers.h"
 void sprq_begin(void);
 #define SPRQ_KEY   (*g_sprq[0])   // was 0x82415c: sort key (depth)
 #define SPRQ_FLAGS (*g_sprq[1])   // 0x82815c: draw flags (param 8)
@@ -512,3 +510,4 @@ void golfer_palette_finish(int slot);
 #include "port/roster.h"
 
 #endif  // SIMGOLF_PORT_GHIDRA_PRELUDE_H
+
