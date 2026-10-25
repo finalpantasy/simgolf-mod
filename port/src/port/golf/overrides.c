@@ -5,6 +5,7 @@
 #include "golf_protos.h"
 #include "port/runtime.h"
 #include "re_bounds.h"
+#include "port/golf/sprq_fingers.h"
 
 // task-40: golf pushes water elevations into Terrain only for tiles near the camera.
 // FUN_00449540 (patch in tools/translate/golf.json) asks here whether to push
@@ -109,7 +110,11 @@ void sprq_begin(void) {
   g_far_trees = mods_get_int("ui.far_trees", 1) != 0;
 #endif
   g_sprq_cap = g_far_trees ? SPRQ_N : 0x400;
-  g_sprq_hint = -1;
+#ifndef __EMSCRIPTEN__
+  sprq_fingers_begin(mods_get_int("performance.sprite_queue_fingers", 1));
+#else
+  sprq_fingers_begin(1);
+#endif
 }
 int far_trees(void) { return g_far_trees && *(volatile int *)(uintptr_t)0x4c2844 == 1; }
 
@@ -189,3 +194,4 @@ static uint32_t init_00474a80(ICALL_PARAMS) {
 void golf_register_overrides(void) {
   icall_register(0x00474a80, init_00474a80);
 }
+
