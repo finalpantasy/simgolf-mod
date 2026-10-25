@@ -1,0 +1,43 @@
+{
+  "comment": "Keep pathStep FIFO searches complete when expanded courses exceed the original 1024 pending entries. Preserve cost, tie and movement rules.",
+  "patches": {
+    "FUN_0042e7e0": [
+      [
+        "DAT_005a7404 = (undefined2)iVar16;\n  DAT_005a8028 = (undefined2)iVar7;",
+        "path_queue_begin((short)iVar16, (short)iVar7);"
+      ],
+      [
+        "sVar3 = (&DAT_005a7404)[uVar6];\n    sVar4 = (&DAT_005a8028)[uVar6];\n    uVar6 = uVar6 + 1 & 0x3ff;",
+        "path_queue_pop(&sVar3, &sVar4);"
+      ],
+      [
+        "(&DAT_005a7404)[local_34] = (short)iVar20;\n            (&DAT_005a8028)[local_34] = (short)iVar23;\n            local_34 = local_34 + 1 & 0x3ff;",
+        "path_queue_push((short)iVar20, (short)iVar23);"
+      ],
+      [
+        "} while ((uVar6 != local_34) && (DAT_0083afcc == 0));",
+        "} while (path_queue_pending() && (DAT_0083afcc == 0));\n  /* Allocation failure: use the original no-route direction fallback. */\n  if (path_queue_failed()) return FUN_004671a0(local_4,local_8);"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0042e7e0": [
+      [
+        "DAT_005a7404 = (undefined2)iVar16;\n  DAT_005a8028 = (undefined2)iVar7;",
+        1
+      ],
+      [
+        "sVar3 = (&DAT_005a7404)[uVar6];\n    sVar4 = (&DAT_005a8028)[uVar6];\n    uVar6 = uVar6 + 1 & 0x3ff;",
+        1
+      ],
+      [
+        "(&DAT_005a7404)[local_34] = (short)iVar20;\n            (&DAT_005a8028)[local_34] = (short)iVar23;\n            local_34 = local_34 + 1 & 0x3ff;",
+        1
+      ],
+      [
+        "} while ((uVar6 != local_34) && (DAT_0083afcc == 0));",
+        1
+      ]
+    ]
+  }
+}
