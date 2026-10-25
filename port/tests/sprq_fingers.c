@@ -13,9 +13,9 @@ static int key_for(int mode, int index, int total) {
   switch (mode) {
     case 0: return index;
     case 1: return total - index;
-    case 2: seed = seed * 1664525u + 1013904223u; return (int)(seed % 20000u);
-    case 3: return (index % 61) * 31;
-    default: return index % 7;
+    case 2: seed = seed * 1664525u + 1013904223u; return (int)(seed % 20000u) - 10000;
+    case 3: return ((index % 61) - 30) * 31;
+    default: return (index % 7) - 3;
   }
 }
 
