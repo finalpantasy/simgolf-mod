@@ -299,13 +299,13 @@ static int draw_difficulty(Scene *s, const FeSnap *snap, SDL_Texture *const *art
     ui_text_in(c, ui_rect(r.x, ty, r.w, nf.line), UI_TYPE_TITLE, t->text_primary, names[i], 0.5f);
     ui_text_in(c, ui_rect(r.x, ty + nf.line + U(s, 4), r.w, bf.line), UI_TYPE_BODY, t->text_secondary, notes[i], 0.5f);
     {
-      // what the level changes in the rules (the difficulty table): wages and how tiring a hole is
+      // The difficulty table changes payroll frequency and fatigue per hole.
       static const char *const tire[5] = {"-", "Low", "Medium", "High", "Very high"};
       char w[32];
-      snprintf(w, sizeof w, "%d a month", snap->wages[i] > 0 ? snap->wages[i] : 2);
+      snprintf(w, sizeof w, "%d times/month", snap->wages[i] > 0 ? snap->wages[i] : 2);
       int fa = snap->fatigue[i] < 1 ? 1 : snap->fatigue[i] > 4 ? 4 : snap->fatigue[i];
       float ry = r.y + r.h - U(s, 28) - U(s, 76);
-      const char *lab[2] = {"Wages paid", "Golfer fatigue"};
+      const char *lab[2] = {"Payroll", "Golfer fatigue"};
       const char *val[2] = {w, tire[fa]};
       for (int k = 0; k < 2; k++) {
         UiRect row = ui_rect(r.x + U(s, 24), ry + k * U(s, 40), r.w - U(s, 48), U(s, 36));
