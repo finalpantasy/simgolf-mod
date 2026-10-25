@@ -85,3 +85,10 @@ and increased 626,266 times. The last-sprite hint is ineligible when the
 new key is no greater than its key, so this real sequence frequently reaches
 the original head-walk path. The hook itself adds runtime overhead and the
 sample does not measure the proposed code's frame time.
+
+In a separate zoom-1 frame, the hook captured all 4,738 sort keys between
+successive queue resets. An offline replay of those keys with the prior
+single hint counted 4,685,716 linked-list walks; replay with 64 bounded
+hints counted 211,292. The resulting queue index order was identical.
+This uses real game input but still measures traversals in a replay, not
+frame time in a rebuilt executable.
