@@ -42,4 +42,3 @@ void sprq_note_insert(int index) {
   g_finger_next = (g_finger_next + 1) % FINGER_COUNT;
   if (g_finger_count < FINGER_COUNT) ++g_finger_count;
 }
-
