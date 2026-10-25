@@ -194,4 +194,3 @@ static uint32_t init_00474a80(ICALL_PARAMS) {
 void golf_register_overrides(void) {
   icall_register(0x00474a80, init_00474a80);
 }
-
