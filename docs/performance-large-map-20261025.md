@@ -59,6 +59,10 @@ On the same 158 x 158 course, two zoom-out wheel events selected zoom 1. With
 640–650/s. This setting changes the tree sprite pass and queue size, so the
 A/B result isolates that path, though it does not distinguish tree production
 from sorted queue insertion. It is a strong lead for [issue #85](https://github.com/finalpantasy/simgolf-mod/issues/85).
+The HD presenter averaged 26.2 frames/s with distant trees on and 121.5
+frames/s with them off; HD art drawing averaged 7.55 versus 3.50 ms/frame.
+That indicates rendering work is also material at zoom 1. The queue change
+does not address all of that render cost.
 
 `FUN_00462a30` maintains the sprite queue as a sorted linked list. Its current
 hint starts at the last inserted sprite only when that sprite sorts before the
