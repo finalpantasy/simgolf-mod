@@ -49,3 +49,28 @@ boolean until `mods_serial()` changes, following the existing
 The cost reduction has **not** been measured in a rebuilt executable: the
 generated Ghidra code and native x86 build dependencies are not in this
 checkout. Keep the baseline separate from any eventual before/after claim.
+
+## Farthest-zoom tree bottleneck
+
+On the same 158 x 158 course, two zoom-out wheel events selected zoom 1. With
+`ui.far_trees=1`, the game's headless `perf:` yield rate fell from roughly
+630/s at zoom 4 to roughly 20–40/s at zoom 1 while game-code time stayed at
+100%. With `ui.far_trees=0` at zoom 1, the yield rate returned to about
+640–650/s. This setting changes the tree sprite pass and queue size, so the
+A/B result isolates that path, though it does not distinguish tree production
+from sorted queue insertion. It is a strong lead for [issue #85](https://github.com/finalpantasy/simgolf-mod/issues/85).
+
+`FUN_00462a30` maintains the sprite queue as a sorted linked list. Its current
+hint starts at the last inserted sprite only when that sprite sorts before the
+new one. For nonmonotonic keys, it walks from the head. This branch adds 64
+bounded insertion hints and begins the walk from the largest known key below
+the new key. The same strict comparison retains the original order for equal
+keys. `performance.sprite_queue_fingers=0` restores the single-hint behavior.
+
+The standalone C test in `port/tests/sprq_fingers.c` compares the exact queue
+index order across ascending, descending, random, cyclic and duplicate-heavy
+keys. All 8,000-entry cases match. It counted 10,469,422 linked-list walks in
+the random case with the prior single hint versus 491,578 with the bounded
+hints. This is a synthetic traversal count, **not a measured in-game speedup**.
+The rebuilt native game still needs a far-tree visual and frame-time check.
+
