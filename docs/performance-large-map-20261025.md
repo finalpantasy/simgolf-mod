@@ -73,4 +73,3 @@ keys. All 8,000-entry cases match. It counted 10,469,422 linked-list walks in
 the random case with the prior single hint versus 491,578 with the bounded
 hints. This is a synthetic traversal count, **not a measured in-game speedup**.
 The rebuilt native game still needs a far-tree visual and frame-time check.
-
