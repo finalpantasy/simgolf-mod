@@ -510,4 +510,3 @@ void golfer_palette_finish(int slot);
 #include "port/roster.h"
 
 #endif  // SIMGOLF_PORT_GHIDRA_PRELUDE_H
-
