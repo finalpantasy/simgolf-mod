@@ -6,7 +6,8 @@ not a measured improvement from the source change in this branch.
 ## Reproduction
 
 - Installed v0.1.30 (`25ab425`), Windows, Direct3D 11.
-- A copy of a 158 x 158 course autosave was loaded through `--headless --script`.
+- A fresh copy of the same 158 x 158 course autosave was loaded for each run
+  through `--headless --script`. All runs started at zoom 4.
   `SIMGOLF_USER_DIR` pointed at a disposable folder so the player's saved games
   were not changed. `--mods` and `SIMGOLF_OPTIONS_FILE` selected disposable
   copies of the settings files.
