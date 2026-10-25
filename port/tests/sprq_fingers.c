@@ -41,8 +41,9 @@ static unsigned long long run(int mode, int use_fingers, int total, int *order) 
       cur = next[cur];
     }
     next[i] = cur;
+    g_sprq[9][i] = (uint32_t)cur;
     if (prev < 0) head = i;
-    else next[prev] = i;
+    else { next[prev] = i; g_sprq[9][prev] = (uint32_t)i; }
     sprq_note_insert(i);
   }
   int index = head;
