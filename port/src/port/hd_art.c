@@ -2281,6 +2281,7 @@ typedef struct {
 #define TEX_N (1 << 16)
 static Tex *g_tex;   // open addressing, render thread; slots stay used after eviction (tombstones)
 static int g_ntex, g_tex_slots;
+static Tex **g_evict_order;   // reused scratch, oldest resident textures first
 static int g_recover_cursor = TEX_N;
 static size_t g_tex_bytes, g_tex_peak;
 static uint32_t g_tick;
@@ -2419,24 +2420,46 @@ static void tex_rehash(void) {
   free(old);
 }
 
+static void tex_drop(Tex *old) {
+  SDL_DestroyTexture(old->tex);
+  if(old->emissive)SDL_DestroyTexture(old->emissive);
+  g_tex_bytes -= (size_t)old->w * old->h * (old->emissive?8:4);
+  old->emissive=NULL;
+  g_ntex--;
+  EnterCriticalSection(&g_lock);
+  KeyState *s = ks_find(old->key, 0);
+  if (s) s->state = S_NONE;
+  LeaveCriticalSection(&g_lock);
+  free(old->request);old->request=NULL;
+  old->tex = NULL;   // the key stays as a tombstone so probing goes on past it
+}
+
+static int tex_oldest_first(const void *a, const void *b) {
+  const Tex *x = *(Tex *const *)a, *y = *(Tex *const *)b;
+  if (x->used != y->used) return x->used < y->used ? -1 : 1;
+  // The old scan picked the first slot on equal timestamps.
+  return x == y ? 0 : x < y ? -1 : 1;
+}
+
 static void tex_evict(void) {
   size_t budget = (size_t)texture_budget_mb() << 20;
+  if (g_tex_bytes <= budget || g_ntex <= 0) return;
+  if (!g_evict_order) g_evict_order = malloc((size_t)TEX_N * sizeof *g_evict_order);
+  if (g_evict_order) {
+    int n = 0;
+    for (int i = 0; i < TEX_N; i++)
+      if (g_tex[i].tex && g_tex[i].used + 2 < g_tick) g_evict_order[n++] = &g_tex[i];
+    qsort(g_evict_order, (size_t)n, sizeof *g_evict_order, tex_oldest_first);
+    for (int i = 0; i < n && g_tex_bytes > budget; i++) tex_drop(g_evict_order[i]);
+    return;
+  }
+  // Low-memory fallback: keep the original selection path.
   while (g_tex_bytes > budget && g_ntex > 0) {
-    Tex *old = NULL;   // the least recently used
+    Tex *old = NULL;
     for (int i = 0; i < TEX_N; i++)
       if (g_tex[i].tex && (!old || g_tex[i].used < old->used)) old = &g_tex[i];
-    if (!old || old->used + 2 >= g_tick) break;   // all in use right now
-    SDL_DestroyTexture(old->tex);
-    if(old->emissive)SDL_DestroyTexture(old->emissive);
-    g_tex_bytes -= (size_t)old->w * old->h * (old->emissive?8:4);
-    old->emissive=NULL;
-    g_ntex--;
-    EnterCriticalSection(&g_lock);
-    KeyState *s = ks_find(old->key, 0);
-    if (s) s->state = S_NONE;
-    LeaveCriticalSection(&g_lock);
-    free(old->request);old->request=NULL;
-    old->tex = NULL;   // the key stays as a tombstone so probing goes on past it
+    if (!old || old->used + 2 >= g_tick) break;
+    tex_drop(old);
   }
 }
 
