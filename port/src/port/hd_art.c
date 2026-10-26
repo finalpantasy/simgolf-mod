@@ -2412,8 +2412,10 @@ static Tex *tex_find(Key k, int make) {
 // Drops the tombstones when the table gets full.
 static void tex_rehash(void) {
   if (g_tex_slots < TEX_N * 3 / 4 || g_recover_cursor<TEX_N) return;
+  Tex *fresh = calloc(TEX_N, sizeof(Tex));
+  if (!fresh) return;   // keep the original table when memory is tight
   Tex *old = g_tex;
-  g_tex = calloc(TEX_N, sizeof(Tex));
+  g_tex = fresh;
   g_tex_slots = 0;
   for (int i = 0; i < TEX_N; i++)
     if (old[i].tex || old[i].request) *tex_find(old[i].key, 1) = old[i];
