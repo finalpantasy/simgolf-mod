@@ -24,10 +24,17 @@ not a measured improvement from the source change in this branch.
 | 2560 x 1440, speed 3, storm/rain/clouds on | about 10.9 | 100% | about 120 |
 | 2560 x 1440, speed 3, storm/rain/clouds on, water reflections off | about 10.9 | 100% | about 128 |
 
-The speed-3 loop is CPU saturated even with weather off. Weather adds render
-work, especially at native monitor resolution, but the original game loop
-remained at roughly the same rate in these controlled runs. Speed 1 leaves
-game-code headroom. Other hardware or course views may behave differently.
+`perf:` frames/s counts `g_presents` in `win_present()`; `gdi.c` documents
+the course view's own approximately 11-per-second redraw cadence. It is **not**
+a direct simulation FPS measurement. The speed-1 run held the same cadence
+while game-code time was only 43%, confirming that about 11 redraws/s is not
+by itself proof of a slowdown. `hd:` reports the independent renderer's
+presentation rate.
+
+At speed 3 the game thread reported near-100% busy time even with weather off.
+Weather adds render work, especially at native monitor resolution, but the
+original redraw cadence remained roughly the same in these controlled runs.
+Speed 1 leaves game-code headroom. Other hardware or course views may differ.
 
 With `SIMGOLF_RENDER_PROFILE=1` and the 2560 x 1440 test, the mean render
 compose time after course load rose from 2.65 to 5.69 ms per frame. The
