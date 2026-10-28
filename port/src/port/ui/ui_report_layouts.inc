@@ -61,6 +61,27 @@ static int report_course_legend(const RpSnap *s,const RpItem *it) {
      (it->x==487 && !strcmp(it->s,"Scenic Hole")));
 }
 
+// showMembershipRoster (00454c50) emits the rank at x=320. Keep its
+// label and add a distinct symbol, so rank is readable without color vision.
+static int report_roster_rank(UiCtx *c,UiRect cell,const char *text,uint32_t id) {
+  const UiTokens *t=ui_tokens(c);
+  UiIcon icon;UiColor bg=t->accent_soft,fg=t->accent_soft_text;
+  if(!strcmp(text,"Member"))icon=UI_ICON_USERS;
+  else if(!strcmp(text,"Silver Member")) {
+    icon=UI_ICON_STAR;bg=(UiColor){192,192,192,255};fg=(UiColor){38,44,52,255};
+  } else if(!strcmp(text,"Gold Member")) {
+    icon=UI_ICON_TROPHY;bg=(UiColor){212,175,55,255};fg=(UiColor){38,44,52,255};
+  } else if(!strcmp(text,"Resigned")) { icon=UI_ICON_X;bg=t->surface_inset;fg=t->danger; }
+  else return 0;
+  float size=fminf(ui_s(c,20),cell.h),gap=ui_s(c,6);
+  UiRect badge=ui_rect(cell.x,cell.y+(cell.h-size)/2,size,size);
+  uid_rrect(ui_drawer(c),badge,ui_s(c,4),bg);
+  ui_icon(c,icon,badge,size*.8f,fg);
+  cell.x+=size+gap;cell.w=fmaxf(0,cell.w-size-gap);
+  report_string(c,cell,text,UI_TYPE_CAPTION,t->text_primary,0,id);
+  return 1;
+}
+
 static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *art,RpAction *acts,int max) {
   const UiTokens *t=ui_tokens(c);UiDraw *d=ui_drawer(c);int na=0;
   float sx[32]={0},weight[32]={0};int nc=0,header=-1;
@@ -171,7 +192,9 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
       UiColor color_out=(strchr(text,'-')&&numeric(text))?t->danger:text_colour(t,color);
       float align=key?.5f:((col && s->kind!=RP_KEYS)?1:0);
       if(s->kind==RP_ROSTER)align=col>=5?.5f:col==0||col==4?0:1;
-      report_string(c,cell,text,style,color_out,align,ui_idi(ui_id("report.cell"),r*32+col));
+      uint32_t id=ui_idi(ui_id("report.cell"),r*32+col);
+      if(!(s->kind==RP_ROSTER && col==4 && report_roster_rank(c,cell,text,id)))
+        report_string(c,cell,text,style,color_out,align,id);
 
       (void)first;
     }
@@ -203,6 +226,7 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
     const char *names[]={"Member","Silver Member","Gold Member","Resigned","Photo Opp","Happy Ending"};
     for(int i=0;i<6;i++) {
       UiRect r=ui_rect(body.x+i*body.w/6,yy,body.w/6,ui_s(c,24));
+      if(report_roster_rank(c,r,names[i],ui_idi(ui_id("roster.legend"),i)))continue;
       UiIcon icon=i==4?UI_ICON_CAMERA:i==3?UI_ICON_X:i==5?UI_ICON_CHECK:UI_ICON_USERS;
       ui_icon(c,icon,ui_rect(r.x,r.y,ui_s(c,20),r.h),ui_s(c,16),i==3?t->danger:t->accent_soft_text);
       ui_text_fit(c,ui_rect(r.x+ui_s(c,26),r.y,r.w-ui_s(c,28),r.h),UI_TYPE_CAPTION,t->text_secondary,names[i],0);
@@ -224,14 +248,14 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
 
 static void report_sga(UiCtx *c,const RpSnap *s,UiRect body) {
   const UiTokens *t=ui_tokens(c);UiDraw *d=ui_drawer(c);
-  report_value(c,s,75,77,ui_rect(body.x,body.y,body.w*.7f,ui_s(c,32)),UI_TYPE_HEADING,0);
+  report_value(c,s,75,77,ui_rect(body.x,body.y,body.w*.45f,ui_s(c,32)),UI_TYPE_HEADING,0);
   // showCourseReport (0044fb30) right-aligns a passing grade at (396,77),
   // but draws the rejected evaluation's zero at (370,80).
   const RpItem *grade=report_at(s,396,77);
   if(!grade)grade=report_at(s,370,80);
   char grade_text[RP_TEXT+16];
   snprintf(grade_text,sizeof grade_text,"Grade: %s",grade?grade->s:"");
-  report_string(c,ui_rect(body.x+body.w*.75f,body.y,body.w*.25f,ui_s(c,32)),grade_text,UI_TYPE_HEADING,t->text_primary,1,ui_id("sga.grade"));
+  report_string(c,ui_rect(body.x+body.w*.46f,body.y,body.w*.26f,ui_s(c,32)),grade_text,UI_TYPE_HEADING,t->text_primary,0,ui_id("sga.grade"));
   float top=body.y+ui_s(c,56),rh=ui_s(c,42);
   const char *head[]={"Criterion","Current","Rating","Ideal (Minimum)"};
   float start[]={0,.29f,.46f,.73f},width[]={.28f,.16f,.26f,.27f};

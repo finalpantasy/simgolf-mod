@@ -1,3 +1,13 @@
+## 0.1.33 - 2026-10-28
+
+Clearer membership ranks and SGA grades.
+
+- Makes Member, Silver Member, and Gold Member ranks distinct with matching symbols and colored badges in the membership roster and legend.
+- Keeps membership status labels visible, including Visitor and Resigned, without changing membership progression.
+- Moves the SGA evaluation grade above the ratings column, as requested in issue #96, while retaining tournament first-prize information.
+- Adds regression coverage for membership markers and signed HUD skill ratings.
+- Retains the save, artwork, menu-weather, payroll, and updater repairs from 0.1.32.
+
 ## 0.1.32 - 2026-10-28
 
 Safer saves and artwork, newest saves first, and clearer reports.
