@@ -444,7 +444,10 @@ static int do_apply(const char *app, const char *stage, DWORD pid, int restart, 
         snprintf(p, sizeof p, "%s\\%s", upd, fd.cFileName);
         char prior_complete[MAX_PATH + 32];
         snprintf(prior_complete, sizeof prior_complete, "%s\\.update-complete", p);
-        if (_stricmp(p, backup) < 0) {
+        // A same-second update may reuse a lower suffix after pruning freed
+        // that slot. Names do not order attempts: keep the current backup and
+        // prune other completed ones, while preserving every unmarked folder.
+        if (_stricmp(p, backup) != 0) {
           int marker_state = path_attributes(prior_complete, NULL);
           if (marker_state == 1) {
             if (!rm_tree(p)) logf_("apply: could not fully prune completed backup %s", p);

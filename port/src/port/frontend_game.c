@@ -74,6 +74,11 @@ static int g_champ;         // the difficulty screen belongs to the championship
 static unsigned char g_art_done[FE_ART_MAX];
 static int g_last_screen;
 static int g_world_active;
+// Game-thread screen identity also applies with the original front end.
+// Pixels outside its 800x600 page can still contain the previous course.
+static int g_frontend_page;
+int fe_game_page_active(void) { return g_frontend_page; }
+void fe_course_done(void) { g_frontend_page = 0; }
 
 // the click injector
 static int g_inj, g_inj_x, g_inj_y, g_inj_stage, g_inj_wait, g_inj_click;
@@ -706,6 +711,11 @@ static int g_lv_count, g_lv_sel, g_lv_p1, g_lv_p2;
 static int *g_lv_scroll;
 static int g_lv_scroll_val;
 
+void fe_list_notice(void) {
+  void file_list_draw_notice(void);
+  if (!fef_enabled()) file_list_draw_notice();
+}
+
 void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) {
   g_lv_count = count;
   g_lv_scroll = scroll;
@@ -731,8 +741,10 @@ static const char *text_at(int fn, int x, int y) {
 }
 
 static void read_load(void) {
+  int file_list_omitted(void);
   FeLoad *L = &g_snap.load;
   memset(L, 0, sizeof *L);
+  L->list.omitted = file_list_omitted();
   L->championship = g_lv_p2 != 0;
   const char *t = text_at(-1, 0x1f8, 0x2a);
   copy_str(L->list.title, sizeof L->list.title, t ? t : (L->championship ? "Select Championship Course" : "Load Previous Game"));
@@ -804,8 +816,10 @@ int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d
 }
 
 static void read_pro(void) {
+  int file_list_omitted(void);
   FePro *P = &g_snap.pro;
   memset(P, 0, sizeof *P);
+  P->list.omitted = file_list_omitted();
   const char *t = text_at(-1, 0x1f8, 0x2a);
   copy_str(P->list.title, sizeof P->list.title, t ? t : "Pick A Pro");
   P->list.total = g_lv_count;
@@ -1017,6 +1031,7 @@ void fe_loading_pic(void *sprite) {
 }
 
 void fe_loading(int pct, const char *quote) {
+  g_frontend_page = 1;
   if (!fef_loading_enabled()) return;
   if (pct <= 0 || g_snap.screen != FE_LOADING) g_snap.loading.epoch++;
   if (pct <= 0) g_load_pic_ok = 0;
@@ -1059,6 +1074,7 @@ void fe_context(int title_choice) {
 }
 
 void fe_base(int screen) {
+  g_frontend_page = 1;
   if (!fef_enabled()) return;
   g_on = 1;
   if (screen == FE_WORLD) {
@@ -1087,6 +1103,7 @@ void fe_base(int screen) {
 }
 
 void fe_frame(int screen) {
+  g_frontend_page = 1;
   static int theme_started;
   if (screen == FE_TITLE && !theme_started) {
     theme_started = 1;

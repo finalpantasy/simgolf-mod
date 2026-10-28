@@ -1,3 +1,16 @@
+## 0.1.32 - 2026-10-28
+
+Safer saves and artwork, newest saves first, and clearer reports.
+
+- Prevents an artwork-cache crash when Windows cannot allocate a replacement cache table.
+- Prevents long filenames from referring to a different save. Unsupported long names are hidden with a message asking you to shorten them; your files are not changed.
+- Lists saved games newest first while keeping preview, load, and delete tied to the selected file.
+- Stops course rain and storm sounds after returning to the main menu on wide screens.
+- Restores passing SGA grades and tournament first-prize information in the modern report.
+- Clarifies championship payroll as payments per month, rather than a money amount.
+- Prevents obsolete updater backups after several updates within the same second.
+- Retains the 0.1.31 championship path-search fix, saved games, settings, and remastered defaults.
+
 ## 0.1.31 - 2026-10-28
 
 Fixes golfers getting stranded on expanded courses during championships.

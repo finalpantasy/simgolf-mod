@@ -1992,9 +1992,10 @@ int hd_present(const uint16_t *screen) {
   }
   if (!g_active) return 0;
   int hud_game_paused(void);
+  int frontend_page = fe_game_page_active() && mods_get_int("fixes.frontend_course_state", 1);
   if (hd_present_hold_course(g_snap_fresh, g_frame_layered, g_frame_course,
                                     hud_course_transition(), opt_is_open(), hud_game_paused(), dlg_game_active(), dlgf_active(), rp_game_active(),
-                                    fef_cover_screen() >= 0, mods_get_int("fixes.hud_transitions", 1))) {
+                                    frontend_page || fef_cover_screen() >= 0, mods_get_int("fixes.hud_transitions", 1))) {
     // Original tray handlers and the paused Options page can present partial
     // back-buffer updates. Keep the complete course publication until redraw.
     hd_art_discard_pending();
@@ -2013,7 +2014,7 @@ int hd_present(const uint16_t *screen) {
   g_snap_fresh = 0;
   // Before golf has drawn any course terrain, the terrain cache holds the
   // title picture, which would pass for a course frame.
-  int course = terrain_hd_seen() && hdt_capture(layered ? g_snap : screen, mask, g_frame_serial + 1);   // the serial this frame gets below
+  int course = !frontend_page && terrain_hd_seen() && hdt_capture(layered ? g_snap : screen, mask, g_frame_serial + 1);   // the serial this frame gets below
   if (!course) layered = 0;
   EnterCriticalSection(&g_lock);
   g_frame_analysis = analysis;

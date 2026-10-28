@@ -107,6 +107,10 @@
       [
         "uVar8 = FUN_0046d6e0(400,100,1,1,0);",
         "fe_suspend();\n      uVar8 = FUN_0046d6e0(400,100,1,1,0);"
+      ],
+      [
+        "FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_9f4 = iVar3 + -0x10;",
+        "fe_list_notice();\n    FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_9f4 = iVar3 + -0x10;"
       ]
     ],
     "FUN_0043a8c0": [
@@ -145,6 +149,10 @@
       [
         "uVar6 = FUN_0046d6e0(400,100,1,1,0);",
         "fe_suspend();\n      uVar6 = FUN_0046d6e0(400,100,1,1,0);"
+      ],
+      [
+        "FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_604 = iVar2 + -0x10;",
+        "fe_list_notice();\n    FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_604 = iVar2 + -0x10;"
       ]
     ],
     "FUN_004725b0": [
@@ -206,6 +214,18 @@
     "FUN_004724c0": [
       [
         "a0 = &DAT_0080b194;",
+        1
+      ]
+    ],
+    "FUN_0043b610": [
+      [
+        "FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_9f4 = iVar3 + -0x10;",
+        1
+      ]
+    ],
+    "FUN_0043a8c0": [
+      [
+        "FUN_004762d0(PTR_DAT_004c1570,0x51b360,0,0,0);\n    local_604 = iVar2 + -0x10;",
         1
       ]
     ]

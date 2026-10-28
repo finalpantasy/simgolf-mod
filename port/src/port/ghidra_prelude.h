@@ -481,6 +481,7 @@ void fe_rect(int x, int y, int w, int h, unsigned colour);              // FUN_0
 int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5);   // FUN_00473f60
 int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d);   // FUN_00473cb0 (the pro's portrait)
 void fe_list_vars(int count, int *scroll, int sel, int p1, int p2);
+void fe_list_notice(void);
 void fe_theme_vars(int n, const unsigned char *mask, int sel);   // the theme packs: rows, content bits per row, golf's current row
 void fe_theme_restore(int count);
 void fe_theme_remember(void);

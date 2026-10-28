@@ -77,6 +77,7 @@ typedef struct FeList {
   int32_t sel;           // row in view, -1 none
   int32_t scroll, total; // first row in view, rows in all
   int32_t more;          // "(more...)" is drawn
+  int32_t omitted;       // filenames too long for the original authoritative slots
 } FeList;
 
 typedef struct FeLoad {

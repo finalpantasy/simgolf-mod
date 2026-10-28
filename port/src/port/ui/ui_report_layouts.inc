@@ -225,7 +225,11 @@ static int report_grid(UiCtx *c,const RpSnap *s,UiRect body,SDL_Texture *const *
 static void report_sga(UiCtx *c,const RpSnap *s,UiRect body) {
   const UiTokens *t=ui_tokens(c);UiDraw *d=ui_drawer(c);
   report_value(c,s,75,77,ui_rect(body.x,body.y,body.w*.7f,ui_s(c,32)),UI_TYPE_HEADING,0);
-  const RpItem *grade=report_at(s,370,80);char grade_text[RP_TEXT+16];
+  // showCourseReport (0044fb30) right-aligns a passing grade at (396,77),
+  // but draws the rejected evaluation's zero at (370,80).
+  const RpItem *grade=report_at(s,396,77);
+  if(!grade)grade=report_at(s,370,80);
+  char grade_text[RP_TEXT+16];
   snprintf(grade_text,sizeof grade_text,"Grade: %s",grade?grade->s:"");
   report_string(c,ui_rect(body.x+body.w*.75f,body.y,body.w*.25f,ui_s(c,32)),grade_text,UI_TYPE_HEADING,t->text_primary,1,ui_id("sga.grade"));
   float top=body.y+ui_s(c,56),rh=ui_s(c,42);
@@ -245,6 +249,7 @@ static void report_sga(UiCtx *c,const RpSnap *s,UiRect body) {
   float y=top+10*rh+ui_s(c,24);
   report_value(c,s,174,288,ui_rect(body.x,y,body.w*.35f,ui_s(c,32)),UI_TYPE_LABEL,0);
   report_value(c,s,400,310,ui_rect(body.x+body.w*.36f,y,body.w*.64f,ui_s(c,32)),UI_TYPE_HEADING,0);
+  report_value(c,s,400,338,ui_rect(body.x+body.w*.36f,y+ui_s(c,32),body.w*.64f,ui_s(c,32)),UI_TYPE_BODY,0);
 }
 
 static void report_hole(UiCtx *c,const RpSnap *s,UiRect body) {

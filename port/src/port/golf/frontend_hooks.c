@@ -13,7 +13,8 @@
 //
 // The native versions of the hooks are in port/frontend_game.c; the browser
 // build gets the no-op versions below, which keep the original behaviour.
-// With ui.frontend=original they are no-ops on native too.
+// With ui.frontend=original the native hooks only track page identity, so
+// stale course pixels cannot keep course weather running over a menu.
 
 #include "golf_protos.h"
 #include "port/runtime.h"
@@ -21,6 +22,7 @@
 #ifdef __EMSCRIPTEN__
 
 void fe_frame(int screen) { (void)screen; }
+void fe_course_done(void) {}
 void fe_base(int screen) { (void)screen; }
 void fe_context(int n) { (void)n; }
 int fe_text(int fn, int tag, const char *text, int x, int y, unsigned colour) {
@@ -41,6 +43,10 @@ void fe_world_hover(int tag) { (void)tag; }
 void fe_rect(int x, int y, int w, int h, unsigned colour) { FUN_00480b00((void *)0x519a60, x, y, w, h, colour); }
 int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5) { return (int)FUN_00473f60(self, p1, target, x, y, p5); }
 int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d) { return FUN_00473cb0(self, target, x, y, a, b, c, d); }
+void fe_list_notice(void) {
+  void file_list_draw_notice(void);
+  file_list_draw_notice();
+}
 void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) { (void)count, (void)scroll, (void)sel, (void)p1, (void)p2; }
 void fe_theme_vars(int n, const unsigned char *mask, int sel) { (void)n, (void)mask, (void)sel; }
 void fe_theme_restore(int count) { (void)count; }

@@ -7,6 +7,8 @@
 #ifndef SIMGOLF_PORT_FS_H
 #define SIMGOLF_PORT_FS_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,7 +36,9 @@ int fs_safe_saves(void);
 
 // Directory listing for FindFirstFile: calls fn for each entry of the
 // resolved directory whose name matches the DOS wildcard pattern.
-typedef void (*fs_list_fn)(void *ctx, const char *name, int is_dir, unsigned size);
+// modified is the last-write time in Windows FILETIME ticks (100ns since
+// 1601), or zero if unavailable. It travels with the filename, not a UI row.
+typedef void (*fs_list_fn)(void *ctx, const char *name, int is_dir, unsigned size, uint64_t modified);
 int fs_list(const char *dospattern, fs_list_fn fn, void *ctx);
 
 #ifdef __cplusplus
