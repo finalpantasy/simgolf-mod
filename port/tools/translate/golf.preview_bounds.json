@@ -1,0 +1,95 @@
+{
+  "comment": "Bound previewShotFlight tile reads and ground-sampling calls to relocated allocations, preserving padded reads and existing flight rules.",
+  "patches": {
+    "FUN_0040c170": [
+      [
+        "(&DAT_0057231a)[iVar2]",
+        "grid_tile_byte(&DAT_005722e8, param_1 + 1, param_2, 1)"
+      ]
+    ],
+    "FUN_004226a0": [
+      [
+        "iVar10 = FUN_0040bf60(iVar13,iVar15);",
+        "iVar10 = grid_tile_in_storage(iVar13, iVar15) ? FUN_0040bf60(iVar13,iVar15) : 1;"
+      ],
+      [
+        "(int)(char)(&DAT_005722b6)[iVar13 * 0x32 + iVar15]",
+        "(int)(char)grid_tile_byte(&DAT_005722e8, iVar13 - 1, iVar15, 1)"
+      ],
+      [
+        "(int)(char)(&DAT_005722e7)[iVar13 * 0x32 + iVar15]",
+        "(int)(char)grid_tile_byte(&DAT_005722e8, iVar13, iVar15 - 1, 1)"
+      ],
+      [
+        "(int)(char)(&DAT_0057231a)[iVar13 * 0x32 + iVar15]",
+        "(int)(char)grid_tile_byte(&DAT_005722e8, iVar13 + 1, iVar15, 1)"
+      ],
+      [
+        "(int)(char)(&DAT_005722e9)[iVar13 * 0x32 + iVar15]",
+        "(int)(char)grid_tile_byte(&DAT_005722e8, iVar13, iVar15 + 1, 1)"
+      ],
+      [
+        "(int)(char)(&DAT_005619a0)[iVar13 * 0x32 + iVar15]",
+        "(int)(char)grid_tile_byte(&DAT_005619a0, iVar13, iVar15, 1)"
+      ],
+      [
+        "*(byte *)(&DAT_0053caf0 + iVar15 + iVar13 * 0x32)",
+        "grid_tile_byte(&DAT_0053caf0, iVar13, iVar15, 2)"
+      ],
+      [
+        "FUN_0042fa30(",
+        "shot_preview_height("
+      ],
+      [
+        "FUN_0040c450(",
+        "shot_preview_slope("
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0040c170": [
+      [
+        "(&DAT_0057231a)[iVar2]",
+        1
+      ]
+    ],
+    "FUN_004226a0": [
+      [
+        "iVar10 = FUN_0040bf60(iVar13,iVar15);",
+        1
+      ],
+      [
+        "(int)(char)(&DAT_005722b6)[iVar13 * 0x32 + iVar15]",
+        1
+      ],
+      [
+        "(int)(char)(&DAT_005722e7)[iVar13 * 0x32 + iVar15]",
+        1
+      ],
+      [
+        "(int)(char)(&DAT_0057231a)[iVar13 * 0x32 + iVar15]",
+        1
+      ],
+      [
+        "(int)(char)(&DAT_005722e9)[iVar13 * 0x32 + iVar15]",
+        1
+      ],
+      [
+        "(int)(char)(&DAT_005619a0)[iVar13 * 0x32 + iVar15]",
+        2
+      ],
+      [
+        "*(byte *)(&DAT_0053caf0 + iVar15 + iVar13 * 0x32)",
+        2
+      ],
+      [
+        "FUN_0042fa30(",
+        2
+      ],
+      [
+        "FUN_0040c450(",
+        5
+      ]
+    ]
+  }
+}

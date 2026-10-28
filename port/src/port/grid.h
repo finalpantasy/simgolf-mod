@@ -47,6 +47,22 @@ uintptr_t grid_translate(uintptr_t addr);
 #define MAP_H g_map_h
 #define GRID(i) g_grid[i]
 
+// alloc_grids gives tile arrays W*H cells plus W+2 cells on each side.
+// Shot previews can travel farther outside the course than that padding.
+// Keep every existing in-storage read (including padded neighbour reads),
+// and extend the zero padding only when the read would leave the allocation.
+static inline int grid_tile_in_storage(int row, int col) {
+  int64_t at = (int64_t)row * MAP_W + col;
+  int64_t pad = (int64_t)MAP_W + 2;
+  return at >= -pad && at < (int64_t)MAP_W * MAP_H + pad;
+}
+
+static inline uint8_t grid_tile_byte(const void *base, int row, int col, int element_bytes) {
+  if (!grid_tile_in_storage(row, col)) return 0;
+  int64_t at = (int64_t)row * MAP_W + col;
+  return ((const uint8_t *)base)[at * element_bytes];
+}
+
 // Game rules tuned for 50 x 50 (land generator, weeds, wildlife; golf.json
 // patches, task-8), scaled with the side (GEN_LIN) or the area (GEN_AREA).
 // Both give back n on a 50 x 50 map. The names avoid "MAP_W": grid.py skips
