@@ -10,6 +10,7 @@
 #include "port/golf/placement_animation.h"
 #include "port/golf/save_cancel.h"
 #include "port/golf/re_bounds.h"
+#include "port/golf/path_queue.h"
 #include "port/camera_tiles.h"
 #include "port/clubhouse_start.h"
 #include "port/staff.h"

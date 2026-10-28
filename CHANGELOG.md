@@ -1,3 +1,11 @@
+## 0.1.31 - 2026-10-28
+
+Fixes golfers getting stranded on expanded courses during championships.
+
+- Completes path searches that exceed the original 1,024-entry queue, allowing the leading pair and waiting golfers to continue naturally.
+- Preserves path costs, movement priorities, fatigue, saved games and settings. Allocation failures safely retry on later searches.
+- Retains the 0.1.30 freeze diagnostics. The separate global freeze report in issue 69 remains under investigation.
+
 ## 0.1.30 - 2026-10-23
 
 Stops false freeze reports while a message waits for a click.
