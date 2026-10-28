@@ -2,6 +2,17 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.31",
+      "date": "2026-10-28",
+      "name": "Championship path search fix",
+      "summary": "Fixes golfers getting stranded on expanded courses during championships.",
+      "notes": [
+        "Completes path searches that exceed the original 1,024-entry queue, allowing the leading pair and waiting golfers to continue naturally.",
+        "Preserves path costs, movement priorities, fatigue, saved games and settings. Allocation failures safely retry on later searches.",
+        "Retains the 0.1.30 freeze diagnostics. The separate global freeze report in issue 69 remains under investigation."
+      ]
+    },
+    {
       "version": "0.1.30",
       "date": "2026-10-23",
       "name": "Freeze report fix",
