@@ -102,7 +102,7 @@
       ],
       [
         "FUN_0045bf80(2,0);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_9f8,&local_9fc);",
-        "FUN_0045bf80(2,0);\n      fe_list_vars((int)iVar3,(int *)&local_a0c,(int)local_a08,param_1,param_2);\n      fe_frame(4);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_9f8,&local_9fc);"
+        "FUN_0045bf80(2,0);\n      fe_list_vars((int)iVar3,(int *)&local_a0c,(int *)&local_a08,param_1,param_2);\n      fe_frame(4);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_9f8,&local_9fc);"
       ],
       [
         "uVar8 = FUN_0046d6e0(400,100,1,1,0);",
@@ -144,7 +144,7 @@
       ],
       [
         "FUN_0045bf80(2,0);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_60c,&local_610);",
-        "FUN_0045bf80(2,0);\n      fe_list_vars((int)local_608,(int *)&local_61c,(int)local_618,1,0);\n      fe_frame(5);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_60c,&local_610);"
+        "FUN_0045bf80(2,0);\n      fe_list_vars((int)local_608,(int *)&local_61c,(int *)&local_618,1,0);\n      fe_frame(5);\n      FUN_0045c030();\n      FUN_0047ab50(&DAT_00519a60,&local_60c,&local_610);"
       ],
       [
         "uVar6 = FUN_0046d6e0(400,100,1,1,0);",

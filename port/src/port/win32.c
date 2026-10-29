@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "port/fs.h"
+#include "port/save_ratings.h"
 #include "port/golf/camera_input.h"
 void hud_note_script_click(int x, int y);   // golf/hud_hooks.c (task-30)
 #include "port/runtime.h"
@@ -1059,7 +1060,45 @@ nu CloseHandle(nu h) {
 }
 
 // FindFirstFileA: the whole listing is gathered up front.
-typedef struct { char name[260]; int dir; unsigned size; uint64_t modified; } FindEntry;
+typedef struct { char name[260]; int dir; unsigned size; uint64_t modified; SaveRatings rating;int rating_valid; } FindEntry;
+static FindEntry g_save_rating_cache[100];
+static int g_save_rating_count,g_save_sort_mode;
+
+int file_save_sort_mode(void) {
+#ifdef __EMSCRIPTEN__
+  return -1;
+#else
+  int mods_get_int(const char *,int);
+  if(!mods_get_int("fixes.save_order",1))return -1;
+  int mode=mods_get_int("ui.save_sort",0);
+  return mode>=0&&mode<=2?mode:0;
+#endif
+}
+
+int file_save_rating(const char *name,SaveRatings *out) {
+  for(int i=0;i<g_save_rating_count;i++)if(!strcmp(name,g_save_rating_cache[i].name)){
+    *out=g_save_rating_cache[i].rating;return g_save_rating_cache[i].rating_valid;
+  }
+  return 0;
+}
+
+static void find_rating(FindEntry *e) {
+  e->rating_valid=0;memset(&e->rating,0,sizeof e->rating);
+  if(e->dir)return;
+  for(int i=0;i<g_save_rating_count;i++){
+    const FindEntry *old=&g_save_rating_cache[i];
+    if(e->modified&&e->modified==old->modified&&e->size==old->size&&!strcmp(e->name,old->name)){
+      e->rating=old->rating;e->rating_valid=old->rating_valid;return;
+    }
+  }
+  char dos[300],real[1024];
+  snprintf(dos,sizeof dos,"Saved Games/%s",e->name);
+  if(!fs_resolve(dos,real,sizeof real,0))return;
+  FILE *f=fopen(real,"rb");if(!f)return;
+  unsigned char prefix[8192];size_t n=fread(prefix,1,sizeof prefix,f);
+  int ok=!ferror(f);if(fclose(f))ok=0;
+  if(ok)e->rating_valid=save_ratings_parse(prefix,n,&e->rating);
+}
 typedef struct {
   int n, pos, cap, failed;
   FindEntry *e;
@@ -1115,6 +1154,12 @@ static int find_recent(const void *av, const void *bv) {
   return strcmp(a->name, b->name);
 }
 
+static int find_rated(const void *av,const void *bv) {
+  const FindEntry *a=av,*b=bv;
+  int order=save_ratings_compare(&a->rating,a->rating_valid,&b->rating,b->rating_valid,g_save_sort_mode);
+  return order?order:find_recent(av,bv);
+}
+
 static int find_save_order_on(void) {
 #ifdef __EMSCRIPTEN__
   return 1;
@@ -1151,8 +1196,16 @@ nu FindFirstFileA(nu pattern, nu data) {
   // Sort before the browser copies its authoritative filename table. Display,
   // preview, load and delete therefore all retain the same index-to-file map.
   // Do not change the ordering of themes, heads, golfers or championship courses.
-  if (find_save_pattern(S(pattern)) && find_save_order_on())
-    qsort(f->e, (size_t)f->n, sizeof *f->e, find_recent);
+  if (find_save_pattern(S(pattern)) && find_save_order_on()) {
+    g_save_sort_mode=file_save_sort_mode();
+    if(g_save_sort_mode>0)for(int i=0;i<f->n;i++)find_rating(&f->e[i]);
+    qsort(f->e,(size_t)f->n,sizeof *f->e,g_save_sort_mode>0?find_rated:find_recent);
+    if(g_save_sort_mode>=0){
+      int cached=f->n<100?f->n:100;
+      if(!g_save_sort_mode)for(int i=0;i<cached;i++)find_rating(&f->e[i]);
+      memcpy(g_save_rating_cache,f->e,(size_t)cached*sizeof *f->e);g_save_rating_count=cached;
+    }
+  }
   find_fill(f, data);
   return obj_new(OBJ_FIND, f);
 }

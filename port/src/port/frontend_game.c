@@ -37,6 +37,7 @@
 #include "port/hd_art.h"
 #include "port/host.h"
 #include "port/runtime.h"
+#include "port/save_ratings.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 #define G16(a) (*(volatile int16_t *)(uintptr_t)(a))
@@ -709,6 +710,7 @@ static void read_world(void) {
 
 static int g_lv_count, g_lv_sel, g_lv_p1, g_lv_p2;
 static int *g_lv_scroll;
+static int *g_lv_selection;
 static int g_lv_scroll_val;
 
 void fe_list_notice(void) {
@@ -716,11 +718,12 @@ void fe_list_notice(void) {
   if (!fef_enabled()) file_list_draw_notice();
 }
 
-void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) {
+void fe_list_vars(int count, int *scroll, int *sel, int p1, int p2) {
   g_lv_count = count;
   g_lv_scroll = scroll;
   g_lv_scroll_val = scroll ? *scroll : 0;
-  g_lv_sel = sel;
+  g_lv_selection=sel;
+  g_lv_sel = sel?*sel:-1;
   g_lv_p1 = p1;
   g_lv_p2 = p2;
 }
@@ -746,6 +749,8 @@ static void read_load(void) {
   memset(L, 0, sizeof *L);
   L->list.omitted = file_list_omitted();
   L->championship = g_lv_p2 != 0;
+  L->list.sort_mode=file_save_sort_mode();
+  L->list.save_sort=!L->championship&&L->list.sort_mode>=0;
   const char *t = text_at(-1, 0x1f8, 0x2a);
   copy_str(L->list.title, sizeof L->list.title, t ? t : (L->championship ? "Select Championship Course" : "Load Previous Game"));
   L->list.total = g_lv_count;
@@ -765,6 +770,11 @@ static void read_load(void) {
     }
   }
   int s = g_lv_sel - g_lv_scroll_val;
+  if(L->list.save_sort)for(int row=0;row<L->list.n_rows;row++){
+    int index=g_lv_scroll_val+row;SaveRatings rating;
+    if(index>=0&&index<100&&file_save_rating((const char *)(uintptr_t)(0x80b130+index*100),&rating))
+      snprintf(L->list.detail[row],sizeof L->list.detail[row],"Fun %d  Skill %.2f",rating.fun,(double)rating.skill/100.0);
+  }
   L->list.sel = g_lv_sel >= 0 && s >= 0 && s < FE_ROWS ? s : -1;
   L->has_info = g_lv_sel >= 0;
   if (!L->has_info) return;
@@ -968,6 +978,14 @@ static void run_actions(int screen) {
   if (g_inj) return;
   FeAction a;
   if (!fef_take_action(&a)) return;
+  if(screen==FE_LOAD&&!g_lv_p2&&a.kind==FE_A_SAVE_SORT&&a.arg>=0&&a.arg<=2&&file_save_sort_mode()>=0){
+    char value[4];snprintf(value,sizeof value,"%d",a.arg);mods_option_set("ui.save_sort",value);
+    if(g_lv_selection)*g_lv_selection=-1;
+    if(g_lv_scroll)*g_lv_scroll=0;
+    g_lv_sel=-1;g_lv_scroll_val=0;
+    // Let the original list rebuild its authoritative filename slots.
+    inj_start(0x310,0x78,1);return;
+  }
   int x, y;
   if (action_point(screen, &a, &x, &y)) inj_start(x, y, a.kind != FE_A_HOVER_TAG);
 }

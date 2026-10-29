@@ -84,3 +84,7 @@ void legacy_text_device_reset(LegacyRenderer *t) {
   for(int i=0;i<CACHE;i++)if(t->glyph[i].texture)SDL_DestroyTexture(t->glyph[i].texture);
   memset(t->glyph,0,sizeof t->glyph);t->next=0;
 }
+
+void legacy_text_renderer_rebind(LegacyRenderer *t,SDL_Renderer *r) {
+  if(t)t->r=r;
+}

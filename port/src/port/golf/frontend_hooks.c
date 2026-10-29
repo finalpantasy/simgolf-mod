@@ -47,7 +47,7 @@ void fe_list_notice(void) {
   void file_list_draw_notice(void);
   file_list_draw_notice();
 }
-void fe_list_vars(int count, int *scroll, int sel, int p1, int p2) { (void)count, (void)scroll, (void)sel, (void)p1, (void)p2; }
+void fe_list_vars(int count, int *scroll, int *sel, int p1, int p2) { (void)count, (void)scroll, (void)sel, (void)p1, (void)p2; }
 void fe_theme_vars(int n, const unsigned char *mask, int sel) { (void)n, (void)mask, (void)sel; }
 void fe_theme_restore(int count) { (void)count; }
 void fe_theme_remember(void) {}

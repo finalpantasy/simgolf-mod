@@ -716,6 +716,16 @@ static void draw_list_panel(Scene *s, const FeList *Lst, const char *what, const
   else if (Lst->total == 1 && !strcmp(what, "pro golfers")) what = "pro golfer";
   snprintf(cnt, sizeof cnt, "%d %s", Lst->total, what);
   ui_text_in(c, ui_rect(head.x + U(s, 18), head.y, head.w, head.h), UI_TYPE_LABEL, t->text_secondary, cnt, 0);
+  if(Lst->save_sort){
+    const char *labels[]={"Recent","Fun","Skill"};
+    for(int k=0;k<3;k++){
+      UiRect sort=ui_rect(head.x+U(s,230+k*112),head.y+U(s,6),U(s,106),U(s,40));
+      g_layout.btn[k]=sort;
+      if(ui_button(c,ui_idi(ui_id("fe.list.sort"),k),sort,labels[k],UI_ICON_NONE,
+                   k==Lst->sort_mode?UI_BTN_PRIMARY:UI_BTN_PILL,0))push_act(acts,max,n,FE_A_SAVE_SORT,k);
+      if(k==2)ui_tooltip(c,ui_idi(ui_id("fe.list.sort"),k),sort,"Combined Length, Accuracy and Imagination skill");
+    }
+  }
   if (Lst->total > FE_ROWS) {
     char rng[64];
     int a = Lst->scroll + 1, b = Lst->scroll + Lst->n_rows;
@@ -768,7 +778,9 @@ static void draw_list_panel(Scene *s, const FeList *Lst, const char *what, const
     } else if (hov > 0.01f) {
       uid_rrect(ui_drawer(c), rr, rad, uid_alpha(t->surface_inset, hov));
     }
-    ui_text_fit(c, ui_rect(rr.x + U(s, 18), rr.y, rr.w - U(s, 36), rr.h), UI_TYPE_BODY, t->text_primary, Lst->row[i], 0);
+    float detail=Lst->detail[i][0]?U(s,265):0;
+    ui_text_fit(c, ui_rect(rr.x + U(s, 18), rr.y, rr.w - U(s, 36)-detail, rr.h), UI_TYPE_BODY, t->text_primary, Lst->row[i], 0);
+    if(detail)ui_text_fit(c,ui_rect(rr.x+rr.w-detail,rr.y,detail-U(s,18),rr.h),UI_TYPE_CAPTION,t->text_secondary,Lst->detail[i],1);
     g_layout.row[i] = rr;
     if (ui_clicked(c, id)) push_act(acts, max, n, FE_A_ROW, i);
   }

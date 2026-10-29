@@ -2,6 +2,8 @@
 #pragma once
 #include <SDL.h>
 void ui_device_reset(SDL_Renderer *r);
+// Call after discarding GPU resources, before any drawing on the new renderer.
+void ui_renderer_rebind(SDL_Renderer *old,SDL_Renderer *next);
 void hdt_device_reset(void);
 void hd_art_device_reset(void);
 void water_device_reset(void);

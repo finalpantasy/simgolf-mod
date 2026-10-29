@@ -8,3 +8,4 @@ void legacy_text_draw(LegacyRenderer *renderer, const LegacyText *text,
                       float x, float y, float scale, SDL_Rect bounds);
 
 void legacy_text_device_reset(LegacyRenderer *t);
+void legacy_text_renderer_rebind(LegacyRenderer *t,SDL_Renderer *r);

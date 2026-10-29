@@ -11,6 +11,7 @@
 #include "port/golf/save_cancel.h"
 #include "port/golf/re_bounds.h"
 #include "port/golf/path_queue.h"
+#include "port/golf/shot_preview.h"
 #include "port/camera_tiles.h"
 #include "port/clubhouse_start.h"
 #include "port/staff.h"
@@ -334,9 +335,7 @@ int far_trees(void);
 // tools/translate/golf.trees.json point those functions at port storage of
 // SPRQ_N entries per array; g_sprq_cap is SPRQ_N, or 0x400 (the original) when
 // far_trees is off. sprq_begin() runs at the queue reset (once per frame).
-#define SPRQ_N 32768
-extern uint32_t g_sprq[10][SPRQ_N];
-extern int g_sprq_cap, g_sprq_hint;
+#include "port/golf/sprq_fingers.h"
 void sprq_begin(void);
 #define SPRQ_KEY   (*g_sprq[0])   // was 0x82415c: sort key (depth)
 #define SPRQ_FLAGS (*g_sprq[1])   // 0x82815c: draw flags (param 8)
@@ -413,6 +412,7 @@ int hole_line_shift(int tee);   // task-119: the sideways offset of a tee's rout
 // task-78 (port/water_native.c): realistic water. 1 while the presenter draws the water,
 // so golf skips its own ripples, waves, waterfalls, spray and sparkles (translator patch golf.water.json).
 int water_hide_golf_ripples(void);
+int water_fish_enabled(void);
 void *water_sprite(int id, int frame, int view);   // FUN_0043d6f0, or 0 for water golf no longer draws
 uint32_t water_queue(int x, int y, uint32_t depth, int w, int h, uint32_t sprite, int a, uint32_t b);   // FUN_004628d0 unless sprite is 0
 
@@ -480,7 +480,7 @@ void fe_world_hover(int tag);   // the tag the original has highlighted this fra
 void fe_rect(int x, int y, int w, int h, unsigned colour);              // FUN_00480b00 on the back buffer
 int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5);   // FUN_00473f60
 int fe_sprite_b(void *self, int target, int x, int y, int a, int b, int c, int d);   // FUN_00473cb0 (the pro's portrait)
-void fe_list_vars(int count, int *scroll, int sel, int p1, int p2);
+void fe_list_vars(int count, int *scroll, int *sel, int p1, int p2);
 void fe_list_notice(void);
 void fe_theme_vars(int n, const unsigned char *mask, int sel);   // the theme packs: rows, content bits per row, golf's current row
 void fe_theme_restore(int count);

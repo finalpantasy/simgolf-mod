@@ -25,7 +25,7 @@ cbuffer C : register(b0) {
   float4 g_waves[32];  // per wave: wave vector (rad per tile), slope amplitude (a k), phase
   float4 g_ball[8];    // active ball splashes: x, y (map tiles), start time (s)
   float4 g_bp;         // ball splash: size (tiles), life (s), droplets, active count
-  float4 g_bq;         // ball splash: foam, ring width (tiles), droplet radius (tiles)
+  float4 g_bq;         // ball splash: foam, ring width, droplet radius; optional fish view
 };
 
 Texture2D T_tile  : register(t0);   // golf's water tile texture (art pack upscale when on)
@@ -75,6 +75,29 @@ PSIn vs_water(VSIn i) {
 // (blue well above red), sand is warm and pale, grass is green.
 float key_of(float3 c) {
   return smoothstep(g_key.x, g_key.y, c.b - c.r);
+}
+
+// Small schools remain inside an eight-tile patch. All animation is visual;
+// the course's terrain, wildlife, collision and random generator are untouched.
+float fish_school(float2 p,float t) {
+  float2 cell=floor(p/8),q=p-cell*8-4;
+  float seed=frac(sin(dot(cell,float2(12.9898,78.233)))*43758.5453);
+  float angle=t*0.16+seed*6.2831853;
+  float2 forward=float2(cos(angle),sin(angle)),side=float2(-forward.y,forward.x);
+  float2 center=float2(sin(angle)*1.15,-cos(angle)*1.15);
+  float mask=0;
+  float aa=max(length(fwidth(p)),0.008);
+  [unroll] for(int j=0;j<5;j++) {
+    float2 offset=forward*((j%3)*0.65-0.65)+side*((j/3)*0.65-0.32);
+    float2 v=q-center-offset;
+    float2 f=float2(dot(v,forward),dot(v,side))*1.7;
+    f.y+=sin(t*7+j*1.7)*0.015*saturate(-f.x*5);
+    float body=1-smoothstep(1-aa*7,1+aa*7,length(f/float2(0.20,0.058)));
+    float tail=(1-smoothstep(0,aa,abs(f.y)-(-f.x-0.13)*0.65))
+      *smoothstep(-0.29-aa,-0.29+aa,f.x)*(1-smoothstep(-0.15-aa,-0.15+aa,f.x));
+    mask=max(mask,max(body,tail));
+  }
+  return saturate(mask);
 }
 
 // Soft caustic net on the shallow bed: two drifting noise layers folded into ridges.
@@ -203,6 +226,7 @@ float4 ps_water(PSIn i) : SV_Target {
     body *= 0.95 + 0.10 * smoothstep(0.55, 0.95, band);
   }
   body *= 0.85 + 0.15 * saturate(dot(N, L));
+  if(g_bq.w>0.5)body=lerp(body,float3(0.065,0.18,0.17),fish_school(P+refr*2,t)*0.65);
   // golf's lighting (cliff shade) carried over from the vertex colour
   float lit = saturate(dot(i.col, float3(0.3, 0.5, 0.2)) / 0.75);
   body *= lit;

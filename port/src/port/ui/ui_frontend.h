@@ -78,6 +78,8 @@ typedef struct FeList {
   int32_t scroll, total; // first row in view, rows in all
   int32_t more;          // "(more...)" is drawn
   int32_t omitted;       // filenames too long for the original authoritative slots
+  int32_t save_sort,sort_mode;
+  char detail[FE_ROWS][48];
 } FeList;
 
 typedef struct FeLoad {
@@ -153,6 +155,7 @@ enum {
   FE_A_OK,
   FE_A_DELETE,
   FE_A_SCROLL,      // list: arg rows down (negative up)
+  FE_A_SAVE_SORT,   // saved games: 0 recent, 1 fun, 2 combined skill
   FE_A_OPTIONS,     // title: open the native Options page (presenter only, never reaches the original)
   FE_A_UPDATES,     // title: arg 0 panel opened, 1 Later, 2 Update now (presenter only, never reaches the original)
   FE_A_MODS         // title: open the native Mods screen (presenter only, task-22)

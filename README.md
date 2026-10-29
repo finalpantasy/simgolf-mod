@@ -18,7 +18,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Version **0.1.33** makes membership ranks easier to distinguish and places the SGA grade above the ratings column. It retains the save, artwork, and championship fixes from 0.1.32. See the [changelog](CHANGELOG.md) for details.
+Version **0.1.34** improves large-course rendering and graphics recovery, adds safe save sorting and optional Sandbox generation tools, and restores the Windows game icon. See the [changelog](CHANGELOG.md) for details.
 
 ## New features and improvements over vanilla
 

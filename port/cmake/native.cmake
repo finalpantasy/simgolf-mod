@@ -121,6 +121,20 @@ include(cmake/ball.cmake)
 # Installer worker sgsetup.exe (task-76): unpacks the player's own disc.
 include(cmake/setup.cmake)
 
+# Explorer, shortcuts and SDL's Windows window class use application icon 101.
+# Compile separately so C/C++-only compiler switches never reach llvm-rc.
+set(_app_resources "${CMAKE_SOURCE_DIR}/resources/windows")
+set(_app_icon "${CMAKE_BINARY_DIR}/simgolf-icon.res")
+add_custom_command(OUTPUT "${_app_icon}"
+  COMMAND "${CMAKE_RC_COMPILER}" /nologo "/I${_app_resources}"
+    "/FO${_app_icon}" "${_app_resources}/simgolf.rc"
+  DEPENDS "${_app_resources}/simgolf.rc" "${_app_resources}/simgolf.ico"
+  VERBATIM)
+set_source_files_properties("${_app_icon}" PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+foreach(_app golf sgsetup sgupdate)
+  target_sources(${_app} PRIVATE "${_app_icon}")
+endforeach()
+
 # Same semantics as the browser build (docs/porting.md): wrapping signed and
 # pointer arithmetic, no strict aliasing, null checks kept, loops may spin.
 set(_sem /clang:-fwrapv /clang:-fwrapv-pointer /clang:-fno-strict-aliasing

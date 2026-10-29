@@ -68,6 +68,7 @@
 //   fpslog=path   one line per presented frame (time, frame ms, game frames)
 
 #define WIN32_LEAN_AND_MEAN
+#define COBJMACROS
 #include "port/release_data.h"
 #include <windows.h>
 #include "platform/exe_path.h"
@@ -87,6 +88,7 @@
 #include "port/hd_native.h"
 #include "port/legacy_text_native.h"
 #include "port/graphics_reset.h"
+#include "port/graphics_device.h"
 #include "port/ui/ui_course_map.h"
 #include "port/hd_present_policy.h"
 #include "port/dialogs_frosted.h"
@@ -143,8 +145,9 @@ static unsigned g_start_flags;
 static volatile LONG g_device_reset;
 static int SDLCALL watch_device_reset(void *user,SDL_Event *e) {
   (void)user;
-  if(e->type==SDL_RENDER_DEVICE_RESET || e->type==SDL_RENDER_TARGETS_RESET)
+  if(e->type==SDL_RENDER_DEVICE_RESET || e->type==SDL_RENDER_TARGETS_RESET) {
     InterlockedExchange(&g_device_reset,1);
+  }
   return 1;
 }
 
@@ -524,7 +527,16 @@ static void fill(Rt *t, Layer *L, int mode, LONG serial) {
   L->serial = serial;
 }
 
-static int recover_device(Rt *t) {
+static SDL_Renderer *create_renderer(void) {
+  Uint32 flags=SDL_RENDERER_ACCELERATED|SDL_RENDERER_TARGETTEXTURE|(g_cfg.vsync?SDL_RENDERER_PRESENTVSYNC:0);
+  SDL_SetHint(SDL_HINT_RENDER_DRIVER,"direct3d11");
+  SDL_Renderer *r=SDL_CreateRenderer(g_window,-1,flags);
+  SDL_SetHint(SDL_HINT_RENDER_DRIVER,"");
+  return r?r:SDL_CreateRenderer(g_window,-1,flags);
+}
+
+static void discard_device_resources(Rt *t) {
+  Layer *layers[]={&t->course[0],&t->course[1],&t->overlay,&t->ui};
   SDL_RenderFlush(t->r);
   SDL_SetRenderTarget(t->r,NULL);
   // A glide references the snapshot being discarded below. End its shared
@@ -546,13 +558,35 @@ static int recover_device(Rt *t) {
   SDL_Texture **extra[]={&t->canvas,&t->zsnap,&t->pix,&t->slast,&t->dump_tex};
   for(int i=0;i<5;i++) {if(*extra[i])SDL_DestroyTexture(*extra[i]);*extra[i]=NULL;}
   t->zsnap_ok=t->slast_ok=t->zon=t->have_prev=0;t->off_dur=0;
-  Layer *layers[]={&t->course[0],&t->course[1],&t->overlay,&t->ui};
-  int made=0;
   for(int i=0;i<4;i++) {
     Layer *l=layers[i];
     if(l->src)SDL_DestroyTexture(l->src);
     if(l->pre)SDL_DestroyTexture(l->pre);
     memset(l,0,sizeof *l);l->serial=l->pre_serial=-1;
+  }
+}
+
+static int recover_device(Rt *t,int replace) {
+  Layer *layers[]={&t->course[0],&t->course[1],&t->overlay,&t->ui};
+  if(t->r)discard_device_resources(t);
+  if(t->r && replace) {
+    // Water and UI caches must release their references before SDL destroys
+    // the device. Otherwise the old swap chain may keep the window occupied.
+    ui_renderer_rebind(t->r,NULL);
+    legacy_text_renderer_rebind(t->text_renderer,NULL);
+    SDL_DestroyRenderer(t->r);t->r=NULL;
+  }
+  if(!t->r) {
+    t->r=create_renderer();
+    if(!t->r){fprintf(stderr,"hd: renderer recovery waiting: %s\n",SDL_GetError());return 0;}
+    ui_renderer_rebind(NULL,t->r);
+    legacy_text_renderer_rebind(t->text_renderer,t->r);
+  }
+  SDL_RendererInfo info;SDL_GetRendererInfo(t->r,&info);
+  if(!strcmp(info.name,"direct3d11") && !hd_device_mark(t->r,(UINT_PTR)t))return 0;
+  int made=0;
+  for(int i=0;i<4;i++) {
+    Layer *l=layers[i];
     l->src=SDL_CreateTexture(t->r,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,FRAME_W,FRAME_H);
     made+=l->src!=NULL;
   }
@@ -1548,11 +1582,7 @@ static DWORD WINAPI render_main(void *arg) {
   t->local = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->local_ui = calloc((size_t)FRAME_W * FRAME_H, 2);
   t->mask = calloc((size_t)FRAME_W * FRAME_H, 1);
-  Uint32 flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE | (g_cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0);
-  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
-  t->r = SDL_CreateRenderer(g_window, -1, flags);
-  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "");
-  if (!t->r) t->r = SDL_CreateRenderer(g_window, -1, flags);
+  t->r = create_renderer();
   Layer *layers[] = {&t->course[0], &t->course[1], &t->overlay, &t->ui};
   int made = 0;
   for (int i = 0; t->r && i < 4; i++) {
@@ -1573,6 +1603,7 @@ static DWORD WINAPI render_main(void *arg) {
   g_text_ready=t->text_renderer && t->text_course && t->text_ui;
   SDL_RendererInfo info;
   SDL_GetRendererInfo(t->r, &info);
+  if(!strcmp(info.name,"direct3d11"))hd_device_mark(t->r,(UINT_PTR)t);
   for (int c = 0; c < 32768; c++) {
     uint32_t r = (c >> 10) & 31, g = (c >> 5) & 31, b = c & 31;
     r = r << 3 | r >> 2;
@@ -1608,8 +1639,12 @@ static DWORD WINAPI render_main(void *arg) {
     if(reset_file && DeleteFileA(reset_file)) {
       SDL_Event reset={0};reset.type=SDL_RENDER_DEVICE_RESET;SDL_PushEvent(&reset);
     }
-    if(InterlockedExchange(&g_device_reset,0)) {
-      if(!recover_device(t)) { Sleep(100);InterlockedExchange(&g_device_reset,1);continue; }
+    int replace=!t->r || (!strcmp(info.name,"direct3d11") && !hd_device_matches(t->r,(UINT_PTR)t));
+    int notified=InterlockedExchange(&g_device_reset,0);
+    if(replace || notified) {
+      if(replace)fprintf(stderr,"hd: graphics device changed or unavailable; rebuilding renderer (reset event %d)\n",notified);
+      if(!recover_device(t,replace)) { Sleep(100);InterlockedExchange(&g_device_reset,1);continue; }
+      SDL_GetRendererInfo(t->r,&info);
     }
     if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MINIMIZED) {
       Sleep(20);

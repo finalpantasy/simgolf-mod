@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "port/grid.h"
 #include "port/clubhouse_start.h"
+#include "port/sandbox_landscape.h"
 #ifndef __EMSCRIPTEN__
 #include "mods/mods.h"
 #endif
@@ -11,6 +12,24 @@ typedef struct { uint8_t terrain, decoration, building, height; uint16_t flags; 
 static Cell cells[GRID_MAX_SIDE * GRID_MAX_SIDE];
 static int enabled, ax, ay, size;
 static uint8_t *bytes(uint32_t addr) { return (uint8_t *)grid_translate(addr); }
+static void sandbox_start_end(void) {
+#ifndef __EMSCRIPTEN__
+  if(!(*(uint32_t *)(uintptr_t)0x59e7b8 & 0x1000000u))return;
+  int blank=mods_get_int("sandbox.blank",0),flat=mods_get_int("sandbox.flat",0);
+  if(!blank&&!flat)return;
+  extern uint32_t FUN_0040e400(int);
+  extern uint32_t FUN_0042f7a0(void);
+  if(blank)for(int k=255;k>=0;k--){
+    int16_t *record=(int16_t *)(uintptr_t)(0x58bcb8+k*16);
+    if(record[0]>=0)FUN_0040e400(k);
+  }
+  sandbox_landscape_apply(MAP_W,MAP_H,blank,flat,bytes(0x5722e8),bytes(0x542414),
+    bytes(0x53bbac),bytes(0x56988c),(uint16_t *)bytes(0x53caf0),bytes(0x5a4998),
+    *(uint8_t *)(uintptr_t)(0x578375+4*0x30));
+  FUN_0042f7a0();
+  fprintf(stderr,"sandbox: new landscape rough-only=%d flat=%d size=%dx%d\n",!!blank,!!flat,MAP_W,MAP_H);
+#endif
+}
 void clubhouse_start_begin(void) {
   enabled = size = 0;
 #ifndef __EMSCRIPTEN__
@@ -32,6 +51,7 @@ void clubhouse_start_end(void) {
   extern uint32_t FUN_0040e400(int);
   extern int FUN_0042f340(void);
   extern uint32_t FUN_0042f7a0(void);
+  sandbox_start_end();
   enabled = 0;
   if (!size) return;
   int found = -1;

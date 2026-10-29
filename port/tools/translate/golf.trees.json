@@ -148,11 +148,11 @@
       ],
       [
         "  iVar1 = iVar3;\n  if (iVar3 != -1) {\n    do {",
-        "  iVar1 = iVar3;\n  if (iVar3 != -1 && g_sprq_hint >= 0 && g_sprq_hint < DAT_00838200 &&\n      (int)(&DAT_0082415c)[g_sprq_hint] < param_3) {\n    /* simgolf mod task-90: the new sprite sorts after the last inserted one, so\n       start the walk there (the same list as the walk from the head) */\n    param_4 = g_sprq_hint;\n    iVar1 = (&DAT_008361f4)[g_sprq_hint];\n    while (iVar1 != -1 && (int)(&DAT_0082415c)[iVar1] < param_3) {\n      param_4 = iVar1;\n      iVar1 = (&DAT_008361f4)[iVar1];\n    }\n    (&DAT_008361f4)[DAT_00838200] = iVar1;\n    (&DAT_008361f4)[param_4] = DAT_00838200;\n    goto LAB_00462bc1;\n  }\n  if (iVar3 != -1) {\n    do {"
+        "  iVar1 = iVar3;\n  int fast_hint = sprq_pick_hint(param_3, DAT_00838200);\n  if (iVar3 != -1 && fast_hint >= 0) {\n    /* Start at the closest known smaller key; the forward walk retains the\n       original sorted order, including insertion before equal keys. */\n    param_4 = fast_hint;\n    iVar1 = (&DAT_008361f4)[fast_hint];\n    while (iVar1 != -1 && (int)(&DAT_0082415c)[iVar1] < param_3) {\n      param_4 = iVar1;\n      iVar1 = (&DAT_008361f4)[iVar1];\n    }\n    (&DAT_008361f4)[DAT_00838200] = iVar1;\n    (&DAT_008361f4)[param_4] = DAT_00838200;\n    goto LAB_00462bc1;\n  }\n  if (iVar3 != -1) {\n    do {"
       ],
       [
         "LAB_00462bc1:\n  DAT_00838200 = DAT_00838200 + 1;",
-        "LAB_00462bc1:\n  g_sprq_hint = DAT_00838200;\n  DAT_00838200 = DAT_00838200 + 1;"
+        "LAB_00462bc1:\n  sprq_note_insert(DAT_00838200);\n  DAT_00838200 = DAT_00838200 + 1;"
       ],
       [
         "DAT_0082415c",

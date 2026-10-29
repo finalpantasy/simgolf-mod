@@ -33,6 +33,9 @@ class SaveListOrder(unittest.TestCase):
 static const char *root;
 static const char *host_user_dir(void) { return root; }
 static const char *host_game_dir(void) { return root; }
+int fs_resolve(const char *p,char *out,int cap,int writing) {
+  assert(!writing);int n=snprintf(out,cap,"%s/%s",root,p);return n>=0&&n<cap;
+}
 '''
         harness += "\n".join(function(native, signature) for signature in (
             "static const char *base_for(", "static int normalize(",
@@ -54,6 +57,7 @@ static void *obj_get(nu h,int kind) { (void)kind; return h==1?object:NULL; }
 static void obj_free(nu h) { (void)h; object=NULL; }
 static int mods_get_int(const char *key,int def) { (void)key; return def; }
 '''
+        harness += (ROOT / "port/src/port/save_ratings.h").read_text().replace("#pragma once", "")
         harness += listing + r'''
 int main(int argc,char **argv) {
   assert(argc==2);root=argv[1];
@@ -109,6 +113,9 @@ int main(int argc,char **argv) {
 #include <stdlib.h>
 #include <string.h>
 typedef uintptr_t nu;
+#define FindFirstFileA game_FindFirstFileA
+#define FindNextFileA game_FindNextFileA
+#define FindClose game_FindClose
 #define P(x) ((void *)(uintptr_t)(x))
 #define S(x) ((char *)(uintptr_t)(x))
 #define U32(p, off) (*(uint32_t *)((char *)P(p) + (off)))
@@ -120,7 +127,13 @@ static int enabled = 1, reverse;
 static nu obj_new(int kind, void *p) { (void)kind; object=p; return 1; }
 static void *obj_get(nu h,int kind) { (void)kind; return h==1?object:NULL; }
 static void obj_free(nu h) { (void)h; object=NULL; }
-static int mods_get_int(const char *key,int def) { (void)def; assert(!strcmp(key,"fixes.save_order"));return enabled; }
+static int mods_get_int(const char *key,int def) {
+  if(!strcmp(key,"ui.save_sort"))return def;
+  assert(!strcmp(key,"fixes.save_order"));return enabled;
+}
+static int fs_resolve(const char *p,char *out,int cap,int writing) {
+  (void)p;(void)out;(void)cap;assert(!writing);return 0;
+}
 static const char *names[]={"A-old.sve","Z-new.sve","b-tie.sve","B-tie.sve","unknown.sve"};
 static const uint64_t stamps[]={10,30,20,20,0};
 static int fs_list(const char *p,void (*fn)(void *,const char *,int,unsigned CALLBACK),void *ctx) {
@@ -129,6 +142,7 @@ static int fs_list(const char *p,void (*fn)(void *,const char *,int,unsigned CAL
   return 5;
 }
 '''.replace("CALLBACK", callback).replace("STAMP", stamp)
+        harness += (ROOT / "port/src/port/save_ratings.h").read_text().replace("#pragma once", "")
         cases = r'''
 static void check(const char *pattern, const int *order) {
   union { uint64_t align; char bytes[320]; } data;

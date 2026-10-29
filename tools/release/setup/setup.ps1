@@ -236,6 +236,7 @@ try {
     $lnk.TargetPath = Join-Path $Dir "Sim Golf Remastered.exe"
     $lnk.WorkingDirectory = $Dir
     $lnk.Description = "SimGolf Remastered"
+    $lnk.IconLocation = (Join-Path $Dir "Sim Golf Remastered.exe") + ",0"
     $lnk.Save()
     Say "Desktop shortcut made."
   }

@@ -16,6 +16,7 @@ typedef struct { uint32_t id; float v; } State;
 typedef struct { UiIcon icon; int px; SDL_Texture *tex; double retry; } IconTex;   // retry: when a failed texture may be built again (task-114k)
 
 struct UiCtx {
+  struct UiCtx *next_context;
   SDL_Renderer *r;
   UiTokens tok;
   UiDraw d;
@@ -76,6 +77,8 @@ void ui_tokens_load_all(UiTokens *t, const char *base_path, const char *const *o
 #define DBG_CTX_MAX 16
 static struct { UiCtx *c; char name[24]; } g_dbg[DBG_CTX_MAX];
 static int g_ndbg;
+// Recovery owns every context, including ones beyond the debug-view limit.
+static UiCtx *g_contexts;
 
 void ui_debug_name(UiCtx *c, const char *name) {
   for (int i = 0; i < g_ndbg; i++)
@@ -102,6 +105,7 @@ int ui_debug_probe(int i, float x, float y, const UiCtx *skip, char *name, int c
 UiCtx *ui_create(SDL_Renderer *r, const UiTokens *tokens, const char *font_dir) {
   UiCtx *c = calloc(1, sizeof *c);
   if (!c) return NULL;
+  c->next_context=g_contexts;g_contexts=c;
   if (g_ndbg < DBG_CTX_MAX) {
     g_dbg[g_ndbg].name[0] = 0;
     g_dbg[g_ndbg++].c = c;
@@ -120,6 +124,9 @@ UiCtx *ui_create(SDL_Renderer *r, const UiTokens *tokens, const char *font_dir) 
 
 void ui_destroy(UiCtx *c) {
   if (!c) return;
+  UiCtx **link=&g_contexts;
+  while(*link && *link!=c)link=&(*link)->next_context;
+  if(*link)*link=c->next_context;
   for (int i = 0; i < g_ndbg; i++)
     if (g_dbg[i].c == c) g_dbg[i] = g_dbg[--g_ndbg];
   for (int i = 0; i < c->nicons; i++)
@@ -1088,12 +1095,18 @@ void ui_tag(UiCtx *c, float cx, float y, const char *text, int selected) {
 
 // Discard only GPU resources. Fonts, input queues and active controls survive.
 void ui_device_reset(SDL_Renderer *r) {
-  for(int i=0;i<g_ndbg;i++) {
-    UiCtx *c=g_dbg[i].c;
+  for(UiCtx *c=g_contexts;c;c=c->next_context) {
     if(c->r!=r)continue;
     for(int k=0;k<c->nicons;k++)if(c->icons[k].tex)SDL_DestroyTexture(c->icons[k].tex);
     memset(c->icons,0,sizeof c->icons);c->nicons=0;
     uid_free(&c->d);uid_init(&c->d,r);
     uit_device_reset(&c->t);
+  }
+}
+
+void ui_renderer_rebind(SDL_Renderer *old,SDL_Renderer *next) {
+  for(UiCtx *c=g_contexts;c;c=c->next_context) {
+    if(c->r!=old)continue;
+    c->r=next;c->d.r=next;c->t.r=next;
   }
 }

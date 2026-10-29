@@ -84,6 +84,9 @@ static int g_cache_mb = 1024, g_log = 1, g_on, g_selftest, g_loaders = 4, g_debu
 static int g_look_base[NCAT], g_look_env[NCAT] = {-1, -1, -1, -1, -1, -1, -1};
 static int g_env_phase, g_base_done;   // set_key calls after the store are SIMGOLF_DISPLAY's
 static volatile LONG g_alpha_edges=1;
+static volatile LONG g_decode_queue_mb=32;
+static volatile LONG g_sprite_lod=1;
+#include "port/hd_art_lod.h"
 
 // HD is the default (card task-71, the maintainer 2026-10-10: "i want the game to be in hd, not pixelized"); scripted
 // runs set SIMGOLF_ART_DEFAULT=original so their pictures stay the plain build's.
@@ -172,6 +175,9 @@ void hd_art_set_key(const char *k, const char *v) {
 void hd_art_read_store(void) {
   defaults();
   InterlockedExchange(&g_alpha_edges,mods_get_int("art.alpha_edges",1)!=0);
+  InterlockedExchange(&g_sprite_lod,mods_get_int("performance.sprite_texture_lod",1)!=0);
+  int queue_mb=mods_get_int("performance.art_decode_queue_mb",32);
+  InterlockedExchange(&g_decode_queue_mb,queue_mb<8?8:queue_mb>128?128:queue_mb);
   if (!g_base_done) {   // the first call: what golf.ini said
     memcpy(g_look_base, g_look, sizeof g_look);
     g_pixel_base = g_pixel;
@@ -673,7 +679,8 @@ static void on_cut(void *wrap, int src, int x, int y, int w, int h) {
 // canvas pixels its draws changed, checked against the picture at its end.
 
 enum { V_RGBA, V_IDX, V_SHADOW, V_RECOLOR, V_MASKED, V_SHADE, V_INDEXED_SHADOW,
-       V_RGBA_EDGE, V_RECOLOR_EDGE };
+       V_RGBA_EDGE, V_RECOLOR_EDGE,
+       V_RGBA_LOD, V_RECOLOR_LOD, V_SHADOW_LOD, V_RGBA_EDGE_LOD, V_RECOLOR_EDGE_LOD };
 enum { LC, LT };
 
 typedef struct {
@@ -765,6 +772,7 @@ typedef struct {
   int sx, sy, sw, sh, mask;   // stills: the rectangle (1x) and the mask file (-1 none)
   int shadow_max_index;       // V_INDEXED_SHADOW: last source index treated as a LUT plane
   int alpha_edges;            // immutable request setting, never read the mod store in loaders
+  int lod;                    // immutable resolution class encoded in the key
   uint16_t pal[256];   // V_IDX/V_RECOLOR: RGB555 colours; shadows: black alpha per index from 0xf8
 } Req;
 
@@ -789,6 +797,8 @@ static Req *g_q;           // ring, under g_lock
 static int g_qh, g_qt;
 static Done *g_done;       // ring, under g_lock
 static int g_dh, g_dt;
+static size_t g_done_bytes,g_done_peak;   // under g_lock, completed CPU pixels
+#include "port/hd_art_queue.h"
 static volatile LONG g_loads, g_fails;
 static double g_load_ms;
 
@@ -845,7 +855,11 @@ static Key make_key(int file, int view, int frame, int variant, uint32_t hash) {
 // The texture an entry needs (shadow: its shadow part). Stills: one texture
 // per rectangle of the sheet (and mask), view/frame 0xff.
 static Key entry_key(const Entry *e, int shadow) {
-  if (shadow) return make_key(e->shadow_file, e->view, e->frame, V_SHADOW, e->shadow_hash);
+  const ArtFile *file=&g_files[e->file];
+  int world=file->cat==C_TREES||file->cat==C_PEOPLE||file->cat==C_BUILDINGS||file->cat==C_ANIMALS;
+  int lod=e->view>=0&&world&&(e->variant==V_RGBA||e->variant==V_RECOLOR)&&hd_art_sprite_lod(
+    InterlockedCompareExchange(&g_sprite_lod,0,0),e->w,e->h,file->w4,file->h4)==4;
+  if (shadow) return make_key(e->shadow_file, e->view, e->frame, lod?V_SHADOW_LOD:V_SHADOW, e->shadow_hash);
   if (e->view < 0) {
     uint32_t h = hash_bytes(&e->sx, 8, 2166136261u);
     h = (h ^ (uint32_t)(e->variant == V_MASKED || e->variant == V_SHADE || e->variant == V_INDEXED_SHADOW ? e->pal_hash + 1 : 0)) * 16777619u;
@@ -856,6 +870,12 @@ static Key entry_key(const Entry *e, int shadow) {
   if(InterlockedCompareExchange(&g_alpha_edges,0,0)){
     if(variant==V_RGBA)variant=V_RGBA_EDGE;
     if(variant==V_RECOLOR)variant=V_RECOLOR_EDGE;
+  }
+  if(lod){
+    if(variant==V_RGBA)variant=V_RGBA_LOD;
+    else if(variant==V_RECOLOR)variant=V_RECOLOR_LOD;
+    else if(variant==V_RGBA_EDGE)variant=V_RGBA_EDGE_LOD;
+    else if(variant==V_RECOLOR_EDGE)variant=V_RECOLOR_EDGE_LOD;
   }
   return make_key(e->file, e->view, e->frame, variant, e->pal_hash);
 }
@@ -874,7 +894,9 @@ static void want(const Entry *e, int shadow, const uint16_t *pal) {
     r->view = e->view;
     r->frame = e->frame;
     r->variant = shadow ? V_SHADOW : e->variant;
-    r->alpha_edges=(k.b>>28)==V_RGBA_EDGE||(k.b>>28)==V_RECOLOR_EDGE;
+    int variant=k.b>>28;
+    r->alpha_edges=variant==V_RGBA_EDGE||variant==V_RECOLOR_EDGE||variant==V_RGBA_EDGE_LOD||variant==V_RECOLOR_EDGE_LOD;
+    r->lod=variant>=V_RGBA_LOD?4:1;
     r->sx = e->sx, r->sy = e->sy, r->sw = e->sw, r->sh = e->sh;
     r->shadow_max_index = shadow ? 0 : e->shadow_max_index;
     r->mask = e->variant == V_MASKED ? (int)e->pal_hash : -1;
@@ -1268,6 +1290,12 @@ static void load_one(const Req *r, Done *d) {
       free(idx);
     }
   }
+  if(rgba&&r->lod==4){
+    int rw,rh;uint8_t *reduced=hd_art_reduce_rgba(rgba,w,h,&rw,&rh);
+    if(reduced){free(rgba);rgba=reduced;w=rw;h=rh;}
+    // On allocation failure retain the complete full-size image and account
+    // for its actual dimensions in both CPU and GPU budgets.
+  }
   if(r->view>=0&&r->alpha_edges)sprite_alpha_extrude(rgba,w,h,1);
   d->key = r->key;
   d->request = *r;
@@ -1383,7 +1411,8 @@ static DWORD WINAPI loader_main(void *arg) {
       continue;
     }
     EnterCriticalSection(&g_lock);
-    int have = g_qh != g_qt;
+    size_t budget=(size_t)InterlockedCompareExchange(&g_decode_queue_mb,0,0)<<20;
+    int have = g_qh != g_qt && g_done_bytes<budget;
     if (have) r = g_q[g_qh++ % QN];
     LeaveCriticalSection(&g_lock);
     if (!have) {
@@ -1392,13 +1421,20 @@ static DWORD WINAPI loader_main(void *arg) {
     }
     Done d;
     load_one(&r, &d);
+    size_t bytes=d.rgba?(size_t)d.w*d.h*4:0;
     EnterCriticalSection(&g_lock);
-    while (g_dt - g_dh >= QN) {   // the render thread is behind (minimised): wait
+    while (g_dt - g_dh >= QN || !hd_art_queue_accept(g_done_bytes,bytes,
+             (size_t)InterlockedCompareExchange(&g_decode_queue_mb,0,0)<<20)) {
+      // Backpressure when uploads stall or the window is minimized. At most
+      // one additional decoded image per loader can be waiting outside this
+      // queue. The old count-only bound allowed thousands of full RGBA images.
       LeaveCriticalSection(&g_lock);
       Sleep(5);
       EnterCriticalSection(&g_lock);
     }
     g_done[g_dt++ % QN] = d;
+    g_done_bytes+=bytes;
+    if(g_done_bytes>g_done_peak)g_done_peak=g_done_bytes;
     if (d.rgba) {
       g_loads++;
       g_load_ms += d.ms;
@@ -2227,9 +2263,14 @@ void hd_art_publish(int layered, const uint16_t *screen, int retain_course) {
   double now = host_now_ms();
   if (g_log && now - last > 5000) {
     if (last > 0 && g_any) {
+      EnterCriticalSection(&g_lock);
+      size_t queued=g_done_bytes,peak=g_done_peak;
+      LeaveCriticalSection(&g_lock);
       fprintf(stderr, "art: %d tags (%d cuts, %d untagged); last lists %d course + %d on top; %d draws recorded (%d page blits), %d px owned in 5 s; loads %ld ok %ld failed, %.2f ms avg\n",
               g_ntags, g_tagstat.cuts, g_tagstat.untagged, g_pub[LC].n, g_pub[LT].n, g_stat.rec, g_stat.blits_rec, g_stat.owned,
               (long)g_loads, (long)g_fails, g_loads ? g_load_ms / g_loads : 0.0);
+      fprintf(stderr,"art: decoded upload queue %.1f MB, peak %.1f MB, budget %ld MB\n",
+              queued/1048576.0,peak/1048576.0,(long)InterlockedCompareExchange(&g_decode_queue_mb,0,0));
       if (g_vstat.n)
         fprintf(stderr, "art: selftest %ld frames checked, mean match %.4f, best f-1/f/f+1 %ld/%ld/%ld, %ld under 0.9, %ld without an original\n",
                 (long)g_vstat.n, g_vstat.n > g_vstat.missing ? g_vstat.score / (g_vstat.n - g_vstat.missing) : 0.0,
@@ -2281,6 +2322,7 @@ typedef struct {
 #define TEX_N (1 << 16)
 static Tex *g_tex;   // open addressing, render thread; slots stay used after eviction (tombstones)
 static int g_ntex, g_tex_slots;
+static Tex **g_evict_order;   // reused scratch, oldest resident textures first
 static int g_recover_cursor = TEX_N;
 static size_t g_tex_bytes, g_tex_peak;
 static uint32_t g_tick;
@@ -2421,24 +2463,46 @@ static void tex_rehash(void) {
   free(old);
 }
 
+static void tex_drop(Tex *old) {
+  SDL_DestroyTexture(old->tex);
+  if(old->emissive)SDL_DestroyTexture(old->emissive);
+  g_tex_bytes -= (size_t)old->w * old->h * (old->emissive?8:4);
+  old->emissive=NULL;
+  g_ntex--;
+  EnterCriticalSection(&g_lock);
+  KeyState *s = ks_find(old->key, 0);
+  if (s) s->state = S_NONE;
+  LeaveCriticalSection(&g_lock);
+  free(old->request);old->request=NULL;
+  old->tex = NULL;   // the key stays as a tombstone so probing goes on past it
+}
+
+static int tex_oldest_first(const void *a, const void *b) {
+  const Tex *x = *(Tex *const *)a, *y = *(Tex *const *)b;
+  if (x->used != y->used) return x->used < y->used ? -1 : 1;
+  // The old scan picked the first slot on equal timestamps.
+  return x == y ? 0 : x < y ? -1 : 1;
+}
+
 static void tex_evict(void) {
   size_t budget = (size_t)texture_budget_mb() << 20;
+  if (g_tex_bytes <= budget || g_ntex <= 0) return;
+  if (!g_evict_order) g_evict_order = malloc((size_t)TEX_N * sizeof *g_evict_order);
+  if (g_evict_order) {
+    int n = 0;
+    for (int i = 0; i < TEX_N; i++)
+      if (g_tex[i].tex && g_tex[i].used + 2 < g_tick) g_evict_order[n++] = &g_tex[i];
+    qsort(g_evict_order, (size_t)n, sizeof *g_evict_order, tex_oldest_first);
+    for (int i = 0; i < n && g_tex_bytes > budget; i++) tex_drop(g_evict_order[i]);
+    return;
+  }
+  // Low-memory fallback: keep the original selection path.
   while (g_tex_bytes > budget && g_ntex > 0) {
-    Tex *old = NULL;   // the least recently used
+    Tex *old = NULL;
     for (int i = 0; i < TEX_N; i++)
       if (g_tex[i].tex && (!old || g_tex[i].used < old->used)) old = &g_tex[i];
-    if (!old || old->used + 2 >= g_tick) break;   // all in use right now
-    SDL_DestroyTexture(old->tex);
-    if(old->emissive)SDL_DestroyTexture(old->emissive);
-    g_tex_bytes -= (size_t)old->w * old->h * (old->emissive?8:4);
-    old->emissive=NULL;
-    g_ntex--;
-    EnterCriticalSection(&g_lock);
-    KeyState *s = ks_find(old->key, 0);
-    if (s) s->state = S_NONE;
-    LeaveCriticalSection(&g_lock);
-    free(old->request);old->request=NULL;
-    old->tex = NULL;   // the key stays as a tombstone so probing goes on past it
+    if (!old || old->used + 2 >= g_tick) break;
+    tex_drop(old);
   }
 }
 
@@ -2481,7 +2545,11 @@ static int upload_done(SDL_Renderer *r) {
     Done d;
     EnterCriticalSection(&g_lock);
     int have = g_dh != g_dt;
-    if (have) d = g_done[g_dh++ % QN];
+    if (have) {
+      d = g_done[g_dh++ % QN];
+      if(d.rgba)g_done_bytes-=(size_t)d.w*d.h*4;
+      SetEvent(g_wake);
+    }
     LeaveCriticalSection(&g_lock);
     if (!have) break;
     double prof_t = host_now_ms();

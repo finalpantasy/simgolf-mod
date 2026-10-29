@@ -73,6 +73,7 @@ static int cur_look(void) {
 static volatile LONG g_mode = -1;     // 1: display.water=hd (game thread writes, render thread reads)
 static volatile LONG g_works;         // 1 once the pass has drawn, -1 when it can't run
 static volatile LONG g_occlusion = 1;
+static volatile LONG g_fish;
 static volatile float g_wind_dir = -1000, g_wind_speed = -1;   // task-79 override (-1000: the look's own)
 
 // water.clip: record the next frames to a video (look tests; game paused by the caller)
@@ -88,6 +89,7 @@ void water_poll(void) {
   if (s == g_seen_serial && g_mode >= 0) return;
   g_seen_serial = s;
   g_occlusion = mods_get_int("fixes.water_occlusion", 1) != 0;
+  InterlockedExchange(&g_fish,mods_get_int("water.fish",0)!=0);
   const char *env = getenv("SIMGOLF_WATER");
   const char *v = env && *env ? env : mods_get("display.water");
   // Realistic is the default with the HD presentation; scripted runs that keep the plain build's
@@ -123,6 +125,7 @@ void water_poll(void) {
 
 int water_on(void) { return g_mode > 0 && g_works > 0; }
 int water_hide_golf_ripples(void) { return g_mode > 0 && g_works > 0; }
+int water_fish_enabled(void) { return g_mode > 0 && g_works > 0 && g_fish; }
 
 // Sprites drawn under the surface (shoals, rocks and coral, Flics/Water/UW*): the colour and opacity they
 // are drawn with while the water pass runs, so they read as seen through the water. 0: draw as golf does.
@@ -1292,6 +1295,7 @@ void water_draw(SDL_Renderer *r, int x, int y, int w, int h, double now_ms) {
     for (int i = 0; i < W.nball; i++) c.ball[i][0] = W.ball[i][0], c.ball[i][1] = W.ball[i][1], c.ball[i][2] = W.ball[i][2];
     c.bp[0] = L->ball_size, c.bp[1] = L->ball_life, c.bp[2] = L->ball_drops, c.bp[3] = (float)W.nball;
     c.bq[0] = L->ball_foam, c.bq[1] = L->ball_ring, c.bq[2] = L->ball_drop_r;
+    c.bq[3] = g_fish ? 1.0f : 0.0f;
     set_cb(&c);
     D3D11_VIEWPORT vp = {0, 0, rw, rh, 0, 1};
     ID3D11DeviceContext_RSSetViewports(W.ctx, 1, &vp);

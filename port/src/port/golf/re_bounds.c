@@ -8,7 +8,17 @@
 
 int fix_re_bounds_on(void) {
 #ifndef __EMSCRIPTEN__
-  return mods_get_int("fixes.re_bounds", 1) != 0;
+  // Sprite lookups call this for every visible animation cell. The settings
+  // store searches its keys linearly and parses the value on each read, so
+  // keep the live setting until the store changes (as bounds_fixes.c does).
+  static unsigned seen = ~0u;
+  static int enabled = 1;
+  unsigned serial = mods_serial();
+  if (serial != seen) {
+    enabled = mods_get_int("fixes.re_bounds", 1) != 0;
+    seen = serial;
+  }
+  return enabled;
 #else
   return 1;
 #endif

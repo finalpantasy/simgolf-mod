@@ -1,3 +1,15 @@
+## 0.1.34 - 2026-10-29
+
+Smoother large-course rendering, graphics recovery, safer shot previews, save sorting and optional Sandbox tools.
+
+- Recovers the renderer when Windows graphics-device recreation fails without an SDL reset notification, retaining golfer-card text and input.
+- Bounds shot-preview terrain reads outside map storage and incorporates the validated sprite-queue and texture-eviction improvements from PRs #98, #104 and #105.
+- Reduces distant upscaled world-sprite texture churn and bounds queued decoded artwork. The full-resolution path remains available through performance.sprite_texture_lod=0.
+- Adds Recent, Fun and Skill save sorting while preserving the selected file for preview, loading and deletion.
+- Adds independently switchable empty and flat Sandbox generation options, both off by default; existing courses and Career generation are preserved.
+- Adds optional underwater fish scenery for realistic water, off by default.
+- Embeds the supplied Windows icon in the game, installer worker and updater, with explicit shortcut icon selection.
+
 ## 0.1.33 - 2026-10-28
 
 Clearer membership ranks and SGA grades.
