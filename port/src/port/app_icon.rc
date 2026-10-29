@@ -1,0 +1,2 @@
+#include "app_icon.h"
+SIMGOLF_APP_ICON_ID ICON "app_icon.ico"

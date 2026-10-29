@@ -49,6 +49,18 @@ add_executable(golf WIN32
   src/platform/sound.cpp src/platform/sound_native.cpp
   ${SIMGOLF_GEN_SRC} ${SIMGOLF_GOLF_OVERRIDES} ${SIMGOLF_JGLD_OVERRIDES})
 
+# Compile the icon separately so clang-cl-only C/C++ flags do not reach llvm-rc.
+# The existing x86 toolchain already supplies CMAKE_RC_COMPILER.
+set(_app_icon_res "${CMAKE_CURRENT_BINARY_DIR}/app_icon.res")
+add_custom_command(OUTPUT "${_app_icon_res}"
+  COMMAND "${CMAKE_RC_COMPILER}" /nologo
+    /I "${CMAKE_SOURCE_DIR}/src/port" /I "${CMAKE_SOURCE_DIR}/../data/ui"
+    /FO "${_app_icon_res}" "${CMAKE_SOURCE_DIR}/src/port/app_icon.rc"
+  DEPENDS src/port/app_icon.rc src/port/app_icon.h "${CMAKE_SOURCE_DIR}/../data/ui/app_icon.ico"
+  VERBATIM)
+set_source_files_properties("${_app_icon_res}" PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+target_sources(golf PRIVATE "${_app_icon_res}")
+
 # task-3: sharp scaling, borderless full screen, render thread (any resolution, any frame rate)
 target_sources(golf PRIVATE src/port/hd_native.c src/port/hd_terrain_native.c src/port/legacy_text_native.c)
 target_sources(golf PRIVATE src/port/course_lamps.c src/port/course_lamps_art.c src/port/course_lamps_game.c src/port/course_lamps_render.c)
