@@ -284,7 +284,6 @@ int course_switch_on(void);
 int course_switch_available(int tag);
 int course_switch_current(int tag);
 int course_switch_request(int tag);
-int course_switch_prepare_purchase(void);
 void course_switch_refresh(void);
 void course_switch_invalidate(void);
 void course_switch_before_purchase(int site);
@@ -1005,8 +1004,6 @@ static void run_actions(int screen) {
         course_switch_request(a.arg)) inj_start(768, 557, 1);
     return;
   }
-  if (screen == FE_WORLD && a.kind == FE_A_TAG && G32(IN_GAME) &&
-      !course_switch_prepare_purchase()) return;
   if(screen==FE_LOAD&&!g_lv_p2&&a.kind==FE_A_SAVE_SORT&&a.arg>=0&&a.arg<=2&&file_save_sort_mode()>=0){
     char value[4];snprintf(value,sizeof value,"%d",a.arg);mods_option_set("ui.save_sort",value);
     if(g_lv_selection)*g_lv_selection=-1;
