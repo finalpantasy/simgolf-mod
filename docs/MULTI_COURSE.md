@@ -19,5 +19,6 @@ keep every course; a lone manual save still contains only its active layout.
 Existing single-course saves load as before. The game cannot reconstruct an
 older property's layout if no snapshot was saved when the player left it; the
 map then shows **No saved course**. Switching is offered in the Frosted Mint
-world map on the Windows build. The browser and original-skin map keep their
-existing controls.
+world map on the Windows build. The original-skin map has no switch control,
+and in-game property rerolls are disabled to keep site indices stable. The
+browser build keeps its existing controls.

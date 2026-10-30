@@ -14,6 +14,10 @@ enum { BASE = 0x400000, BYTES = 0xc00000, STRIDE = 0x2e };
 #define U8(a) (*(uint8_t *)(uintptr_t)(a))
 static uint8_t *saves[16];
 static char save_names[16][64];
+static int last_save_write = -1;
+static int fail_next_save;
+void crt_reset_last_save_write(void) { last_save_write = -1; }
+int crt_last_save_write(void) { return last_save_write; }
 
 static int site_of(const char *name) {
   const char *p = strrchr(name, '_');
@@ -41,10 +45,12 @@ int fs_resolve(const char *path, char *out, int cap, int writing) {
 int FUN_0040b4a0(char *name) {
   int site = site_of(name);
   assert(site >= 0 && site < 16);
+  if (fail_next_save) { fail_next_save = 0; last_save_write = 0; return 0; }
   if (!saves[site]) saves[site] = malloc(BYTES);
   assert(saves[site]);
   snprintf(save_names[site], sizeof save_names[site], "%s", name);
   memcpy(saves[site], (void *)(uintptr_t)BASE, BYTES);
+  last_save_write = 1;
   return 1;
 }
 
@@ -57,6 +63,7 @@ int FUN_0040b9b0(char *name, int apply_theme, int header_only, int championship)
 }
 
 void course_switch_before_purchase(int site);
+int course_switch_prepare_purchase(void);
 void course_switch_refresh(void);
 int course_switch_available(int tag);
 int course_switch_request(int tag);
@@ -84,8 +91,15 @@ int main(void) {
   U8(0x5722e8) = 22; // B's terrain
   U8(0xa00000) = 7; // golfer progressed on B
   U8(0x571ffb + STRIDE) = 8; // B's shared ownership record
+  fail_next_save = 1;
+  assert(!course_switch_prepare_purchase()); // the map must not send a purchase click
+  assert(I32(0x59bf90) == 1 && I32(0x571fd4) == 900);
   course_switch_refresh();
   assert(course_switch_available(0));
+  assert(course_switch_request(0));
+  fail_next_save = 1;
+  course_switch_apply();
+  assert(I32(0x59bf90) == 1 && I32(0x571fd4) == 900); // failed write leaves the live course alone
   assert(course_switch_request(0));
   course_switch_apply();
   assert(I32(0x59bf90) == 0 && I32(0x571fd4) == 400 && U8(0x5722e8) == 11);

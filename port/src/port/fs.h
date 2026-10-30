@@ -34,6 +34,11 @@ int fs_commit(int fd);
 int fs_replace(const char *tmp, const char *dst);
 int fs_safe_saves(void);
 
+// Result of the most recent .sve write through the game's CRT. Reset before
+// requesting a save so an open failure cannot be mistaken for an older success.
+void crt_reset_last_save_write(void);
+int crt_last_save_write(void); // 1 complete, 0 failed, -1 no save was opened
+
 // Directory listing for FindFirstFile: calls fn for each entry of the
 // resolved directory whose name matches the DOS wildcard pattern.
 // modified is the last-write time in Windows FILETIME ticks (100ns since

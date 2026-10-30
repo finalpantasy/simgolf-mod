@@ -71,13 +71,20 @@ static int save_current(void) {
   if (site < 0 || site >= SITE_COUNT || VALUE(0x834170) == 0) return 0;
   char name[64];
   snapshot_name(site, name, sizeof name, 0);
+  crt_reset_last_save_write();
   FUN_0040b4a0(name);
-  if (!snapshot_exists(site)) {
+  if (crt_last_save_write() != 1 || !snapshot_exists(site)) {
     fprintf(stderr, "course-switch: could not save site %d\n", site);
     return 0;
   }
   cached_snapshot[site] = 1;
   return 1;
+}
+
+// Save a recovery copy before the original map begins an in-game purchase.
+// The post-purchase save below updates it with the actual deducted balance.
+int course_switch_prepare_purchase(void) {
+  return VALUE(0x834170) == 0 || save_current();
 }
 
 // Called at the end of the map, after the purchase has deducted its price but
@@ -127,6 +134,7 @@ int course_switch_current(int tag) { (void)tag; return 0; }
 int course_switch_request(int tag) { (void)tag; return 0; }
 void course_switch_refresh(void) {}
 void course_switch_invalidate(void) {}
+int course_switch_prepare_purchase(void) { return 1; }
 void course_switch_before_purchase(int site) { (void)site; }
 void course_switch_apply(void) {}
 #endif

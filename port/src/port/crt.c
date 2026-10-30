@@ -194,6 +194,9 @@ static int is_save(const char *real) {
 static char *g_fd_path[256];
 static unsigned char g_fd_failed[256];
 static uint32_t g_fd_bytes[256];
+static int g_last_save_write = -1;
+void crt_reset_last_save_write(void) { g_last_save_write = -1; }
+int crt_last_save_write(void) { return g_last_save_write; }
 void crt_io_failed(uint32_t fd) { if (fd < 256) g_fd_failed[fd] = 1; }
 const char *crt_real_path(unsigned fd) { return fd < 256 ? g_fd_path[fd] : NULL; }
 
@@ -273,6 +276,7 @@ int crt_write(nu fd, nu buf, nu n) {
 }
 int crt_close(nu fd) {
   if ((int32_t)fd < 0) { errno = EBADF; return -1; }
+  int save_write = fd < 256 && g_fd_written[fd] && is_save(g_fd_written[fd]);
   int synced = fd < 256 && g_fd_final[fd] ? fs_commit((int)fd) : 1;
   int r = close((int)fd);
   if (fd < 256 && g_fd_failed[fd]) r = -1;
@@ -301,6 +305,7 @@ int crt_close(nu fd) {
   path_styles_closed((int)fd);
 #endif
   if (fd < 256) { free(g_fd_path[fd]); g_fd_path[fd] = NULL; }
+  if (save_write) g_last_save_write = r == 0;
   return r;
 }
 int crt_lseek(nu fd, nu off, nu whence) {
