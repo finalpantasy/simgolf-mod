@@ -122,6 +122,8 @@ void course_switch_apply(void) {
   memcpy(carry->quotes, (void *)(uintptr_t)roster_address(0x543d10), sizeof carry->quotes);
   memcpy(carry->pros, (void *)(uintptr_t)roster_address(0x58dd50), sizeof carry->pros);
   memcpy(carry->sites, (void *)(uintptr_t)0x571fd8, sizeof carry->sites);
+  // One bank account: the cash travels, so a purchase is not paid back by the course left behind.
+  int32_t cash = *(int32_t *)(uintptr_t)0x571fd4;
   char name[64];
   snapshot_name(target, name, sizeof name, 1);
   FUN_0040b9b0(name, 1, 0, 0);
@@ -130,6 +132,7 @@ void course_switch_apply(void) {
   memcpy((void *)(uintptr_t)roster_address(0x543d10), carry->quotes, sizeof carry->quotes);
   memcpy((void *)(uintptr_t)roster_address(0x58dd50), carry->pros, sizeof carry->pros);
   memcpy((void *)(uintptr_t)0x571fd8, carry->sites, sizeof carry->sites);
+  *(int32_t *)(uintptr_t)0x571fd4 = cash;
   free(carry);
   fprintf(stderr, "course-switch: opened site %d\n", target);
 }

@@ -11,8 +11,8 @@ snapshot of the course you are leaving before the original game creates the
 new one. On a later visit to the map, select a purchased property and choose
 **Switch course** to return to its saved layout.
 
-Each course keeps its own land, buildings, staff, clock, cash and progress.
-Golfer identities, membership statistics and profile history travel to the
+Each course keeps its own land, buildings, staff, clock and progress. Cash is
+one bank account: it travels with you to the course you open. Golfer identities, membership statistics and profile history travel to the
 course you open. The career's world map remains shared so all bought sites
 stay marked as owned. A course's purchase price is paid before its previous
 course snapshot is written.

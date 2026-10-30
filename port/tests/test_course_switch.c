@@ -125,7 +125,7 @@ int main(void) {
   assert(I32(0x59bf90) == 1 && I32(0x571fd4) == 900); // failed write leaves the live course alone
   assert(course_switch_request(0));
   course_switch_apply();
-  assert(I32(0x59bf90) == 0 && I32(0x571fd4) == 400 && U8(0x5722e8) == 11);
+  assert(I32(0x59bf90) == 0 && I32(0x571fd4) == 900 && U8(0x5722e8) == 11); // one bank account
   assert(I32(0x5a6364) == 13);
   assert(U8(ROSTER + 0x100000) == 7 && U8(0x571ffb + STRIDE) == 8);
 
@@ -134,12 +134,12 @@ int main(void) {
   course_switch_refresh();
   assert(course_switch_request(1));
   course_switch_apply();
-  assert(I32(0x59bf90) == 1 && I32(0x571fd4) == 900 && U8(0x5722e8) == 22);
+  assert(I32(0x59bf90) == 1 && I32(0x571fd4) == 300 && U8(0x5722e8) == 22); // A's cash came along
   assert(I32(0x5a6364) == 22);
   assert(U8(ROSTER + 0x100000) == 9);
   I32(0x822c78) = 99999; // a different career cannot open these snapshots
   course_switch_refresh();
   assert(!course_switch_available(0) && !course_switch_request(0));
-  puts("course switch: A/B layouts, cash, golfers and ownership preserved");
+  puts("course switch: A/B layouts, shared cash, golfers and ownership preserved");
   return 0;
 }
