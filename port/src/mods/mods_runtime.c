@@ -485,10 +485,11 @@ void mods_save_written(const char *path) {
   size_t used = strlen(text);
   int rules = snprintf(text + used, sizeof text - used,
                        "\n[rules]\nversion = 1\nauthored_visitor_skills = %d\n"
-                       "living_reactions = %d\nweather_gameplay = %d\n",
+                       "living_reactions = %d\nweather_gameplay = %d\nmulti_course = %d\n",
                        mods_get_int("gameplay.authored_visitor_skills", 0) != 0,
                        mods_get_int("golfers.reactions", 0) != 0,
-                       mods_get_int("environment.gameplay", 0) != 0);
+                       mods_get_int("environment.gameplay", 0) != 0,
+                       mods_get_int("gameplay.multi_course", 0) != 0);
   if (rules < 0 || (size_t)rules >= sizeof text - used) return;
   FILE *f = fopen(tmp, "wb");
   if (!f) {

@@ -6,6 +6,7 @@
 #include <string.h>
 #include "port/fs.h"
 #include "port/roster.h"
+#include "mods/mods.h"
 
 // The generated Ghidra header redefines CRT types, so this game-side helper
 // declares just the two original functions it calls.
@@ -13,6 +14,10 @@ void FUN_0040b4a0(char *name);
 void FUN_0040b9b0(char *name, int apply_theme, int header_only, int championship);
 
 #ifndef __EMSCRIPTEN__
+// mods.ini [gameplay] multi_course (Options > Gameplay), default 0: the
+// original single course, its in-game property reseed and refresh disc.
+int course_switch_on(void) { return mods_get_int("gameplay.multi_course", 0) != 0; }
+
 enum { SITE_COUNT = 16, SITE_SIZE = 0x2e, SITE_BYTES = 0x30e };
 #define VALUE(a) (*(volatile int32_t *)(uintptr_t)(a))
 static int pending_site = -1;
@@ -41,7 +46,7 @@ static int snapshot_exists(int site) {
 
 int course_switch_available(int tag) {
   int site = site_for_tag(tag);
-  return site >= 0 && site != VALUE(0x59bf90) && cached_snapshot[site];
+  return course_switch_on() && site >= 0 && site != VALUE(0x59bf90) && cached_snapshot[site];
 }
 
 void course_switch_refresh(void) {
@@ -56,12 +61,12 @@ void course_switch_invalidate(void) { cache_valid = 0; }
 
 int course_switch_current(int tag) {
   int site = site_for_tag(tag);
-  return site >= 0 && site == VALUE(0x59bf90);
+  return course_switch_on() && site >= 0 && site == VALUE(0x59bf90);
 }
 
 int course_switch_request(int tag) {
   int site = site_for_tag(tag);
-  if (site < 0 || site == VALUE(0x59bf90) || !cached_snapshot[site] || !snapshot_exists(site)) return 0;
+  if (!course_switch_on() || site < 0 || site == VALUE(0x59bf90) || !cached_snapshot[site] || !snapshot_exists(site)) return 0;
   pending_site = site;
   return 1;
 }
@@ -84,13 +89,13 @@ static int save_current(void) {
 // Save a recovery copy before the original map begins an in-game purchase.
 // The post-purchase save below updates it with the actual deducted balance.
 int course_switch_prepare_purchase(void) {
-  return VALUE(0x834170) == 0 || save_current();
+  return !course_switch_on() || VALUE(0x834170) == 0 || save_current();
 }
 
 // Called at the end of the map, after the purchase has deducted its price but
 // before FUN_00407d30 clears the old course.  A new career has no old course.
 void course_switch_before_purchase(int new_site) {
-  if (new_site >= 0 && new_site < SITE_COUNT && VALUE(0x834170) != 0 &&
+  if (course_switch_on() && new_site >= 0 && new_site < SITE_COUNT && VALUE(0x834170) != 0 &&
       new_site != VALUE(0x59bf90)) save_current();
 }
 
@@ -129,6 +134,7 @@ void course_switch_apply(void) {
   fprintf(stderr, "course-switch: opened site %d\n", target);
 }
 #else
+int course_switch_on(void) { return 0; }
 int course_switch_available(int tag) { (void)tag; return 0; }
 int course_switch_current(int tag) { (void)tag; return 0; }
 int course_switch_request(int tag) { (void)tag; return 0; }

@@ -280,6 +280,7 @@ static void inj_step(void) {
 }
 
 // Modal screens can return on DOWN before another heartbeat releases it.
+int course_switch_on(void);
 int course_switch_available(int tag);
 int course_switch_current(int tag);
 int course_switch_request(int tag);
@@ -645,7 +646,8 @@ static void read_world(void) {
   int diff = G32(0x822c88);
   W->difficulty = diff >= 0 && diff < 4 ? diff : -1;
   // Refresh rerolls site indices; snapshots are keyed by those indices.
-  W->can_refresh = !G32(IN_GAME);
+  W->multi_course = G32(IN_GAME) && course_switch_on();
+  W->can_refresh = !W->multi_course;
   W->gcx = 201;
   W->gcy = 308;
   W->gr = 196;
@@ -671,7 +673,7 @@ static void read_world(void) {
     T->px = (int16_t)w->pin_x;
     T->py = (int16_t)w->pin_y;
     T->pin = (int8_t)w->pin_state;
-    if (G32(IN_GAME)) {
+    if (G32(IN_GAME) && course_switch_on()) {
       T->current = (int8_t)course_switch_current(i);
       if (T->current) T->state = 2;
       else if (T->state == 2) T->can_switch = (int8_t)course_switch_available(i);

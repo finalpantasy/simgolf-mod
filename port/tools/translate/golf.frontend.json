@@ -24,7 +24,7 @@
     "FUN_0046f550": [
       [
         "FUN_0046f2b0();",
-        "if (*(int *)0x834170 == 0) FUN_0046f2b0();"
+        "if (*(int *)0x834170 == 0 || !course_switch_on()) FUN_0046f2b0();"
       ],
       [
         "return -1;",

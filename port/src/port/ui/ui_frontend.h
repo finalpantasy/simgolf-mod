@@ -65,6 +65,7 @@ typedef struct FeWorld {
   int32_t badges;        // painted property badges (default); [ui] map_badges=original keeps golf's emblems
   int32_t difficulty;    // 0..3, -1 unknown
   int32_t can_refresh;   // golf's refresh disc is on this screen
+  int32_t multi_course;  // [gameplay] multi_course in a running game: owned courses can be switched
   char budget[32];
   char heading[64];      // golf's "Where will you build your golf course?"
   // the globe in the original's 800x600: centre and radius

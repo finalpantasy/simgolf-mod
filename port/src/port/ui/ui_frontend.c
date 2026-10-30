@@ -670,7 +670,7 @@ static int draw_world(Scene *s, const FeSnap *snap, SDL_Texture *const *art, FeA
     ui_vscroll_end(c);
     UiRect bb = ui_rect(footer.x + footer.w - U(s, 220), footer.y + footer.h - U(s, 46), U(s, 220), U(s, 44));
     const char *label = T->state == 1 ? "Build here" : T->current ? "Current course" :
-                        T->can_switch ? "Switch course" : T->state == 2 ? "No saved course" : "Not enough money";
+                        T->can_switch ? "Switch course" : T->state == 2 ? (W->multi_course ? "No saved course" : "Already purchased") : "Not enough money";
     int enabled = T->state == 1 || T->can_switch;
     if (ui_button(c, ui_id("fe.world.build"), bb, label, enabled ? UI_ICON_CHEV : UI_ICON_NONE,
                   UI_BTN_PRIMARY, enabled ? 0 : UI_DISABLED))

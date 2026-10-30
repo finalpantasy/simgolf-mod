@@ -1,5 +1,11 @@
 # Multiple owned courses (Windows)
 
+Optional, off by default: **Options > Gameplay > Own several courses**, or
+`[gameplay] multi_course=1` in mods.ini. Off keeps the original game: one live
+course, the in-game world map reseeds its properties and offers the refresh
+disc, and no course snapshots are written. Saves record the setting in their
+`.mods.toml` `[rules]` table.
+
 In a running game, open **Menu → World map**. Buying another property saves a
 snapshot of the course you are leaving before the original game creates the
 new one. On a later visit to the map, select a purchased property and choose

@@ -103,6 +103,8 @@ static const Row k_gameplay[] = {
     {.type = OT_SEG, .label = "New Career clubhouse", .key = "gameplay.manual_clubhouse", .def = "0",
      .desc = "Automatic placement, or choose its position yourself when starting a Career.",
      .n = 2, .vals = {"0", "1"}, .names = {"Automatic", "Place manually"}},
+    {.type = OT_TOGGLE, .label = "Own several courses", .key = "gameplay.multi_course", .def = "0",
+     .desc = "Buying another property keeps your current course. Switch between owned courses on the World map. Off: the original, one course at a time."},
     {.type = OT_HEAD, .label = "New Sandbox landscape"},
     {.type = OT_TOGGLE, .label = "Empty rough-only map", .key = "sandbox.blank", .def = "0",
      .desc = "Start a new Sandbox with rough and no scenery or buildings. Place the clubhouse yourself. Existing saves keep their landscape."},

@@ -22,6 +22,8 @@ static int last_save_write = -1;
 static int fail_next_save;
 void crt_reset_last_save_write(void) { last_save_write = -1; }
 int crt_last_save_write(void) { return last_save_write; }
+static int multi_course = 1; // [gameplay] multi_course
+int mods_get_int(const char *key, int def) { return strcmp(key, "gameplay.multi_course") ? def : multi_course; }
 
 static int site_of(const char *name) {
   const char *p = strrchr(name, '_');
@@ -96,6 +98,13 @@ int main(void) {
   U8(ROSTER + 0x100000) = 3; // golfer membership stat
   course_switch_refresh();
   assert(!course_switch_available(1) && !course_switch_request(1));
+  multi_course = 0; // off: the original game, no snapshot and no switch
+  course_switch_before_purchase(1);
+  assert(!saves[0]);
+  fail_next_save = 1;
+  assert(course_switch_prepare_purchase());
+  fail_next_save = 0;
+  multi_course = 1;
   course_switch_before_purchase(1);
   assert(saves[0]);
 
