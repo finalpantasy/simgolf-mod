@@ -1,0 +1,16 @@
+{
+  "comment": "Check the recovery snapshot in the common purchase decision, before leaving the world map or deducting cash. Both Original and Frosted UI use this path.",
+  "patches": {
+    "FUN_0046f550": [
+      [
+        "if (((int)uVar6 <= DAT_00571fd4) || (bVar17)) {",
+        "if (((int)uVar6 <= DAT_00571fd4) || (bVar17)) {\n            if (!course_switch_prepare_purchase()) {\n              DAT_00822d68 = 0;\n              goto LAB_0046f733;\n            }"
+      ]
+    ]
+  },
+  "required_patch_counts": {
+    "FUN_0046f550": [
+      ["if (((int)uVar6 <= DAT_00571fd4) || (bVar17)) {", 1]
+    ]
+  }
+}
