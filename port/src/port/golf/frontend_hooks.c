@@ -55,7 +55,7 @@ void fe_loading_pic(void *sprite) { (void)sprite; }
 void fe_loading(int pct, const char *quote) { (void)pct, (void)quote; }
 void fe_loading_progress(int assets) { (void)assets; }
 void fe_suspend(void) {}
-void fe_world_end(void) {}
+void fe_world_end(int result) { (void)result; }
 int fe_theme_key_ready(void) { return FUN_0045ae70(); }
 
 #endif

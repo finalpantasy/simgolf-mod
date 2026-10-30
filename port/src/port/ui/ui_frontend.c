@@ -669,9 +669,12 @@ static int draw_world(Scene *s, const FeSnap *snap, SDL_Texture *const *art, FeA
     for (int li = 0; li < nl; li++) ui_text_in(c, ui_rect(detail.x, detail.y + offset + li * df.line, detail.w, df.line), UI_TYPE_CAPTION, t->text_secondary, wrapped[li], 0);
     ui_vscroll_end(c);
     UiRect bb = ui_rect(footer.x + footer.w - U(s, 220), footer.y + footer.h - U(s, 46), U(s, 220), U(s, 44));
-    const char *label = T->state == 1 ? "Build here" : T->state == 2 ? "Already purchased" : "Not enough money";
-    if (ui_button(c, ui_id("fe.world.build"), bb, label, T->state == 1 ? UI_ICON_CHEV : UI_ICON_NONE, UI_BTN_PRIMARY, T->state == 1 ? 0 : UI_DISABLED))
-      push_act(acts, max, &n, FE_A_TAG, sel);
+    const char *label = T->state == 1 ? "Build here" : T->current ? "Current course" :
+                        T->can_switch ? "Switch course" : T->state == 2 ? "No saved course" : "Not enough money";
+    int enabled = T->state == 1 || T->can_switch;
+    if (ui_button(c, ui_id("fe.world.build"), bb, label, enabled ? UI_ICON_CHEV : UI_ICON_NONE,
+                  UI_BTN_PRIMARY, enabled ? 0 : UI_DISABLED))
+      push_act(acts, max, &n, T->can_switch ? FE_A_SWITCH : FE_A_TAG, sel);
     g_layout.ok = bb;
   } else {
     ui_text_fit(c, ui_rect(footer.x, footer.y + U(s, 25), footer.w, U(s, 32)), UI_TYPE_BODY, t->text_secondary, "Select a property to inspect its details and price.", 0);

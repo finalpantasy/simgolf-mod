@@ -476,6 +476,7 @@ void fe_world_loop(int on);     // the loop over the 16 tags starts (1) and ends
 void fe_world_tag(int tag, int state, int theme, int owned, int hover, int sprite);
 void fe_world_pin(int tag, int x, int y, int state);   // the pin's place on the globe (original 800x600)
 void fe_world_hover(int tag);   // the tag the original has highlighted this frame, -1 none
+void fe_world_end(int result);  // result is the purchased site, or -1 on Back
 // the list screens (FUN_0043b610 load game / championship courses, FUN_0043a8c0 pro pick, FUN_004725b0 themes)
 void fe_rect(int x, int y, int w, int h, unsigned colour);              // FUN_00480b00 on the back buffer
 int fe_sprite3(void *self, int p1, int target, unsigned x, unsigned y, int p5);   // FUN_00473f60

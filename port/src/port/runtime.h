@@ -93,7 +93,7 @@ void port_trace_clear(void);
 int port_trace_selected(int i, uint32_t *addr, uint32_t *calls);   // the i-th traced function and its calls
 
 // Frontend modal hooks called by translator patches (native and browser).
-void fe_world_end(void);
+void fe_world_end(int result);
 int fe_theme_key_ready(void);
 
 #ifdef __cplusplus

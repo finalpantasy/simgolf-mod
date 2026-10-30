@@ -45,6 +45,8 @@ typedef struct FeTag {
   int8_t pin;            // golf's pin sprite variant (4 available, 5 too dear, 6/7 purchased, near the edge)
   int8_t art;            // FE_ART_EMBLEM slot or -1
   int8_t badge;          // painted badge 0..15 (San Diego .. Northeast) by property name, -1 unknown
+  int8_t can_switch;     // a saved layout exists for this owned site
+  int8_t current;        // this is the course being played
   int32_t price;        // dollars, 0 unknown
   int32_t acres;
   char name[32];
@@ -149,6 +151,7 @@ enum {
   FE_A_DIFFICULTY,  // arg 0..3
   FE_A_BACK,
   FE_A_TAG,         // world: build on tag arg (a click on it)
+  FE_A_SWITCH,      // world: load the owned course at tag arg
   FE_A_HOVER_TAG,   // world: highlight tag arg (the pointer moves onto it)
   FE_A_REFRESH,     // world: golf's refresh disc
   FE_A_ROW,         // list and theme screens: click row arg

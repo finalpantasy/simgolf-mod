@@ -280,7 +280,15 @@ static void inj_step(void) {
 }
 
 // Modal screens can return on DOWN before another heartbeat releases it.
-void fe_world_end(void) {
+int course_switch_available(int tag);
+int course_switch_current(int tag);
+int course_switch_request(int tag);
+void course_switch_refresh(void);
+void course_switch_invalidate(void);
+void course_switch_before_purchase(int site);
+void course_switch_apply(void);
+
+void fe_world_end(int result) {
   if (getenv("SIMGOLF_COURSE_TRACE")) fprintf(stderr, "course-build %.3f\n", host_now_ms());
   if (g_inj && g_inj_click && g_inj_stage == 2) sdl_button(g_inj_x, g_inj_y, 0);
   g_inj = 0;
@@ -289,6 +297,9 @@ void fe_world_end(void) {
   g_world_active = 0;
   g_on = 0;
   g_last_screen = FE_NONE;
+  if (result >= 0) course_switch_before_purchase(result);
+  else course_switch_apply();
+  course_switch_invalidate();
   // task-106: Build here published its loading card just before the map loop returned; the original builds the
   // course for seconds without presenting, so that card stays up (golf's next loading call or the course view replaces it)
   if (g_snap.screen == FE_LOADING) {
@@ -507,6 +518,7 @@ static void matte_map_globe(uint32_t *px, int w, int h) {
 }
 
 static void world_begin(void) {
+  course_switch_refresh();
   memset(g_wrec, 0, sizeof g_wrec);
   g_n_wglob = 0;
   g_in_tags = 0;
@@ -631,7 +643,8 @@ static void read_world(void) {
   { const char *mb = mods_get("ui.map_badges"); W->badges = !(mb && !strcmp(mb, "original")); }
   int diff = G32(0x822c88);
   W->difficulty = diff >= 0 && diff < 4 ? diff : -1;
-  W->can_refresh = 1;
+  // Refresh rerolls site indices; snapshots are keyed by those indices.
+  W->can_refresh = !G32(IN_GAME);
   W->gcx = 201;
   W->gcy = 308;
   W->gr = 196;
@@ -657,6 +670,12 @@ static void read_world(void) {
     T->px = (int16_t)w->pin_x;
     T->py = (int16_t)w->pin_y;
     T->pin = (int8_t)w->pin_state;
+    if (G32(IN_GAME)) {
+      T->current = (int8_t)course_switch_current(i);
+      if (T->current) T->state = 2;
+      else if (T->state == 2) T->can_switch = (int8_t)course_switch_available(i);
+      T->art = (int8_t)(w->theme * 4 + (T->state == 1 ? 1 : 0));
+    }
     char info[100] = "";
     for (int k = 0; k < w->n; k++) {
       int dy = w->t[k].dy;
@@ -978,6 +997,11 @@ static void run_actions(int screen) {
   if (g_inj) return;
   FeAction a;
   if (!fef_take_action(&a)) return;
+  if (screen == FE_WORLD && a.kind == FE_A_SWITCH) {
+    if (a.arg >= 0 && a.arg < FE_TAGS && g_snap.world.tag[a.arg].state == 2 &&
+        course_switch_request(a.arg)) inj_start(768, 557, 1);
+    return;
+  }
   if(screen==FE_LOAD&&!g_lv_p2&&a.kind==FE_A_SAVE_SORT&&a.arg>=0&&a.arg<=2&&file_save_sort_mode()>=0){
     char value[4];snprintf(value,sizeof value,"%d",a.arg);mods_option_set("ui.save_sort",value);
     if(g_lv_selection)*g_lv_selection=-1;
