@@ -1,3 +1,9 @@
+## 0.1.35 - 2026-10-30
+
+Optional multiple owned courses: keep every property you buy and switch between them on the World map.
+
+- Adds Own several courses (Options > Gameplay), off by default: buying another property keeps your current course, and the World map switches between owned courses. Each course keeps its layout, staff, clock and progress; cash, golfers and memberships travel with you. Off keeps the original one-course game. From PR #108.
+
 ## 0.1.34 - 2026-10-29
 
 Smoother large-course rendering, graphics recovery, safer shot previews, save sorting and optional Sandbox tools.

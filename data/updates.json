@@ -2,6 +2,15 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.35",
+      "date": "2026-10-30",
+      "name": "Multiple owned courses",
+      "summary": "Optional multiple owned courses: keep every property you buy and switch between them on the World map.",
+      "notes": [
+        "Adds Own several courses (Options > Gameplay), off by default: buying another property keeps your current course, and the World map switches between owned courses. Each course keeps its layout, staff, clock and progress; cash, golfers and memberships travel with you. Off keeps the original one-course game. From PR #108."
+      ]
+    },
+    {
       "version": "0.1.34",
       "date": "2026-10-29",
       "name": "Smoother courses and safer play",

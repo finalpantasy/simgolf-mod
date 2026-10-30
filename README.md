@@ -18,7 +18,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Version **0.1.34** improves large-course rendering and graphics recovery, adds safe save sorting and optional Sandbox generation tools, and restores the Windows game icon. See the [changelog](CHANGELOG.md) for details.
+Version **0.1.35** adds optional multiple owned courses: turn on Own several courses in Options > Gameplay to keep every property you buy and switch between them on the World map. It keeps everything from 0.1.34. See the [changelog](CHANGELOG.md) for details.
 
 ## New features and improvements over vanilla
 
