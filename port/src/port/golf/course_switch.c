@@ -9,8 +9,8 @@
 
 // The generated Ghidra header redefines CRT types, so this game-side helper
 // declares just the two original functions it calls.
-int FUN_0040b4a0(char *name);
-int FUN_0040b9b0(char *name, int apply_theme, int header_only, int championship);
+void FUN_0040b4a0(char *name);
+void FUN_0040b9b0(char *name, int apply_theme, int header_only, int championship);
 
 #ifndef __EMSCRIPTEN__
 enum { SITE_COUNT = 16, SITE_SIZE = 0x2e, SITE_BYTES = 0x30e };
