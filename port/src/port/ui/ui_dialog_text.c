@@ -42,6 +42,11 @@ int ui_dialog_format_date_hint(const char *src, char *dst, size_t cap) {
   return 1;
 }
 
+int ui_dialog_hint_caption(const char *panel_text, const char *now_text, char *dst, size_t cap) {
+  if (!panel_text || !now_text || !panel_text[0] || !strcmp(panel_text, now_text)) return 0;
+  return ui_dialog_format_date_hint(now_text, dst, cap);
+}
+
 const char *ui_dialog_choice_label(const char *const *items, int count, int choice) {
   if (!items || count != 3 || choice != 2 || !items[0] || !items[1] || !items[2]) return NULL;
   if (strcmp(items[0], "Wait, I don't want to quit yet!") == 0 &&

@@ -320,7 +320,11 @@ static int draw_hint(UiCtx *c, const DlgSnap *s, SDL_Texture *const *art, DlgAct
   int k = wrap(c, UI_TYPE_BODY, para, text_w, wr);
   for (int i = 0; i < k && n < WRAP_MAX * 3; i++) snprintf(lines[n++], DLG_TEXT, "%s", wr[i]);
   UiFont bf = ui_font(c, UI_TYPE_BODY);
-  float body_h = n * bf.line;
+  // the golfer snapshot's date (dialogs_game.c), above its message
+  int has_caption = s->prompt[0] != 0;
+  UiFont cf = ui_font(c, UI_TYPE_LABEL);
+  float caption_h = has_caption ? cf.line + ui_s(c, 6) : 0;
+  float body_h = caption_h + n * bf.line;
   float content_h = fmaxf(body_h, portrait ? pw : 0);
   float bh = ui_s(c, 44);
   float h = 2 * pad + content_h + ui_s(c, 20) + bh;
@@ -338,6 +342,10 @@ static int draw_hint(UiCtx *c, const DlgSnap *s, SDL_Texture *const *art, DlgAct
     tx = in.x + pw + ui_s(c, 20);
   }
   float y = in.y + (content_h - body_h) / 2;
+  if (has_caption) {
+    ui_text_in(c, ui_rect(tx, y, text_w, cf.line), UI_TYPE_LABEL, t->text_secondary, s->prompt, 0);
+    y += caption_h;
+  }
   for (int i = 0; i < n; i++, y += bf.line) ui_text_in(c, ui_rect(tx, y, text_w, bf.line), UI_TYPE_BODY, t->text_primary, lines[i], 0);
   float by = in.y + in.h - bh;
   float bw = ui_s(c, 120);

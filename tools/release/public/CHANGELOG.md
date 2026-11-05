@@ -1,3 +1,9 @@
+## 0.1.36 - 2026-11-05
+
+Golfer snapshot popups show their message again.
+
+- Fixes golfer snapshot popups (a new skill, a lost skill or a memorable shot) that showed only the date. The message now appears below the snapshot's date. Reported on Reddit.
+
 ## 0.1.35 - 2026-10-30
 
 Optional multiple owned courses: keep every property you buy and switch between them on the World map.

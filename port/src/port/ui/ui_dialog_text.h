@@ -10,6 +10,11 @@ extern "C" {
 // Returns 1 only for a valid date; otherwise leaves dst unchanged.
 int ui_dialog_format_date_hint(const char *src, char *dst, size_t cap);
 
+// The heading for a message panel whose caller wrote a numeric date into the shared
+// text after drawing it (the golfer snapshot): 1 with the English date in dst when
+// now_text is a date and differs from panel_text; otherwise 0 and dst unchanged.
+int ui_dialog_hint_caption(const char *panel_text, const char *now_text, char *dst, size_t cap);
+
 // Returns a display-only replacement for the first choice in the game's exact
 // three-choice exit confirmation, or NULL when the choice should stay as written.
 const char *ui_dialog_choice_label(const char *const *items, int count, int choice);

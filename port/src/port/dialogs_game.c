@@ -31,6 +31,7 @@
 #include "port/hd_native.h"
 #include "port/roster.h"
 #include "port/portrait_game.h"
+#include "port/ui/ui_dialog_text.h"
 
 #define G32(a) (*(volatile int32_t *)(uintptr_t)(a))
 
@@ -532,11 +533,15 @@ static void draw_speaker(int bx, int by, void *user) {
 #define SPEAKER 0x4c2e08
 static unsigned g_hint_t;   // ticks when FUN_0040d320 last drew a message panel
 static int g_hint_on;
+// The panel's own text, kept when FUN_0040d320 draws it. A caller may reuse text_buf before its wait:
+// the golfer snapshot (FUN_00407e00) writes the photo's date there, which left only the date on screen.
+static char g_hint_text[480];
 
 // Before FUN_0040d320 draws a message panel (its param_4 is -2): keep the picture to bring back under the native hint.
 void dlg_hint_pre(void) {
   if (!dlgf_enabled()) return;
   if (g_on) return;   // a native dialog is already up
+  copy_str(g_hint_text, sizeof g_hint_text, (const char *)(uintptr_t)TEXT_BUF);
   unsigned now = SDL_GetTicks();
   if (g_hint_t && now - g_hint_t < 300 && g_kept) {
     g_hint_t = now | 1;
@@ -584,7 +589,11 @@ int dlg_wait(void) {
   s->kind = DLG_HINT;
   s->has_art = has_art;
   s->speaker = G32(SPEAKER);
-  copy_str(s->text, sizeof s->text, (const char *)(uintptr_t)TEXT_BUF);
+  const char *now_text = (const char *)(uintptr_t)TEXT_BUF;
+  copy_str(s->text, sizeof s->text, g_hint_text[0] ? g_hint_text : now_text);
+  char date[40];   // what the caller wrote after the panel, when it is the snapshot's date: the heading
+  if (g_hint_text[0] && ui_dialog_hint_caption(g_hint_text, now_text, date, sizeof date))
+    copy_str(s->prompt, sizeof s->prompt, date);
   dlgf_publish(s);
   DlgAction a;
   while (!g_inj && dlgf_take_action(&a))
@@ -776,6 +785,7 @@ int dlg_document_end(int result) {
 
 void dlg_hint_end(void) {
   g_hint_open = 0;
+  g_hint_text[0] = 0;
   if (g_hint_on) finish(0);
 }
 

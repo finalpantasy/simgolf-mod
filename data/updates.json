@@ -2,6 +2,15 @@
   "format": 1,
   "releases": [
     {
+      "version": "0.1.36",
+      "date": "2026-11-05",
+      "name": "Snapshot popup fix",
+      "summary": "Golfer snapshot popups show their message again.",
+      "notes": [
+        "Fixes golfer snapshot popups (a new skill, a lost skill or a memorable shot) that showed only the date. The message now appears below the snapshot's date. Reported on Reddit."
+      ]
+    },
+    {
       "version": "0.1.35",
       "date": "2026-10-30",
       "name": "Multiple owned courses",
