@@ -243,7 +243,7 @@ static void capsule(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *
 
 // ------------------------------------------------------------------ toast
 
-static void toast(UiCtx *c, const UiHud *hud, const HudSnap *s) {
+static void toast(UiCtx *c, const UiHud *hud, const HudSnap *s, SDL_Texture *const *art) {
   if (!s->news_on || !s->news[0]) return;
   const UiTokens *t = ui_tokens(c);
   // first sentence as the title, the rest as the line
@@ -273,7 +273,9 @@ static void toast(UiCtx *c, const UiHud *hud, const HudSnap *s) {
   UiRect r = ui_rect_round(ui_anchor(ui_screen(c), w, h, UI_TOP_RIGHT, ui_s(c, t->edge_margin), top));
   float k = ui_anim(c, ui_id(s->news), 1, t->motion_open);
   r.y -= (1 - k) * ui_s(c, 12);
-  ui_toast(c, r, NULL, title, line);
+  // the speaker's face when the game names one (hud_game.c speaker_art), as the original strip shows it
+  SDL_Texture *face = art && s->news_face_seq && s->news_face_seq == s->news_seq ? art[HUD_ART_SPEAKER] : NULL;
+  ui_toast(c, r, face, title, line);
 }
 
 // ------------------------------------------------------------------ camera capsule
@@ -1915,7 +1917,7 @@ static const HudMsg *find_msg(const HudSnap *s, int seq) {
 }
 
 // The card under the stats cluster: the strip's message, or the one the player clicked open.
-static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
+static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art, Acts *a) {
   const UiTokens *t = ui_tokens(c);
   if (s->news_seq != hud->last_news) {   // a new message replaces the one open in full
     if (hud->msg_open && s->news_seq) hud->msg_open = s->news_seq;
@@ -1936,14 +1938,17 @@ static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
     return;
   }
   int open = hud->msg_open != 0;
+  // A message with a speaker (a golfer, e.g. a VIP's visit) shows the face the original strip shows, in a
+  // wider card that has room for the whole message beside it.
+  SDL_Texture *face = art && m->seq && m->seq == s->news_face_seq ? art[HUD_ART_SPEAKER] : NULL;
   UiRect scr = ui_screen(c);
-  float mg = ui_s(c, 14), top = ui_s(c, 14 + 40 + 12), pad = ui_s(c, 12), d = ui_s(c, 30), gap = ui_s(c, 10);
-  float w = fminf(ui_s(c, open ? 440 : 400), scr.w - 2 * mg);
+  float mg = ui_s(c, 14), top = ui_s(c, 14 + 40 + 12), pad = ui_s(c, 12), d = ui_s(c, face ? 76 : 30), gap = ui_s(c, face ? 14 : 10);
+  float w = fminf(ui_s(c, (open ? 440 : 400) + (face ? 60 : 0)), scr.w - 2 * mg);
   float tw = w - 2 * pad - d - gap - (open ? ui_s(c, 28) : 0);
   UiFont cf = ui_font(c, UI_TYPE_CAPTION), lf = ui_font(c, UI_TYPE_LABEL);
   const char *st[16];
   int ln[16], more = 0;
-  int n = wrap_lines(c, UI_TYPE_CAPTION, m->text, tw, st, ln, open ? 14 : 3, &more);
+  int n = wrap_lines(c, UI_TYPE_CAPTION, m->text, tw, st, ln, open ? 14 : face ? 6 : 3, &more);
   int btn = (open || m->show == HUD_SHOW_STAFF) && m->show != HUD_SHOW_NONE;   // the weed card (task-112) has its button at once
   float btn_h = ui_s(c, 30);
   float h = 2 * pad + n * cf.line + (open ? lf.line + ui_s(c, 6) : 0) + (btn ? ui_s(c, 10) + btn_h : 0);
@@ -1956,8 +1961,15 @@ static void news_card(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
   if (!open) ui_hit(c, r, rad, cid, UI_HIT_BLOCK | UI_HIT_INTERACT);
   float x = r.x + pad, y = r.y + pad;
   UiRect disc = ui_rect(x, r.y + pad, d, d);
-  uid_rrect(ui_drawer(c), disc, d / 2, t->accent_soft);
-  ui_icon(c, UI_ICON_BELL, disc, ui_s(c, 18), t->accent_soft_text);
+  int fw = 0, fh = 0;
+  if (face && !SDL_QueryTexture(face, NULL, NULL, &fw, &fh) && fw > 0 && fh > 0) {
+    float k2 = fminf(d / fw, d / fh);   // the halo as drawn, centred in the square
+    UiRect fr = ui_rect(disc.x + (d - fw * k2) / 2, disc.y + (d - fh * k2) / 2, fw * k2, fh * k2);
+    uid_image(ui_drawer(c), face, NULL, fr, 0, (UiColor){255, 255, 255, 255});
+  } else {
+    uid_rrect(ui_drawer(c), disc, d / 2, t->accent_soft);
+    ui_icon(c, UI_ICON_BELL, disc, ui_s(c, 18), t->accent_soft_text);
+  }
   x += d + gap;
   if (open) {
     char when[64];
@@ -2080,10 +2092,10 @@ static void history_panel(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
   ui_vscroll_end(c);
 }
 
-static void news_ui(UiCtx *c, UiHud *hud, const HudSnap *s, Acts *a) {
+static void news_ui(UiCtx *c, UiHud *hud, const HudSnap *s, SDL_Texture *const *art, Acts *a) {
   if (s->msg_n && s->msgs[s->msg_n - 1].seq > hud->seen_seq && hud->hist_open) hud->seen_seq = s->msgs[s->msg_n - 1].seq;
   if (hud->hist_open) history_panel(c, hud, s, a);
-  else news_card(c, hud, s, a);
+  else news_card(c, hud, s, art, a);
 }
 
 // The whole HUD is hidden (task-57): one small pill that says how to bring it back, clickable too.
@@ -2329,7 +2341,7 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
     h->density = HUD_JWE;
     bars(c, h, s, art, &a);
     shot_readout(c, s, 1);
-    news_ui(c, h, s, &a);
+    news_ui(c, h, s, art, &a);
     return a.n;
   }
   if (h->density == 0) h->tray_hidden = 0;
@@ -2338,7 +2350,7 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
                   h->density == HUD_LSHAPE || h->density == HUD_COLLAPSED ||
                   h->density >= HUD_BARS;   // these carry money and date themselves
   if (s->capsule_visible && !own_stats) capsule(c, h, s, art, &a);
-  if (h->density != HUD_JWE) toast(c, h, s);   // jwe: news_ui below (task-62)
+  if (h->density != HUD_JWE) toast(c, h, s, art);   // jwe: news_ui below (task-62)
   camera(c, h, &a);
   int tray_open = !h->tray_hidden && active_item(s) >= 0 && active_item(s) <= D_PEOPLE &&
                   (h->density != HUD_JWE || h->bar_open);   // jwe: the tray belongs to the open build bar
@@ -2366,6 +2378,6 @@ int ui_hud_draw(UiCtx *c, UiHud *h, const HudSnap *s, SDL_Texture *const *art, H
                              (h->density == HUD_REGULAR || h->density >= HUD_BARS);
   place_panel(c, h, s, art, &a, building_tray_rotate);
   shot_readout(c, s, 0);
-  if (h->density == HUD_JWE) news_ui(c, h, s, &a);
+  if (h->density == HUD_JWE) news_ui(c, h, s, art, &a);
   return a.n;
 }

@@ -1,8 +1,9 @@
 ## 0.1.36 - 2026-11-05
 
-Golfer snapshot popups show their message again.
+Golfer snapshot popups show their message again, and VIP visits show the visitor's face.
 
 - Fixes golfer snapshot popups (a new skill, a lost skill or a memorable shot) that showed only the date. The message now appears below the snapshot's date. Reported on Reddit.
+- News about a golfer shows that golfer's face again, as in the original game, so visits from J.P. Bigdome, Ivana Richman and I.M. Picky stand out. The news card is wider for these and shows the whole message.
 
 ## 0.1.35 - 2026-10-30
 

@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define HUD_ART_MAX 128
+#define HUD_ART_MAX 129
 
 // Bottom of the original top-right money, fun, and skill plates in game-canvas pixels.
 #define HUD_ORIGINAL_STATS_BOTTOM 142
@@ -41,6 +41,7 @@ enum {   // art slots (game sprites read back with alpha)
   HUD_ART_LIGHT = 90,       // six locally authored optional light designs
   HUD_ART_BRIDGE = 82,      // 8, up to 89
   HUD_ART_PATH = 96,        // after six lights; up to 32 stable material IDs
+  HUD_ART_SPEAKER = 128,    // the news speaker as the original strip draws it (golf-ball halo and face)
 };
 
 // One game message (task-62): what the game's news strip said, kept for the HUD's history.
@@ -93,6 +94,7 @@ typedef struct HudSnap {
   int people_mode;        // 2 golfers, 3/4 player, with employee_overlay
   int shape;              // the placement shape / rotation counter (Tab), 0x5a34f0
   int news_seq;           // task-62: seq of the message the news strip is showing now (0: none)
+  int news_face_seq;      // seq of the message whose speaker is in HUD_ART_SPEAKER (0: none)
   int msg_n;              // history, oldest first, the last HUD_MSG_MAX messages
   HudMsg msgs[HUD_MSG_MAX];
   // task-92: the player's own pro (the original's player panel, FUN_004362f0 / FUN_00436060)

@@ -39,6 +39,7 @@ int hud_game_paused(void) { return (G32(FLAGS) & 4) != 0; }
 uint32_t FUN_004657e0(int x, int y);                                                       // left click entry
 int FUN_00473cb0(void *sprite, int target, int x, int y, int sx, int sy, int div, int clip);  // draw sprite
 uint32_t FUN_00473f60(void *sprite, int mask, int target, uint32_t x, uint32_t y, int clip);  // draw sprite + alpha
+int FUN_0045c200(int who, int x, int y, int z);   // a golfer's face (over the golf-ball halo)
 int FUN_00473e60(void *sprite, int target, int x, int y, int clip);                         // draw sprite
 int FUN_0040daa0(int what);                                                                // course name -> text_buf
 uint32_t FUN_0040d7b0(int tick);                                                           // date -> text_buf
@@ -205,6 +206,11 @@ static uint32_t *snap_sprite(void *sprite, int kind, void *mask, int *ow, int *o
     uint16_t fillc = pass ? (is565 ? 0xffff : 0x7fff) : 0;
     for (int y = 0; y < BH; y++)
       for (int x = 0; x < BW; x++) bb[(ptrdiff_t)(BY + y) * pitch + BX + x] = fillc;
+    if (kind == 4) {   // a news speaker (golfer slot in sprite), as FUN_0040d320 draws it: the golf-ball halo, then the face
+      FUN_00473f60((void *)0x5a58c4, 0x58bb7c, G32(0x4c1570), BX + 8, BY + 8, 0);
+      FUN_0045c200((int)(intptr_t)sprite, BX + 8, BY + 8, -1);
+      goto drawn;
+    }
     if (kind == 3) {   // an object from its sprite set, as the design strips draw it (FUN_00432200)
       FUN_004628d0(BX + BW / 2, BY + BH - 30, 0, g_obj_scale, g_obj_scale, sprite, g_obj_rot, (uint32_t)g_obj_frame);
       goto drawn;
@@ -492,6 +498,27 @@ void hud_departure_notice(int subject) {
   // Departure slots can be reused. Keep this historical notice unlinked.
   g_departure_until = m->t_ms + 10000;
   fprintf(stderr, "hud: retained departure %d: %s\n", m->seq, m->text);
+}
+
+// ------------------------------------------------------------------ the news speaker's face
+//
+// The original strip (FUN_0040d320 from the tick) draws the speaker beside the message: the golf-ball halo and
+// the golfer's face when the post names a golfer slot (0x4c2e08 >= 0), e.g. a VIP arriving (J.P. Bigdome,
+// Ivana Richman, I.M. Picky) or leaving. The card shows the same picture: read once per such message, kept
+// for that message so it still shows when the player opens it again from the history.
+static int g_face_seq, g_face_ok;
+
+static void speaker_art(void) {
+  int sp = g_last_news_subject;
+  if (G8(SCREEN_STATE) != 1 || !g_last_news_seq || g_news_seq != g_last_news_seq || sp < 0 || sp >= 0x9c) return;
+  if (g_last_news_seq == g_face_seq) return;
+  int w = 0, h = 0;
+  uint32_t *px = snap_sprite((void *)(intptr_t)sp, 4, NULL, &w, &h, -1);
+  g_face_seq = g_last_news_seq;
+  g_face_ok = px != NULL;
+  if (px) hudf_publish_art(HUD_ART_SPEAKER, px, w, h);
+  free(px);
+  fprintf(stderr, "hud: speaker face golfer %d for message %d: %dx%d\n", sp, g_face_seq, w, h);
 }
 
 // ------------------------------------------------------------------ weeds (task-112)
@@ -991,6 +1018,7 @@ static void read_state(HudSnap *s) {
     g_news_seq = g_weed_seq;
   }
   s->news_seq = g_news_seq;
+  s->news_face_seq = g_face_ok ? g_face_seq : 0;
   if (g_departure_seq && g_departure_until > host_now_ms() && !s->news_on) {
     s->news_on = 1;
     s->news_seq = g_departure_seq;
@@ -1307,6 +1335,7 @@ void hud_restore(void) {
     g_art_frames = 0;
     snap_art();
   }
+  if (!g_bottom && g_target >= 0) speaker_art();
   for (int i = 0; i < PAGES; i++) copy_rects(i, 0);
   hide_art();
   HudSnap *s = &g_snap;

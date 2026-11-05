@@ -18,7 +18,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Version **0.1.36** fixes golfer snapshot popups that showed only the date: the message now appears below it. It keeps everything from 0.1.35, including optional multiple owned courses. See the [changelog](CHANGELOG.md) for details.
+Version **0.1.36** fixes golfer snapshot popups that showed only the date, and shows a golfer's face on news about them again, so VIP visits stand out. It keeps everything from 0.1.35, including optional multiple owned courses. See the [changelog](CHANGELOG.md) for details.
 
 ## New features and improvements over vanilla
 
