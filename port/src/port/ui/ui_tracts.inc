@@ -9,9 +9,8 @@ typedef struct {
   char price[RP_TEXT];
 } Tract;
 
-// golf's tile k (0..8, numbered k + 1): column k / 3 and row k % 3 of the tile band
-static const int TR_X[3] = {140, 400, 656};
-static const int TR_Y[3] = {88, 156, 224};
+// golf's tile k (0..8, numbered k + 1): column k / 3 and row k % 3 of the tile band (ui_tract_click)
+#include "port/ui/ui_tract_geom.h"
 
 static void tr_read(const RpSnap *s, Tract tr[9], char *cash, char *cash_label) {
   memset(tr, 0, 9 * sizeof *tr);
@@ -68,10 +67,24 @@ static int draw_tracts(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAct
   uid_rrect(d, map, ui_s(c, 16), uid_alpha(t->surface_inset, .40f));
   ui_text_in(c, ui_rect(map.x + ui_s(c, 20), map.y + ui_s(c, 16), map.w - ui_s(c, 40), ui_s(c, 28)), UI_TYPE_LABEL, t->text_secondary, "Course map", 0);
   (void)art;
+  // Before the map: which tracts are for sale, the row under the pointer and this frame's pick (issue 110).
+  unsigned for_sale = 0;
+  int hot = -1;
+  for (int n = 0; n < 9; n++) {
+    if (!(tr[n].has && !tr[n].sold && tr[n].text[0])) continue;
+    char key[24]; snprintf(key, sizeof key, "tr.tract%d", n);
+    uint32_t id = ui_id(key);
+    for_sale |= 1u << n;
+    if (ui_is_hot(c, id)) hot = n;
+    if (ui_clicked(c, id)) {
+      *selection = (float)(n + 1); selected = n;
+      if (getenv("SIMGOLF_REPORTS_LOG")) fprintf(stderr, "reports: tract review %d price [%s]\n", n + 1, tr[n].price);
+    }
+  }
   ui_course_map_draw(c, &s->map, ui_rect(map.x, map.y + ui_s(c, 48), map.w, map.h - ui_s(c, 96)));
-  ui_course_map_tracts(c, &s->map, ui_rect(map.x, map.y + ui_s(c, 48), map.w, map.h - ui_s(c, 96)), selected);
+  ui_course_map_tracts(c, &s->map, ui_rect(map.x, map.y + ui_s(c, 48), map.w, map.h - ui_s(c, 96)), selected, hot, for_sale);
   ui_text_in(c, ui_rect(map.x + ui_s(c, 20), map.y + map.h - ui_s(c, 42), map.w - ui_s(c, 40), ui_s(c, 24)), UI_TYPE_CAPTION,
-      t->text_secondary, "Numbered areas match the tracts in the list.", 0);
+      t->text_secondary, "Numbered areas are for sale. The highlighted one is the tract you picked.", 0);
   ui_text_in(c, ui_rect(list.x, list.y, list.w * .48f, ui_s(c, 32)), UI_TYPE_LABEL, t->text_secondary, cash_label, 0);
   ui_text_fit(c, ui_rect(list.x + list.w * .48f, list.y, list.w * .52f, ui_s(c, 32)), UI_TYPE_HEADING, t->text_primary, cash, 1);
   float row_top = list.y + ui_s(c, 48), rh = (list.h - ui_s(c, 48)) / 9;
@@ -107,10 +120,6 @@ static int draw_tracts(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAct
         ui_text_fit(c, ui_rect(x, ty + ui_s(c, 24) + j * line, width, line), UI_TYPE_CAPTION, t->text_secondary, lines[j], 0);
       ui_tooltip(c, id, r, tt->text);
     }
-    if (can && ui_clicked(c, id)) {
-      *selection = (float)(n + 1); selected = n;
-      if (getenv("SIMGOLF_REPORTS_LOG")) fprintf(stderr, "reports: tract review %d price [%s]\n", n + 1, tt->price);
-    }
   }
   float fy = in.y + in.h - ui_s(c, 44);
   UiRect no = ui_rect(in.x + in.w - ui_s(c, 180), fy, ui_s(c, 180), ui_s(c, 44));
@@ -124,7 +133,8 @@ static int draw_tracts(UiCtx *c, const RpSnap *s, SDL_Texture *const *art, RpAct
   pf_ctl("buy", buy);
   if (ui_button(c, ui_id("tr.buy"), buy, label, UI_ICON_CHECK, UI_BTN_PRIMARY,
       selected < 0 ? UI_DISABLED : 0) && selected >= 0 && na < max) {
-    acts[na++] = (RpAction){RP_A_CLICK, CLICK(TR_X[selected / 3], TR_Y[selected % 3])};
+    int bx, by; ui_tract_click(selected, &bx, &by);
+    acts[na++] = (RpAction){RP_A_CLICK, CLICK(bx, by)};
     *selection = 0;
   }
   ui_text_in(c, ui_rect(in.x, fy, buy.x - in.x - gap, no.h), UI_TYPE_CAPTION, t->text_secondary,

@@ -14,5 +14,6 @@ typedef struct {
 
 // All shapes and labels are drawn at the target's resolution. No game-page bitmap.
 void ui_course_map_draw(UiCtx *c, const UiCourseMap *map, UiRect bounds);
-void ui_course_map_tracts(UiCtx *c, const UiCourseMap *map, UiRect bounds, int selected);
+// Tract outlines over the map: selected and hot (-1 for none) are filled; bit k of for_sale numbers tract k.
+void ui_course_map_tracts(UiCtx *c, const UiCourseMap *map, UiRect bounds, int selected, int hot, unsigned for_sale);
 void ui_course_map_clear(SDL_Renderer *renderer); // before destroying the owning renderer

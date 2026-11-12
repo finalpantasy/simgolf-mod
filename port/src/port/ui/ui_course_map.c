@@ -1,4 +1,5 @@
 #include "port/ui/ui_course_map.h"
+#include "port/ui/ui_tract_geom.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,34 +255,47 @@ void ui_course_map_draw(UiCtx *c,const UiCourseMap *m,UiRect bounds) {
   ui_text_in(c,ui_rect(north.x-ui_s(c,2),north.y-ui_s(c,18),north.w+ui_s(c,4),ui_s(c,18)),UI_TYPE_MICRO,t->text_secondary,"N",.5f);
 }
 
-// Match FUN_004587a0's purchase cells: a one-tile outer border and
-// three integer-sized bands, indexed x-band * 3 + y-band.
-void ui_course_map_tracts(UiCtx *c, const UiCourseMap *m, UiRect bounds, int selected) {
+// FUN_004587a0's purchase cells (ui_tract_geom.h): a one-tile outer border and
+// three bands per axis. Tracts in for_sale (bit k) carry their number, as the
+// original labels only land it can sell; the picked tract (selected) and the
+// list row under the pointer (hot) are filled so the map shows what Buy takes.
+void ui_course_map_tracts(UiCtx *c, const UiCourseMap *m, UiRect bounds, int selected, int hot, unsigned for_sale) {
   if (!m->valid || m->width < 5 || m->height < 5) return;
   UiRect fit = ui_inset_all(bounds, ui_s(c,18));
   float w = fminf(fit.w, fit.h * 2);
   UiRect area = ui_center(fit, w, w / 2);
   const UiTokens *t = ui_tokens(c);
   UiDraw *d = ui_drawer(c);
-  for (int n = 0; n < 9; n++) {
-    float x0 = 1 + ((n / 3) * (m->width - 2)) / 3 - .5f;
-    float y0 = 1 + ((n % 3) * (m->height - 2)) / 3 - .5f;
-    float x1 = x0 + (m->width - 2) / 3;
-    float y1 = y0 + (m->height - 2) / 3;
+  // Plain tracts first, then the hovered and picked ones so their edges win.
+  int order[9], n_order = 0;
+  for (int n = 0; n < 9; n++) if (n != selected && n != hot) order[n_order++] = n;
+  if (hot >= 0 && hot < 9 && hot != selected) order[n_order++] = hot;
+  if (selected >= 0 && selected < 9) order[n_order++] = selected;
+  for (int o = 0; o < n_order; o++) {
+    int n = order[o], tx0, tx1, ty0, ty1;
+    if (!ui_tract_tiles(n, m->width, m->height, &tx0, &tx1, &ty0, &ty1)) continue;
+    float x0 = tx0 - .5f, x1 = tx1 - .5f, y0 = ty0 - .5f, y1 = ty1 - .5f;
     float x[4], y[4];
     point(m,area,x0,y0,&x[0],&y[0]); point(m,area,x1,y0,&x[1],&y[1]);
     point(m,area,x1,y1,&x[2],&y[2]); point(m,area,x0,y1,&x[3],&y[3]);
+    int sale = (for_sale >> n) & 1, picked = n == selected, lit = picked || n == hot;
+    if (lit) {
+      UiColor fill = uid_alpha(t->accent, picked ? .34f : .22f);
+      uid_triangle(d,x[0],y[0],x[1],y[1],x[2],y[2],fill);
+      uid_triangle(d,x[0],y[0],x[2],y[2],x[3],y[3],fill);
+    }
     for (int j = 0; j < 4; j++) {
       int next = (j + 1) % 4;
-      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,5),t->surface_inset);
-      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,n == selected ? 3 : 1),
-               n == selected ? t->accent : t->text_secondary);
+      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,lit ? 6 : 5),t->surface_inset);
+      uid_line(d,x[j],y[j],x[next],y[next],ui_s(c,picked ? 3 : lit ? 2 : 1),
+               lit ? t->accent : uid_alpha(t->text_secondary, sale ? 1 : .45f));
     }
+    if (!sale) continue;
     float cx, cy; point(m,area,(x0+x1)/2,(y0+y1)/2,&cx,&cy);
     float radius = ui_s(c,16);
     UiRect badge = ui_rect(cx-radius,cy-radius,2*radius,2*radius);
-    uid_rrect(d,badge,radius,n == selected ? t->accent_soft : t->surface_inset);
+    uid_rrect(d,badge,radius,lit ? t->accent : t->surface_inset);
     char label[4]; snprintf(label,sizeof label,"%d",n+1);
-    ui_text_in(c,badge,UI_TYPE_LABEL,t->text_primary,label,.5f);
+    ui_text_in(c,badge,UI_TYPE_LABEL,lit ? t->text_on_accent : t->text_primary,label,.5f);
   }
 }
