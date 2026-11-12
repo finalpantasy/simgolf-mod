@@ -18,7 +18,7 @@ it on your PC and nothing from it ever leaves your computer.
 
 [Download for Windows](https://github.com/finalpantasy/simgolf-mod/releases/latest) | [Installation help](INSTALL.md)
 
-Version **0.1.36** fixes golfer snapshot popups that showed only the date, and shows a golfer's face on news about them again, so VIP visits stand out. It keeps everything from 0.1.35, including optional multiple owned courses. See the [changelog](CHANGELOG.md) for details.
+Version **0.1.37** fixes the land-sale map, which showed some tracts in each other's places, and restores your character's work-area ring on the staff map. It keeps everything from 0.1.36, including the snapshot popup and VIP face fixes. See the [changelog](CHANGELOG.md) for details.
 
 ## New features and improvements over vanilla
 

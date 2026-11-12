@@ -1601,7 +1601,8 @@ static void rp_map_begin(void) {
         const uint8_t *r = (const uint8_t *)(staff_base() + i * STAFF_STRIDE);
         int job = (int8_t)r[0x13];
         int x = staff_tile_coord(r[0x10]), y = staff_tile_coord(r[0x11]);
-        if (!r[0x12] || job < -5 || job > -2 || x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+        if (!r[0x12] || job >= 0 || x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+        // FUN_00456be0 rings every active record with a negative job, -6 (record 0) and -1 included.
         m->staff[i].active = 1; m->staff[i].job = job;
         m->staff[i].x = x; m->staff[i].y = y;
         m->staff[i].radius = job == -4 ? ((r[0x12] & 8) ? 8 : 6) : 4;

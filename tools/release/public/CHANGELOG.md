@@ -1,3 +1,10 @@
+## 0.1.37 - 2026-11-12
+
+The land-sale map shows each tract in the right place again.
+
+- Fixes the land-sale map (the year-end tract offer and I.M. Picky's "big plans" offer), which showed tracts 2 and 4, 3 and 7, and 6 and 8 in each other's places. The tract you pick or point at is now filled in on the map, and only tracts for sale are numbered. Reported on Reddit.
+- The staff view of the course map rings your own character's work area again, as in the original game.
+
 ## 0.1.36 - 2026-11-05
 
 Golfer snapshot popups show their message again, and VIP visits show the visitor's face.
